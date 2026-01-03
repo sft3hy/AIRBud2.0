@@ -7,17 +7,21 @@ from typing import List, Dict, Tuple
 from sentence_transformers import SentenceTransformer
 from src.core.chunking import DocumentChunker
 from src.core.persistence import save_rag_state, load_rag_state
-from src.services.groq_client import GroqClient
+from src.core.llm_client import GroqClient, SanctuaryClient
 
 PARSER_API = os.environ.get("PARSER_API_URL", "http://parser:8001")
 VISION_API = os.environ.get("VISION_API_URL", "http://vision:8002")
+
+client = SanctuaryClient()
+if os.environ.get("TEST") == "True":
+    client = GroqClient()
 
 
 class SmartRAG:
     def __init__(self, output_dir, vision_model_name="Moondream2", load_vision=False):
         self.output_dir = output_dir
         self.vision_model_name = vision_model_name
-        self.client = GroqClient()
+        self.client = client
         self.embedding_model = SentenceTransformer(
             "sentence-transformers/all-MiniLM-L6-v2"
         )
@@ -132,7 +136,7 @@ class SmartRAG:
         prompt = f"Context:\n{context}\n\nQuestion: {question}\n\nAnswer using the context provided."
         try:
             resp = self.client.create_chat_completion(
-                model="meta-llama/llama-3.3-70b-versatile",  # Update model as needed
+                model="meta-llama/llama-4-scout-17b-16e-instruct",  # Update model as needed
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
                 max_tokens=1024,

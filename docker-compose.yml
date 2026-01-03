@@ -1,0 +1,88 @@
+services:
+  # 1. Frontend
+  frontend:
+    build: ./services/frontend
+    container_name: smart_rag_frontend
+    ports:
+      - "8501:8501"
+    environment:
+      - RAG_API_URL=http://rag_core:8000
+      - TEST=${TEST}
+    volumes:
+      - shared_data:/app/data
+    depends_on:
+      - rag_core
+
+  # 2. RAG Core
+  rag_core:
+    build: ./services/rag_core
+    container_name: smart_rag_core
+    ports:
+      - "8000:8000"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - SANCTUARY_API_KEY=${SANCTUARY_API_KEY}
+      - PARSER_API_URL=http://parser:8001
+      - VISION_API_URL=http://vision:8002
+      - PYTHONUNBUFFERED=1
+      - TEST=${TEST}
+    volumes:
+      - shared_data:/app/data
+    depends_on:
+      - parser
+      - vision
+
+  # 3. Parser
+  parser:
+    build: ./services/parser
+    container_name: smart_rag_parser
+    ports:
+      - "8001:8001"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TEST=${TEST}
+    volumes:
+      - shared_data:/app/data
+
+  # 4. Vision (CPU by default for Mac)
+  vision:
+    build: ./services/vision
+    container_name: smart_rag_vision
+    ports:
+      - "8002:8002"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TEST=${TEST}
+      - OLLAMA_HOST_LOCAL=http://host.docker.internal:11434
+      - OLLAMA_HOST_PROD=http://ollama:11434
+    volumes:
+      - shared_data:/app/data
+      - huggingface_cache:/root/.cache/huggingface
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 5. Ollama (Only used if TEST=False)
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: smart_rag_ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_storage:/root/.ollama
+    # Deploy block removed for Mac compatibility
+  db_viewer:
+    image: python:3.10-slim
+    container_name: smart_rag_db_viewer
+    ports:
+      - "8080:8080"
+    volumes:
+      # Map the same volume used by rag_core
+      - shared_data:/data
+    # We explicitly run the install and start command
+    command: >
+      sh -c "pip install sqlite-web && sqlite_web /data/history.db -H 0.0.0.0 -p 8080"
+
+volumes:
+  shared_data:
+  huggingface_cache:
+  ollama_storage:

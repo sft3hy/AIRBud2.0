@@ -7,3 +7,4 @@ qwen_vl_utils
 ollama
 timm
 einops
+accelerate

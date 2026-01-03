@@ -11,7 +11,6 @@ os.makedirs("data/uploads", exist_ok=True)
 
 def main():
     st.set_page_config(
-        page_title="Smart RAG Document Analyzer",
         page_icon="🧠",
         layout="wide",
         initial_sidebar_state="expanded",

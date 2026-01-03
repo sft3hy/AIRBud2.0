@@ -7,6 +7,7 @@ from docx import Document
 from pptx import Presentation
 from typing import List, Tuple, Dict, Optional
 import subprocess
+import tempfile
 
 # Import Chart Detector
 from src.utils.chart_detection import PubLayNetDetector
@@ -72,34 +73,98 @@ class DocumentParser:
         # Extract images from relationships
         for rel in doc.part.rels.values():
             if "image" in rel.target_ref:
-                img_data = rel.target_part.blob
-                img = Image.open(io.BytesIO(img_data))
-                if img.width > 150 and img.height > 150:
-                    fname = f"docx_img_{len(img_list)}.png"
-                    save_path = os.path.join(output_dir, fname)
-                    img.save(save_path)
-                    img_list.append(save_path)
-                    full_text.append(f"\n[CHART_PLACEHOLDER:{fname}]\n")
-        return "\n".join(full_text)
+                try:
+                    img_data = rel.target_part.blob
+                    img = Image.open(io.BytesIO(img_data))
+                    if img.width > 150 and img.height > 150:
+                        fname = f"docx_img_{len(img_list)}.png"
+                        save_path = os.path.join(output_dir, fname)
+                        img.save(save_path)
+                        img_list.append(save_path)
+                        full_text.append(f"\n[CHART_PLACEHOLDER:{fname}]\n")
+                except Exception as e:
+                    print(f"Error extracting DOCX image: {e}")
+
+        return "\n\n".join(full_text)
 
     def _extract_from_pptx(self, path, output_dir, img_list):
-        # Convert to PDF first for layout detection (simplified approach)
-        # Or iterate slides
+        print(f"Processing PPTX: {path}")
         prs = Presentation(path)
         full_text = []
 
-        # Note: Proper PPTX chart extraction requires rendering slides to images
-        # We will use the libreoffice trick from original code if available,
-        # otherwise just text. For stability in docker, we might skip the libreoffice dependency
-        # unless strictly needed, but let's include text extraction.
+        # 1. Convert Slides to Images (requires LibreOffice)
+        slide_images = self._convert_pptx_to_images(path)
+        print(f"  Converted {len(slide_images)} slides to images.")
 
         for i, slide in enumerate(prs.slides):
             full_text.append(f"## Slide {i+1}")
+
+            # Text Extraction
             for shape in slide.shapes:
-                if hasattr(shape, "text"):
+                if hasattr(shape, "text") and shape.text.strip():
                     full_text.append(shape.text)
 
-        return "\n".join(full_text)
+            # Visual Processing
+            if i < len(slide_images):
+                # Detect & Crop charts from the rendered slide
+                crops = self._process_visuals(
+                    slide_images[i], f"slide{i+1}", output_dir
+                )
+                img_list.extend(crops)
+
+                for crop_path in crops:
+                    filename = os.path.basename(crop_path)
+                    full_text.append(f"\n[CHART_PLACEHOLDER:{filename}]\n")
+
+        return "\n\n".join(full_text)
+
+    def _convert_pptx_to_images(self, pptx_path) -> List[Image.Image]:
+        images = []
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                # Convert PPTX -> PDF using LibreOffice
+                # --headless: no UI
+                # --outdir: where to put the pdf
+                cmd = [
+                    "soffice",
+                    "--headless",
+                    "--convert-to",
+                    "pdf",
+                    "--outdir",
+                    tmpdir,
+                    pptx_path,
+                ]
+
+                print("  Running LibreOffice conversion...")
+                subprocess.run(
+                    cmd,
+                    check=True,
+                    timeout=120,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+
+                # The output file has the same name but .pdf extension
+                pdf_name = os.path.splitext(os.path.basename(pptx_path))[0] + ".pdf"
+                pdf_path = os.path.join(tmpdir, pdf_name)
+
+                if os.path.exists(pdf_path):
+                    # Load PDF -> Images using PyMuPDF (fitz)
+                    doc = fitz.open(pdf_path)
+                    for page in doc:
+                        # High resolution for better detection
+                        pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0))
+                        img = Image.open(io.BytesIO(pix.tobytes("png")))
+                        images.append(img)
+                    doc.close()
+                else:
+                    print("  Warning: LibreOffice finished but PDF was not found.")
+
+        except Exception as e:
+            print(f"PPTX Image Conversion Failed: {e}")
+            print("Ensure 'libreoffice' is installed in the container.")
+
+        return images
 
     def _process_visuals(self, page_image, prefix, output_dir) -> List[str]:
         bboxes = self.layout_detector.detect(page_image)

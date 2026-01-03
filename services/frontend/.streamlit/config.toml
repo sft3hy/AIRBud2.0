@@ -1,0 +1,12 @@
+[theme]
+# Modern Dark Theme
+primaryColor = "#6366f1"        # Indigo 500 - Vibrant primary action color
+backgroundColor = "#0f172a"     # Slate 900 - Deep, rich background
+secondaryBackgroundColor = "#1e293b" # Slate 800 - Sidebar and card background
+textColor = "#f8fafc"           # Slate 50 - High contrast text
+font = "sans serif"             # Clean modern font
+
+[server]
+enableCORS = false
+enableXsrfProtection = false
+fileWatcherType = "none"        # Better for Docker stability

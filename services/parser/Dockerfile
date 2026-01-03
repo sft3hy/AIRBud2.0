@@ -1,21 +1,25 @@
-FROM python:3.10-slim
+# Use a specific stable version (Bookworm) to avoid unstable repo mirrors
+FROM python:3.10-slim-bookworm
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Added --fix-missing to handle connection drops during large downloads
+RUN apt-get update && apt-get install -y --fix-missing \
     git \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     poppler-utils \
     tesseract-ocr \
     g++ \
+    gcc \
+    libreoffice \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install PyTorch CPU (Detectron requirement)
+# 1. Install PyTorch CPU first (works for Mac & Prod Parser)
 RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
-# Install Detectron2
+# 2. Install Detectron2
 RUN python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
 
 COPY requirements.txt .

@@ -45,6 +45,13 @@ def create_session(req: SessionCreate):
 def get_history(session_id: int):
     return db.get_queries_for_session(session_id)
 
+@app.get("/sessions/{session_id}/documents")
+def get_session_documents(session_id: int):
+    docs = db.get_session_documents(session_id)
+    # Ensure chart_descriptions are parsed from JSON string if necessary
+    # (The db_utils usually handles this, but good to be safe)
+    return docs
+
 
 @app.post("/process")
 def process_document(req: ProcessRequest):
