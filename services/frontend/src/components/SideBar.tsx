@@ -149,7 +149,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                                                 {VISION_MODELS.map((m) => (
                                                     <SelectItem key={m.value} value={m.value}>
                                                         <div className="flex flex-col items-start">
-                                                            <span className="bg-popover text-popover-foreground border-border">{m.label}</span>
+                                                            <span className="text-popover-foreground border-border">{m.label}</span>
                                                             <span className="text-xs text-muted-foreground">{m.desc}</span>
                                                         </div>
                                                     </SelectItem>

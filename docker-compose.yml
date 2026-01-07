@@ -59,24 +59,24 @@ services:
       - PYTHONUNBUFFERED=1
       - TEST=${TEST}
       # When running fully in Docker, we point to the ollama service name
-      - OLLAMA_HOST_LOCAL=http://ollama:11434
-      - OLLAMA_HOST_PROD=http://ollama:11434
+      - OLLAMA_HOST_LOCAL=http://localhost:11434
+      - OLLAMA_HOST_PROD=http://localhost:11434
     volumes:
       - shared_data:/app/data
       - huggingface_cache:/root/.cache/huggingface
     depends_on:
       - ollama
 
-  # 5. Ollama (Enabled)
-  ollama:
-    image: ollama/ollama:latest
-    container_name: smart_rag_ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_storage:/root/.ollama
-    tty: true # Keeps the container running
-    restart: unless-stopped
+  # 5. Ollama (Disabled)
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: smart_rag_ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_storage:/root/.ollama
+  #   tty: true # Keeps the container running
+  #   restart: unless-stopped
 
   # 6. DB Viewer
   db_viewer:

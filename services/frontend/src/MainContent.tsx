@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import { Send, FileText, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom'; // <--- Add this import
 
 import { fetchSessionDocuments, sendQuery, getSessionHistory } from './lib/api';
 import { ChatMessage } from './types';
@@ -23,12 +24,18 @@ const WelcomeScreen = () => (
             <img src={doggieSrc} alt="Smart RAG" className="h-16 w-16" />
         </div>
         <h2 className="text-3xl font-bold mb-4">👋 Welcome to Smart RAG</h2>
-        <p className="text-lg text-muted-foreground mb-8 max-w-md">
+        <p className="text-lg text-muted-foreground mb-4 max-w-md">
             Upload a document or load a past session from the sidebar to begin.
         </p>
+
+        {/* ADD THIS LINK */}
+        <Link to="/how-it-works">
+            <Button variant="link" className="text-primary gap-1 text-base">
+                How it works <span aria-hidden="true">&rarr;</span>
+            </Button>
+        </Link>
     </div>
 );
-
 export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
@@ -137,9 +144,9 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
 
                                 <div className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                                     <div className={`px-5 py-4 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.role === 'user'
-                                            ? 'bg-primary text-primary-foreground rounded-br-sm prose-invert'
-                                            // UPDATED BG and BORDER
-                                            : 'bg-card border rounded-bl-sm text-card-foreground'
+                                        ? 'bg-primary text-primary-foreground rounded-br-sm prose-invert'
+                                        // UPDATED BG and BORDER
+                                        : 'bg-card border rounded-bl-sm text-card-foreground'
                                         }`}>
                                         <ReactMarkdown
                                             components={{
