@@ -11,23 +11,26 @@ app = FastAPI()
 active_model = None
 active_model_name = ""
 
+
 class DescriptionRequest(BaseModel):
     image_path: str
     prompt: str
     model_name: str
 
+
 @app.get("/health")
 def health():
     return {
-        "status": "ok", 
+        "status": "ok",
         "device": "cuda" if torch.cuda.is_available() else "cpu",
-        "test_mode": os.environ.get("TEST")
+        "test_mode": os.environ.get("TEST"),
     }
+
 
 @app.post("/describe")
 def describe_image(req: DescriptionRequest):
     global active_model, active_model_name
-    
+
     # Check if model swap needed
     if active_model_name != req.model_name:
         if active_model:
@@ -35,7 +38,7 @@ def describe_image(req: DescriptionRequest):
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-            
+
         print(f"Loading model: {req.model_name}")
         active_model = VisionModelFactory.create_model(req.model_name)
         if not active_model:
@@ -47,6 +50,7 @@ def describe_image(req: DescriptionRequest):
 
     try:
         image = Image.open(req.image_path).convert("RGB")
+        # print(req.prompt)
         description = active_model.describe_image(image, req.prompt)
         return {"description": description}
     except Exception as e:

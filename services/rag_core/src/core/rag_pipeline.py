@@ -49,7 +49,23 @@ class SmartRAG:
         # 2. Call Vision Service for each image
         for img_path in image_paths:
             fname = os.path.basename(img_path)
-            prompt = "Analyze this image. Identify if it is a Chart, Table, or Diagram. Describe the data."
+            prompt = """Analyze the image and produce a precise, factual description of its contents.
+
+If the image contains data (e.g., charts, graphs, tables, maps, diagrams):
+
+Identify the type of visualization.
+
+Transcribe all visible text exactly (titles, labels, legends, annotations).
+
+Explicitly list each data series and enumerate all data points with their associated values and units, as shown in the image.
+
+If values are not explicitly labeled, estimate them visually and state that they are estimates.
+
+Preserve ordering (e.g., left to right, top to bottom).
+
+Do not summarize trends unless after listing the full data.
+Do not omit numeric values.
+Do not infer information that is not visually present."""
 
             try:
                 v_resp = requests.post(

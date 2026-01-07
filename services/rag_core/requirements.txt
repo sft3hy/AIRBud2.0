@@ -7,3 +7,4 @@ faiss-cpu
 groq
 requests
 numpy
+python-multipart

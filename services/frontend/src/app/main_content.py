@@ -235,7 +235,7 @@ def display_chart_browser():
 
         if chart_dir.exists():
             chart_files = get_all_chart_images(chart_dir)
-            print("Chart files:", chart_files)
+            # print("Chart files:", chart_files)
             for chart_file in chart_files:
                 if not chart_file.is_absolute():
                     full_path = chart_dir / chart_file.name
@@ -275,7 +275,7 @@ def display_chart_browser():
         with nav_col2:
             page_number = extract_page_number(chart_path)
             st.markdown(
-                f"<h4 style='text-align: center; margin: 0;'>Chart {idx + 1} of {total_charts} (Page {page_number})</h4>",
+                f"<h4 style='text-align: center; margin: 0;'>Chart {idx + 1} of {total_charts} (Page {page_number} - {current_doc['original_filename']})</h4>",
                 unsafe_allow_html=True,
             )
 

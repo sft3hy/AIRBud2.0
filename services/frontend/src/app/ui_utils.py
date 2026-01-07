@@ -13,7 +13,7 @@ def get_chart_output_dir(filename: str) -> Path:
 
 def get_all_chart_images(chart_dir: Path | None) -> list[Path]:
     """Get all chart PNG files from the directory and all subdirectories, sorted by page number."""
-    print(f"Searching for charts in: {chart_dir}")
+    # print(f"Searching for charts in: {chart_dir}")
     if chart_dir is None or not chart_dir.exists():
         print("  Chart directory doesn't exist")
         return []

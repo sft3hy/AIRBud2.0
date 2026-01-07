@@ -10,6 +10,7 @@ import os
 
 warnings.filterwarnings("ignore")
 
+
 class VisionModel(ABC):
     def __init__(self):
         self.device = self._get_device()
@@ -24,45 +25,56 @@ class VisionModel(ABC):
         return "cpu"
 
     @abstractmethod
-    def load_model(self): pass
+    def load_model(self):
+        pass
 
     @abstractmethod
-    def describe_image(self, image: Image.Image, prompt: str) -> str: pass
+    def describe_image(self, image: Image.Image, prompt: str) -> str:
+        pass
 
     @abstractmethod
-    def get_model_name(self) -> str: pass
+    def get_model_name(self) -> str:
+        pass
 
     def offload_model(self):
-        if not self._is_loaded: return
+        if not self._is_loaded:
+            return
         print(f"Offloading {self.get_model_name()}...")
-        
+
         # Dereference
         self.model = None
         self.tokenizer = None
         self.processor = None
-        
+
         # Cleanup
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
-            
+
         self._is_loaded = False
         print("✓ Offloaded.")
+
 
 # --- Native Models ---
 class Moondream2Model(VisionModel):
     def load_model(self):
         try:
             from transformers import AutoModelForCausalLM, AutoTokenizer
+
             print(f"Loading Moondream2 on {self.device}...")
             model_id = "vikhyatk/moondream2"
-            
+
             # Trust remote code needed for Moondream
             self.model = AutoModelForCausalLM.from_pretrained(
-                model_id, revision="2025-06-21", trust_remote_code=True, device_map={"": self.device}
+                model_id,
+                revision="2025-06-21",
+                trust_remote_code=True,
+                device_map={"": self.device},
             )
-            self.tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                model_id, trust_remote_code=True
+            )
             self._is_loaded = True
             return True
         except Exception as e:
@@ -70,21 +82,29 @@ class Moondream2Model(VisionModel):
             return False
 
     def describe_image(self, image: Image.Image, prompt: str) -> str:
-        if not self._is_loaded: return "Model not loaded."
+        if not self._is_loaded:
+            return "Model not loaded."
         try:
             enc_image = self.model.encode_image(image)
             return self.model.answer_question(enc_image, prompt, self.tokenizer)
-        except Exception as e: return f"Error: {e}"
-    def get_model_name(self): return "Moondream2"
+        except Exception as e:
+            return f"Error: {e}"
+
+    def get_model_name(self):
+        return "Moondream2"
+
 
 class Qwen3VLModel(VisionModel):
     def load_model(self):
         try:
             from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
+
             print(f"Loading Qwen3-VL on {self.device}...")
             model_id = "Qwen/Qwen3-VL-2B-Instruct"
-            self.processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
-            
+            self.processor = AutoProcessor.from_pretrained(
+                model_id, trust_remote_code=True
+            )
+
             dtype = torch.float16 if self.device == "cuda" else torch.float32
             self.model = Qwen3VLForConditionalGeneration.from_pretrained(
                 model_id, dtype=dtype, device_map=self.device, trust_remote_code=True
@@ -97,63 +117,115 @@ class Qwen3VLModel(VisionModel):
             return False
 
     def describe_image(self, image: Image.Image, prompt: str) -> str:
-        if not self._is_loaded: return "Model not loaded."
+        if not self._is_loaded:
+            return "Model not loaded."
         try:
             from qwen_vl_utils import process_vision_info
-            messages = [{"role": "user", "content": [{"type": "image", "image": image}, {"type": "text", "text": prompt}]}]
-            text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "image": image},
+                        {"type": "text", "text": prompt},
+                    ],
+                }
+            ]
+            text = self.processor.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
             image_inputs, video_inputs = process_vision_info(messages)
-            inputs = self.processor(text=[text], images=image_inputs, videos=video_inputs, padding=True, return_tensors="pt").to(self.device)
+            inputs = self.processor(
+                text=[text],
+                images=image_inputs,
+                videos=video_inputs,
+                padding=True,
+                return_tensors="pt",
+            ).to(self.device)
             with torch.inference_mode():
                 generated_ids = self.model.generate(**inputs, max_new_tokens=512)
-                generated_ids_trimmed = [out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)]
-                return self.processor.batch_decode(generated_ids_trimmed, skip_special_tokens=True)[0]
-        except Exception as e: return f"Error: {e}"
-    def get_model_name(self): return "Qwen3-VL-2B"
+                generated_ids_trimmed = [
+                    out_ids[len(in_ids) :]
+                    for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+                ]
+                return self.processor.batch_decode(
+                    generated_ids_trimmed, skip_special_tokens=True
+                )[0]
+        except Exception as e:
+            return f"Error: {e}"
+
+    def get_model_name(self):
+        return "Qwen3-VL-2B"
+
 
 class InternVL3Model(VisionModel):
     def load_model(self):
         try:
             from transformers import AutoModel, AutoTokenizer
+
             print(f"Loading InternVL on {self.device}...")
             model_id = "OpenGVLab/InternVL3_5-1B-Flash"
             dtype = torch.float16 if self.device == "cuda" else torch.float32
-            self.model = AutoModel.from_pretrained(model_id, dtype=dtype, trust_remote_code=True, device_map=self.device)
-            self.tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True, use_fast=True)
+            self.model = AutoModel.from_pretrained(
+                model_id, dtype=dtype, trust_remote_code=True, device_map=self.device
+            )
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                model_id, trust_remote_code=True, use_fast=True
+            )
             self.model.eval()
             self._is_loaded = True
             return True
         except Exception as e:
             print(f"Error InternVL: {e}")
             return False
-            
+
     def describe_image(self, image: Image.Image, prompt: str) -> str:
-        if not self._is_loaded: return "Model not loaded."
+        if not self._is_loaded:
+            return "Model not loaded."
         try:
             from torchvision import transforms as T
             from torchvision.transforms.functional import InterpolationMode
-            IMAGENET_MEAN = (0.485, 0.456, 0.406); IMAGENET_STD = (0.229, 0.224, 0.225)
-            transform = T.Compose([
-                T.Lambda(lambda img: img.convert("RGB") if img.mode != "RGB" else img),
-                T.Resize((448, 448), interpolation=InterpolationMode.BICUBIC),
-                T.ToTensor(),
-                T.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
-            ])
-            pixel_values = transform(image).unsqueeze(0).to(torch.float16 if self.device == "cuda" else torch.float32).to(self.device)
+
+            IMAGENET_MEAN = (0.485, 0.456, 0.406)
+            IMAGENET_STD = (0.229, 0.224, 0.225)
+            transform = T.Compose(
+                [
+                    T.Lambda(
+                        lambda img: img.convert("RGB") if img.mode != "RGB" else img
+                    ),
+                    T.Resize((448, 448), interpolation=InterpolationMode.BICUBIC),
+                    T.ToTensor(),
+                    T.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+                ]
+            )
+            pixel_values = (
+                transform(image)
+                .unsqueeze(0)
+                .to(torch.float16 if self.device == "cuda" else torch.float32)
+                .to(self.device)
+            )
             question = f"<image>\n{prompt}"
-            return self.model.chat(self.tokenizer, pixel_values, question, dict(max_new_tokens=512))
-        except Exception as e: return f"Error: {e}"
-    def get_model_name(self): return "InternVL3.5"
+            return self.model.chat(
+                self.tokenizer, pixel_values, question, dict(max_new_tokens=512)
+            )
+        except Exception as e:
+            return f"Error: {e}"
+
+    def get_model_name(self):
+        return "InternVL3.5"
+
 
 # --- Ollama Wrapper ---
 class OllamaVisionModel(VisionModel):
     def __init__(self, model_name="gemma3"):
         super().__init__()
         self.ollama_model_name = model_name
-        
+
         # DYNAMIC HOST SELECTION BASED ON TEST ENV VAR
         if os.environ.get("TEST") == "True":
-            self.host = os.environ.get("OLLAMA_HOST_LOCAL", "http://host.docker.internal:11434")
+            self.host = os.environ.get(
+                "OLLAMA_HOST_LOCAL", "http://host.docker.internal:11434"
+            )
             print(f"[Ollama] TEST mode: Using local host ({self.host})")
         else:
             self.host = os.environ.get("OLLAMA_HOST_PROD", "http://ollama:11434")
@@ -161,6 +233,7 @@ class OllamaVisionModel(VisionModel):
 
     def load_model(self):
         import ollama
+
         client = ollama.Client(host=self.host)
         try:
             # Check connection
@@ -174,17 +247,28 @@ class OllamaVisionModel(VisionModel):
     def describe_image(self, image: Image.Image, prompt: str) -> str:
         import ollama
         import io
+
         client = ollama.Client(host=self.host)
         img_byte_arr = io.BytesIO()
         image.save(img_byte_arr, format="PNG")
         try:
             response = client.chat(
                 model=self.ollama_model_name,
-                messages=[{"role": "user", "content": prompt, "images": [img_byte_arr.getvalue()]}]
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt,
+                        "images": [img_byte_arr.getvalue()],
+                    }
+                ],
             )
-            return response['message']['content']
-        except Exception as e: return f"[Ollama Error: {e}]"
-    def get_model_name(self): return f"Ollama-{self.ollama_model_name}"
+            return response["message"]["content"]
+        except Exception as e:
+            return f"[Ollama Error: {e}]"
+
+    def get_model_name(self):
+        return f"Ollama-{self.ollama_model_name}"
+
 
 class VisionModelFactory:
     MODELS = {
@@ -194,9 +278,11 @@ class VisionModelFactory:
         "Ollama-Gemma3": lambda: OllamaVisionModel("gemma3"),
         "Ollama-Granite3.2-Vision": lambda: OllamaVisionModel("granite3.2-vision"),
     }
+
     @classmethod
     def create_model(cls, model_name: str) -> Optional[VisionModel]:
-        if model_name not in cls.MODELS: return None
+        if model_name not in cls.MODELS:
+            return None
         factory = cls.MODELS[model_name]
         instance = factory() if isinstance(factory, type) else factory()
         return instance if instance.load_model() else None
