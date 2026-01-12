@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MainContent } from '../MainContent';
-import { Sidebar } from './Sidebar';
+import { Sidebar } from './SideBar';
 import {
     ResizableHandle,
     ResizablePanel,

@@ -1,5 +1,5 @@
 services:
-  # 1. Frontend (React)
+# 1. Frontend (React)
   frontend:
     build: 
       context: ./services/frontend
@@ -9,6 +9,9 @@ services:
       - "5173:5173"
     environment:
       - VITE_API_URL=http://localhost:8000
+      # --- FIX: Default to False if TEST is unset ---
+      - VITE_TEST_MODE=${TEST:-False}
+      # ----------------------------------------------
       - WATCHPACK_POLLING=true
     volumes:
       - ./services/frontend:/app
@@ -17,18 +20,19 @@ services:
     depends_on:
       - rag_core
 
-  # 2. RAG Core
+   # 2. RAG Core
   rag_core:
     build: ./services/rag_core
     container_name: smart_rag_core
     ports:
       - "8000:8000"
     environment:
-      # --- FIX 1: Switch from Sanctuary to Groq ---
-      - LLM_PROVIDER=groq
+      # --- UPDATED: Dynamic Provider Logic ---
+      # We removed "LLM_PROVIDER=groq" so config.py can decide based on TEST env var
       - GROQ_API_KEY=${GROQ_API_KEY}
-      # --------------------------------------------
       - SANCTUARY_API_KEY=${SANCTUARY_API_KEY}
+      - TEST=${TEST}
+      # ---------------------------------------
       - PARSER_API_URL=http://parser:8001
       - VISION_API_URL=http://vision:8002
       - PYTHONUNBUFFERED=1
@@ -97,6 +101,7 @@ services:
       timeout: 5s
       retries: 5
 
+  # 6. pgadmin
   pgadmin:
     image: dpage/pgadmin4
     container_name: pgadmin

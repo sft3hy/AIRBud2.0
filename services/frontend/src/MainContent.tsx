@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
-import { Send, FileText, Loader2, Eye } from 'lucide-react';
+import { Send, FileText, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { fetchSessionDocuments, sendQuery, getSessionHistory } from './lib/api';
@@ -13,7 +13,6 @@ import { SourceViewer } from './components/SourceViewer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Badge } from '@/components/ui/badge';
 
 // Assets
 import doggieSrc from './assets/doggie.svg';
@@ -113,66 +112,57 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
     if (!sessionId) return <WelcomeScreen />;
 
     const queryCount = chatHistory.filter(x => x.role === 'user').length;
-    const visionModel = documents.length > 0 ? documents[0].vision_model_used : null;
 
     return (
         <div className="flex flex-col h-full w-full bg-background">
             {/* Header */}
-            <div className="px-6 py-3 border-b flex items-center justify-between bg-card shadow-sm z-10">
+            <div className="px-6 py-4 border-b flex items-center justify-between bg-card shadow-sm z-10">
                 <div className="flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-primary" />
-                    <span className="font-medium text-sm">
+                    <FileText className="h-6 w-6 text-primary" />
+                    <span className="font-semibold text-lg">
                         {documents.length > 0 ? (
                             <>
                                 {documents.length === 1 ? documents[0].original_filename : `${documents.length} documents`}
-                                <span className="text-muted-foreground ml-2">| {queryCount} queries</span>
+                                <span className="text-muted-foreground ml-3 text-base">| {queryCount} queries</span>
                             </>
                         ) : (
                             "Active Session"
                         )}
                     </span>
                 </div>
-
-                {/* Vision Model Badge */}
-                {visionModel && (
-                    <Badge variant="secondary" className="gap-1.5 text-xs font-normal border">
-                        <Eye className="h-3.5 w-3.5 text-primary" />
-                        Model: <span className="font-medium text-foreground">{visionModel}</span>
-                    </Badge>
-                )}
             </div>
 
             {/* Chat Area */}
             <div className="flex-1 overflow-hidden relative bg-muted/20">
                 <ScrollArea className="h-full px-4 md:px-20 py-4" ref={scrollRef}>
-                    <div className="space-y-8 pb-4 max-w-4xl mx-auto min-h-[500px]">
+                    <div className="space-y-10 pb-4 max-w-4xl mx-auto min-h-[500px]">
                         {chatHistory.map((msg, idx) => (
                             <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
 
                                 {msg.role === 'assistant' && (
-                                    <div className="h-10 w-10 rounded-full bg-card p-1 flex items-center justify-center shrink-0 border shadow-sm mt-1">
+                                    <div className="h-12 w-12 rounded-full bg-card p-1.5 flex items-center justify-center shrink-0 border shadow-sm mt-1">
                                         <img src={doggieSrc} alt="Bot" className="h-full w-full object-contain" />
                                     </div>
                                 )}
 
                                 <div className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                                    <div className={`px-5 py-4 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.role === 'user'
+                                    <div className={`px-6 py-5 rounded-3xl text-base leading-relaxed shadow-sm ${msg.role === 'user'
                                         ? 'bg-primary text-primary-foreground rounded-br-sm prose-invert'
                                         : 'bg-card border rounded-bl-sm text-card-foreground'
                                         }`}>
                                         <ReactMarkdown
                                             components={{
-                                                p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
+                                                p: ({ node, ...props }) => <p className="mb-3 last:mb-0" {...props} />,
                                                 ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
                                                 ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />,
                                                 li: ({ node, ...props }) => <li className="" {...props} />,
                                                 strong: ({ node, ...props }) => <span className="font-bold" {...props} />,
                                                 a: ({ node, ...props }) => <a className="underline font-medium text-primary" target="_blank" rel="noopener noreferrer" {...props} />,
                                                 code: ({ node, ...props }) => (
-                                                    <code className="px-1 py-0.5 rounded font-mono text-xs bg-muted text-foreground" {...props} />
+                                                    <code className="px-1 py-0.5 rounded font-mono text-sm bg-muted text-foreground" {...props} />
                                                 ),
                                                 pre: ({ node, ...props }) => (
-                                                    <pre className="p-3 rounded-lg overflow-x-auto my-2 bg-muted text-foreground border" {...props} />
+                                                    <pre className="p-4 rounded-lg overflow-x-auto my-3 bg-muted text-foreground border" {...props} />
                                                 ),
                                             }}
                                         >
@@ -186,7 +176,7 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
                                 </div>
 
                                 {msg.role === 'user' && (
-                                    <div className="h-10 w-10 rounded-full bg-muted p-1 flex items-center justify-center shrink-0 border shadow-sm mt-1">
+                                    <div className="h-12 w-12 rounded-full bg-muted p-1 flex items-center justify-center shrink-0 border shadow-sm mt-1">
                                         <img src={userSrc} alt="User" className="h-full w-full object-cover rounded-full" />
                                     </div>
                                 )}
@@ -195,11 +185,11 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
 
                         {sendMessageMutation.isPending && (
                             <div className="flex gap-4">
-                                <div className="h-10 w-10 rounded-full bg-card p-1 flex items-center justify-center shrink-0 border shadow-sm mt-1">
+                                <div className="h-12 w-12 rounded-full bg-card p-1.5 flex items-center justify-center shrink-0 border shadow-sm mt-1">
                                     <img src={doggieSrc} alt="Bot" className="h-full w-full object-contain" />
                                 </div>
-                                <div className="bg-card border px-5 py-4 rounded-2xl rounded-bl-sm text-sm text-muted-foreground flex items-center gap-2 shadow-sm">
-                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                <div className="bg-card border px-6 py-5 rounded-3xl rounded-bl-sm text-base text-muted-foreground flex items-center gap-3 shadow-sm">
+                                    <Loader2 className="h-5 w-5 animate-spin" />
                                     <span className="italic">Finding answer...</span>
                                 </div>
                             </div>
@@ -210,23 +200,23 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
             </div>
 
             {/* Input Area */}
-            <div className="p-4 bg-background border-t">
-                <div className="max-w-3xl mx-auto relative flex items-center gap-2">
+            <div className="p-6 bg-background border-t">
+                <div className="max-w-3xl mx-auto relative flex items-center gap-3">
                     <Input
                         placeholder="Ask a question..."
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        className="pr-12 py-6 rounded-full shadow-sm text-base bg-card text-card-foreground"
+                        className="pr-14 py-7 rounded-full shadow-sm text-lg bg-card text-card-foreground"
                         disabled={sendMessageMutation.isPending}
                     />
                     <Button
                         size="icon"
-                        className="absolute right-2 rounded-full h-10 w-10 shadow-sm"
+                        className="absolute right-2 rounded-full h-12 w-12 shadow-sm"
                         onClick={handleSend}
                         disabled={!input.trim() || sendMessageMutation.isPending}
                     >
-                        <Send className="h-4 w-4" />
+                        <Send className="h-5 w-5" />
                     </Button>
                 </div>
             </div>

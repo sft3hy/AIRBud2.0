@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Upload, LayoutGrid, FileText, CheckCircle2, AlertCircle, X, Play } from 'lucide-react';
+import { Loader2, Upload, LayoutGrid, FileText, CheckCircle2, AlertCircle, X, Play, Cpu, Eye } from 'lucide-react';
 import { getSessions, checkBackendHealth, uploadAndProcessDocument, createSession, getSessionStatus } from '../lib/api';
+import { config } from '../lib/config'; // Import the sync config
 import { VisionModel } from '../types';
 import { cn } from '@/lib/utils';
 import { logger } from '../lib/logger';
@@ -15,6 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 
 interface SidebarProps {
     currentSessionId: string | null;
@@ -40,7 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
     const [isUploading, setIsUploading] = useState(false);
     const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
-    // Health Check
+    // Health Check (Kept for Online/Offline indicator)
     const { data: isBackendOnline } = useQuery({
         queryKey: ['health'],
         queryFn: checkBackendHealth,
@@ -69,7 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
         if (jobStatus.status === 'completed') {
             logger.info("Job completed", { sessionId: activeJobId });
 
-            // Invalidate queries so the main content and sidebar list refresh
+            // Invalidate queries so MainContent refreshes
             queryClient.invalidateQueries({ queryKey: ['sessions'] });
             queryClient.invalidateQueries({ queryKey: ['documents', currentSessionId] });
             queryClient.invalidateQueries({ queryKey: ['charts', currentSessionId] });
@@ -84,13 +86,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
         }
     }, [jobStatus, queryClient, currentSessionId, activeJobId]);
 
-    // 1. Add files to stage
     const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files.length > 0) {
             const newFiles = Array.from(event.target.files);
             setStagedFiles(prev => {
                 const combined = [...prev, ...newFiles];
-                // Filter duplicates
                 return combined.filter((file, index, self) =>
                     index === self.findIndex((f) => f.name === file.name)
                 );
@@ -110,17 +110,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
         logger.info("Starting batch processing", { count: stagedFiles.length, model: selectedModel });
 
         try {
-            // Create Session
+            // 1. Create Session
             const sessionName = stagedFiles.map(f => f.name);
             const newSessionId = await createSession(sessionName);
 
-            // CRITICAL FIX: Invalidate sessions query immediately so the new ID exists in the Select list
-            await queryClient.invalidateQueries({ queryKey: ['sessions'] });
+            // 2. Force refetch and Wait
+            await queryClient.refetchQueries({ queryKey: ['sessions'] });
 
+            // 3. Select the new session immediately
             onSessionChange(newSessionId);
             setActiveJobId(newSessionId);
 
-            // Process Files
+            // 4. Process Files
             for (const file of stagedFiles) {
                 await uploadAndProcessDocument(newSessionId, file, selectedModel);
             }
@@ -138,7 +139,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                 <h2 className="text-lg font-bold flex items-center gap-2">
                     🧠 Smart RAG
                     <div
-                        className={cn("h-2 w-2 rounded-full", isBackendOnline ? 'bg-green-500' : 'bg-red-500 animate-pulse')}
+                        className={cn("h-2.5 w-2.5 rounded-full", isBackendOnline ? 'bg-green-500' : 'bg-red-500 animate-pulse')}
                         title={isBackendOnline ? "Backend Online" : "Backend Offline"}
                     />
                 </h2>
@@ -157,39 +158,46 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                     <ScrollArea className="flex-1 px-4 py-2">
                         <div className="space-y-6 pb-6">
 
-                            {/* JOB STATUS CARD */}
-                            {activeJobId && jobStatus && (
-                                <Card className="p-4 border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 animate-in fade-in slide-in-from-top-2">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        {jobStatus.status === 'completed' ? (
-                                            <CheckCircle2 className="h-4 w-4 text-green-600" />
-                                        ) : jobStatus.status === 'error' ? (
-                                            <AlertCircle className="h-4 w-4 text-red-600" />
-                                        ) : (
-                                            <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                                        )}
-                                        <span className="font-semibold text-sm">
-                                            {jobStatus.status === 'completed' ? 'Success' : jobStatus.status === 'error' ? 'Error' : 'Processing...'}
-                                        </span>
-                                    </div>
-                                    <Progress value={jobStatus.progress} className="h-2 mb-2" />
-                                    <p className="text-xs text-muted-foreground font-mono truncate" title={jobStatus.step}>
-                                        {jobStatus.step}
-                                    </p>
-                                </Card>
-                            )}
+                            {/* SESSION HISTORY */}
+                            <div className="space-y-2">
+                                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Session</h3>
+                                <Select
+                                    value={currentSessionId || "new"}
+                                    onValueChange={(val) => onSessionChange(val === "new" ? null : val)}
+                                    disabled={!!activeJobId}
+                                >
+                                    <SelectTrigger className="w-full bg-background border-primary/20">
+                                        <SelectValue placeholder="Select Session" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="new" className="text-primary font-medium">✨ Start New Session</SelectItem>
+                                        <Separator className="my-1" />
+                                        {sessions.map((sess) => (
+                                            <SelectItem key={sess.id} value={String(sess.id)}>
+                                                {sess.name.length > 25 ? sess.name.substring(0, 25) + "..." : sess.name}
+                                                <span className="ml-2 text-muted-foreground text-xs">({sess.docs})</span>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <Separator />
 
                             {/* UPLOAD & STAGING AREA */}
-                            {!currentSessionId && !activeJobId && (
+                            {!activeJobId && (
                                 <div className="space-y-4">
                                     <div className="space-y-2">
-                                        <label className="text-sm font-medium">Vision Model</label>
+                                        <label className="text-sm font-medium flex items-center gap-2">
+                                            Vision Model
+                                            <Badge variant="outline" className="text-[10px] h-4 px-1 py-0">For New Uploads</Badge>
+                                        </label>
                                         <Select value={selectedModel} onValueChange={(v) => setSelectedModel(v as VisionModel)}>
                                             <SelectTrigger><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                                 {VISION_MODELS.map((m) => (
                                                     <SelectItem key={m.value} value={m.value}>
-                                                        <div className="flex flex-col items-start">
+                                                        <div className="flex flex-col items-start py-1">
                                                             <span className="font-medium">{m.label}</span>
                                                             <span className="text-xs text-muted-foreground">{m.desc}</span>
                                                         </div>
@@ -210,12 +218,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                                             onChange={handleFileSelect}
                                             disabled={isUploading || !isBackendOnline}
                                         />
-                                        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center group-hover:scale-110 transition-transform">
-                                            <Upload className="h-5 w-5 text-muted-foreground" />
+                                        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center group-hover:scale-110 transition-transform">
+                                            <Upload className="h-6 w-6 text-muted-foreground" />
                                         </div>
                                         <div>
-                                            <div className="text-sm font-semibold">Click to Select Documents</div>
-                                            <div className="text-xs text-muted-foreground">PDF, DOCX, PPTX</div>
+                                            <div className="text-base font-semibold">Click to Select Documents</div>
+                                            <div className="text-sm text-muted-foreground">PDF, DOCX, PPTX</div>
                                         </div>
                                     </Card>
 
@@ -251,11 +259,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                                             </div>
 
                                             <Button
-                                                className="w-full gap-2"
+                                                className="w-full gap-2 text-base py-5"
                                                 onClick={handleStartProcessing}
                                                 disabled={isUploading}
                                             >
-                                                {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
+                                                {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Play className="h-5 w-5 fill-current" />}
                                                 Start Processing
                                             </Button>
                                         </div>
@@ -263,31 +271,62 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                                 </div>
                             )}
 
-                            <Separator />
+                            {/* JOB STATUS CARD */}
+                            {activeJobId && jobStatus && (
+                                <Card className="p-4 border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 animate-in fade-in slide-in-from-top-2">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        {jobStatus.status === 'completed' ? (
+                                            <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                        ) : jobStatus.status === 'error' ? (
+                                            <AlertCircle className="h-5 w-5 text-red-600" />
+                                        ) : (
+                                            <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                                        )}
+                                        <span className="font-semibold text-base">
+                                            {jobStatus.status === 'completed' ? 'Success' : jobStatus.status === 'error' ? 'Error' : 'Processing...'}
+                                        </span>
+                                    </div>
+                                    <Progress value={jobStatus.progress} className="h-2 mb-2" />
+                                    <p className="text-xs text-muted-foreground font-mono truncate" title={jobStatus.step}>
+                                        {jobStatus.step}
+                                    </p>
+                                </Card>
+                            )}
 
-                            {/* SESSION HISTORY */}
-                            <div className="space-y-2">
-                                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">History</h3>
-                                <Select
-                                    value={currentSessionId || "new"}
-                                    onValueChange={(val) => onSessionChange(val === "new" ? null : val)}
-                                    disabled={!!activeJobId}
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Select Session" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="new" className="text-primary font-medium">✨ Start New Session</SelectItem>
-                                        {sessions.map((sess) => (
-                                            <SelectItem key={sess.id} value={String(sess.id)}>
-                                                {sess.name.length > 25 ? sess.name.substring(0, 25) + "..." : sess.name} ({sess.docs})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
                         </div>
                     </ScrollArea>
+
+                    {/* SYSTEM INFO FOOTER - Instant Loading */}
+                    <div className="p-4 border-t bg-muted/20">
+                        <div className="space-y-3">
+                            <h4 className="text-xs font-bold uppercase text-muted-foreground tracking-widest">System Info</h4>
+
+                            <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-md bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+                                    <Cpu className="h-4 w-4 text-blue-600" />
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-xs font-medium text-muted-foreground">QA Model</p>
+                                    <p className="text-sm font-semibold truncate" title={config.qaModelName}>
+                                        {config.qaModelName}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-md bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
+                                    <Eye className="h-4 w-4 text-purple-600" />
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-xs font-medium text-muted-foreground">Vision Model</p>
+                                    <p className="text-sm font-semibold truncate" title={selectedModel}>
+                                        {selectedModel}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </TabsContent>
 
                 {/* --- CHARTS TAB --- */}

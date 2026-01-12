@@ -10,7 +10,7 @@
     --card-foreground: 220 20% 15%;
     --popover: 40 15% 98%;
     --popover-foreground: 220 20% 15%;
-    --primary: 220 70% 45%;
+    --primary: 199 97% 46%;
     --primary-foreground: 0 0% 98%;
     --secondary: 40 25% 90%;
     --secondary-foreground: 220 20% 15%;
@@ -55,8 +55,17 @@
     @apply border-border;
   }
 
-  html,
-  body,
+  html {
+    /* INCREASED FONT SIZE HERE */
+    font-size: 18px;
+  }
+
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    @apply bg-background text-foreground;
+  }
+
   #root {
     height: 100%;
     width: 100%;

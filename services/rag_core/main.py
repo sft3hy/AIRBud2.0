@@ -106,7 +106,13 @@ def run_pipeline_task(session_id: int, filename: str, vision_model: str):
 
 @app.get("/")
 def health_check():
-    return {"status": "online", "service": settings.SERVICE_NAME}
+    # UPDATED: Returns system info for the frontend sidebar
+    return {
+        "status": "online",
+        "service": settings.SERVICE_NAME,
+        "llm_model": settings.GEN_MODEL_NAME,
+        "llm_provider": settings.LLM_PROVIDER,
+    }
 
 
 @app.post("/upload")
@@ -218,12 +224,10 @@ def query_session(req: QueryRequest):
             response_text = f"Error generating answer: {llm_resp.error}"
 
         # Save History
-        # --- BUG FIX: Added 'score' field here ---
         results_formatted = [
             {"text": c.text, "source": c.source, "page": c.page, "score": s}
             for c, s in top_results
         ]
-        # -----------------------------------------
 
         db.add_query_record(
             req.session_id, req.question, response_text, results_formatted
