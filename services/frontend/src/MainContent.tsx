@@ -25,7 +25,7 @@ const WelcomeScreen = () => (
         </div>
         <h2 className="text-3xl font-bold mb-4">👋 Welcome to Smart RAG</h2>
         <p className="text-lg text-muted-foreground mb-4 max-w-md">
-            Upload a document or load a past session from the sidebar to begin.
+            Create or select a collection from the sidebar to begin.
         </p>
         <Link to="/how-it-works">
             <Button variant="link" className="text-primary gap-1 text-base">

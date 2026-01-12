@@ -8,26 +8,26 @@ Unlike traditional RAG systems that only read text, Smart RAG uses computer visi
 
 ## 🏗 High-Level Architecture
 
-The system is split into specialized microservices to ensure scalability, modularity, and hardware efficiency. All services share a data volume for access to raw files and processed images.
+The system is split into specialized microservices to ensure scalability, modularity, and hardware efficiency.
 
 ```mermaid
 graph TD
-    User((User)) -->|Browser| Frontend[Frontend Service - Streamlit]
+    User((User)) -->|Browser| Frontend[Frontend Service - React/Vite]
     Frontend -->|HTTP API| Core[RAG Core Service - FastAPI]
     
     subgraph Processing_Pipeline
-        Core -->|HTTP| Parser[Parser Service - Detectron2 OCR]
-        Core -->|HTTP| Vision[Vision Service - Moondream Qwen Ollama]
-        Vision -.->|Network| Ollama[Ollama Provider - Gemma3 Granite]
+        Core -->|HTTP| Parser[Parser Service - Detectron2]
+        Core -->|HTTP| Vision[Vision Service - Moondream/Qwen]
+        Vision -.->|Network| Ollama[Ollama Provider - Gemma3/Granite]
     end
     
     subgraph Storage
-        Core -->|Read Write| DB[(SQLite DB)]
+        Core -->|Read Write| DB[(PostgreSQL)]
         Core -->|Read Write| FAISS[(FAISS Vector Store)]
         SharedVol[Shared Volume - /app/data]
     end
     
-    Frontend -.->|Read Images| SharedVol
+    Frontend -.->|Serve Static Images| SharedVol
     Parser -.->|Write Crops| SharedVol
     Core -.->|Read Write| SharedVol
 ```
@@ -38,12 +38,12 @@ graph TD
 
 | Service | Technology | Description |
 | :--- | :--- | :--- |
-| **Frontend** | Streamlit | Provides the modern UI for uploading files, chatting, and browsing detected charts. |
-| **RAG Core** | FastAPI, LangChain, FAISS | The "Brain". Handles orchestration, embedding generation, vector storage, and SQLite history management. |
-| **Parser** | Detectron2, PyMuPDF | The "Eyes". Converts PDFs/Docs to images, runs **PubLayNet** to detect tables/figures, and performs OCR. |
-| **Vision** | PyTorch, Transformers | The "Visual Cortex". Runs local VLMs (Moondream, Qwen, InternVL) to generate text descriptions of charts. |
-| **Ollama** | Ollama | The "Heavy Lifter". Runs larger models (Gemma 3, Granite Vision) via API. |
-| **DB Viewer** | SQLite-Web | A lightweight web interface to inspect the database at `port:8080`. |
+| **Frontend** | React, Vite, Tailwind, Shadcn UI | A modern, responsive dashboard for managing collections, uploading files, and visualizing data. |
+| **RAG Core** | FastAPI, LangChain, FAISS | The "Brain". Handles orchestration, embedding generation, vector storage, and **PostgreSQL** metadata management. |
+| **Parser** | Detectron2, PyMuPDF | The "Eyes". Converts PDFs/Docs to images and runs **PubLayNet** to detect tables/figures for cropping. |
+| **Vision** | PyTorch, Transformers | The "Visual Cortex". Runs local VLMs (Moondream2, Qwen-VL, InternVL) to generate text descriptions of charts. |
+| **Ollama** | Ollama | The "Heavy Lifter". Runs larger reasoning models (Gemma 3, Granite Vision) via API for complex tasks. |
+| **Postgres** | PostgreSQL 15 | Relational storage for Collections, Documents, and Chat History. |
 
 ---
 
@@ -53,8 +53,8 @@ graph TD
 
 *   **Docker & Docker Compose**
 *   **API Keys:**
-    *   **Groq API Key:** For high-speed text generation (Llama 3/4).
-    *   **Sanctuary API Key:** (Optional) Alternative LLM provider.
+    *   **Groq API Key:** For high-speed text generation (Llama 3/4) in Test Mode.
+    *   **Sanctuary API Key:** For production LLM usage (Claude 3.5 Sonnet).
 *   **Ollama:**
     *   *Mac/Dev:* Install the [Ollama Desktop App](https://ollama.com).
     *   *Linux/Prod:* Docker handles the Ollama container automatically.
@@ -69,14 +69,14 @@ GROQ_API_KEY=your_groq_api_key_here
 SANCTUARY_API_KEY=your_sanctuary_key_here
 
 # Environment Mode
-# Set to "True" for Mac/Local Dev (Uses CPU/MPS and Local Ollama)
-# Set to "False" for Linux/Prod (Uses NVIDIA T4 GPU and Containerized Ollama)
+# "True" = Mac/Local Dev (Uses CPU, Local Ollama, Groq Llama)
+# "False" = Linux/Prod (Uses NVIDIA GPU, Docker Ollama, Claude 3.5)
 TEST=True
 ```
 
 ### 2. Running Locally (Mac M-Series / Dev)
 
-In this mode, the system runs lightweight services in Docker and offloads heavy AI inference to your Mac's native NPU/GPU via the Ollama app.
+In this mode, the system runs lightweight services in Docker and offloads heavy AI inference to your Mac's native NPU/GPU via the host Ollama app.
 
 1.  **Configure Local Ollama:**
     Docker needs permission to access your Mac's Ollama. Run this in your terminal:
@@ -93,10 +93,11 @@ In this mode, the system runs lightweight services in Docker and offloads heavy 
 
 3.  **Start the System:**
     ```bash
-    docker compose up --build
+    # Passing TEST=True allows the frontend to show the correct model info
+    TEST=True docker-compose up --build
     ```
 
-4.  **Access the App:** Open **http://localhost:8501**
+4.  **Access the App:** Open **http://localhost:5173**
 
 ### 3. Running in Production (Linux + NVIDIA GPU)
 
@@ -107,30 +108,32 @@ In this mode, Docker manages everything, including the Ollama instance, and maps
 
 2.  **Start with GPU Overrides:**
     ```bash
-    docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+    docker-compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
     ```
 
 ---
 
 ## 🛠 Features
 
-### 1. Multi-Document Processing
-Upload multiple PDFs, PowerPoints, or Word Docs at once. The system creates a "Session" grouping these files. You can chat with the entire context window of all documents simultaneously.
+### 1. Collections Management
+Organize your research into **Collections**. Unlike static sessions, Collections are mutable workspaces where you can:
+*   Add new documents over time.
+*   Remove outdated documents.
+*   Chat with the aggregate context of the entire folder.
 
 ### 2. Intelligent Chart Browser
-The `Parser` service identifies visual elements. The `Vision` service describes them.
-*   Go to the sidebar to see the **Chart Browser**.
-*   Navigate through every chart found in your documents.
-*   Read the AI-generated analysis of the data trends within the chart.
+The system automatically detects, crops, and analyzes visual elements.
+*   **Visual Analysis:** Every chart is passed through a Vision Model to extract trends, axis labels, and data points.
+*   **Searchable:** These descriptions are embedded, meaning you can search for "Sales trend in Q3" and retrieve a chart image even if the text didn't explicitly mention it.
 
 ### 3. Parent-Child Chunking
-Instead of naïve text splitting, we use a **Parent-Child** strategy:
-*   **Child Chunks:** Small text fragments used for precise vector search match.
-*   **Parent Chunks:** Larger context blocks returned to the LLM to ensure the answer has full context.
+We use a **Parent-Child** retrieval strategy:
+*   **Child Chunks:** Small, specific text fragments used for high-precision vector search.
+*   **Parent Chunks:** Larger context blocks (pages or paragraphs) returned to the LLM to ensure the answer is comprehensive and accurate.
 
-### 4. Database Persistence
-All chat history, processed document metadata, and chart descriptions are stored in a persistent SQLite database (`data/history.db`).
-*   To view the DB: Open **http://localhost:8080**
+### 4. Hybrid Search Architecture
+*   **FAISS:** Used for dense vector similarity search.
+*   **PostgreSQL:** Used for structured filtering, history management, and relational mapping between Charts, Documents, and Collections.
 
 ---
 
@@ -141,22 +144,24 @@ All chat history, processed document metadata, and chart descriptions are stored
 ├── docker-compose.yml          # Base config (CPU/Mac compatible)
 ├── docker-compose.prod.yml     # Production overrides (GPU support)
 ├── .env                        # Secrets and Config
-├── data/                       # Mapped volume (Uploads, DB, Vector Index)
-│   ├── uploads/
-│   ├── faiss_indexes/
-│   └── history.db
+├── data/                       # Mapped volume
+│   ├── uploads/                # Raw PDFs/Docx
+│   ├── charts/                 # Extracted images
+│   ├── faiss_indexes/          # Vector stores
+│   └── chunks/                 # Serialized text chunks
 └── services/
-    ├── frontend/               # Streamlit UI
-    │   ├── src/                # UI Logic & API Client
+    ├── frontend/               # React + Vite Application
+    │   ├── src/                # Components, Pages, API Logic
     │   └── Dockerfile
-    ├── rag_core/               # Orchestrator & Logic
-    │   ├── src/core/           # Pipeline, Chunking, Persistence
+    ├── rag_core/               # FastAPI Orchestrator
+    │   ├── src/core/           # Pipeline, Chunking, LLM Clients
+    │   ├── src/utils/          # DB Connection Pooling
     │   └── Dockerfile
-    ├── parser/                 # Document Parsing
-    │   ├── src/utils/          # PubLayNet / Detectron2 Logic
+    ├── parser/                 # Document Parsing Service
+    │   ├── src/core/           # Detectron2 & PyMuPDF Logic
     │   └── Dockerfile
-    └── vision/                 # Vision Models
-        ├── src/vision/         # Model definitions
+    └── vision/                 # Vision Inference Service
+        ├── src/core/           # Model Manager (Moondream/Qwen)
         └── Dockerfile
 ```
 
@@ -165,11 +170,11 @@ All chat history, processed document metadata, and chart descriptions are stored
 ## 🔧 Troubleshooting
 
 **"Ollama connection failed"**
-*   *Mac:* Ensure you ran `launchctl setenv OLLAMA_HOST "0.0.0.0"` and restarted the Ollama app. Ensure `TEST=True` in `.env`.
+*   *Mac:* Ensure you ran `launchctl setenv OLLAMA_HOST "0.0.0.0"` and restarted the Ollama app.
 *   *Linux:* Ensure the `ollama` container is running and healthy.
 
-**"Exec format error" or "Platform mismatch"**
-*   This happens if you try to run an x86 image on ARM64 or vice versa. The Dockerfiles use `python:3.10-slim` which supports both architectures automatically. Rebuild with `docker compose build --no-cache`.
+**"Column collection_id does not exist"**
+*   If you migrated from an older version, your database schema might be outdated. Run `docker-compose down -v` to wipe the DB volume and restart.
 
-**Database Permission Denied**
-*   If `db_viewer` fails, ensure the `data/` folder on your host machine has read/write permissions for the Docker user.
+**"Cannot copy out of meta tensor"**
+*   Ensure you are using the correct `rag_core` Dockerfile which forces CPU-only PyTorch to prevent `accelerate` from trying to use a non-existent GPU.

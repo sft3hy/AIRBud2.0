@@ -15,10 +15,29 @@ export interface SessionDocument {
 }
 
 export interface SearchResult {
+    type?: 'text' | 'graph'; // New field to distinguish source
     text: string;
     source: string;
     page?: number;
     score?: number;
+}
+
+// For the visualizer
+export interface GraphNode {
+    id: string;
+    group: string;
+    type?: string;
+}
+
+export interface GraphLink {
+    source: string;
+    target: string;
+    label: string;
+}
+
+export interface GraphData {
+    nodes: GraphNode[];
+    links: GraphLink[];
 }
 
 export interface ChatMessage {

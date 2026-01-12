@@ -36,7 +36,7 @@ class Config:
     # DYNAMIC MODEL SELECTION
     if TEST_MODE:
         LLM_PROVIDER = "groq"
-        GEN_MODEL_NAME = "llama-4-scout-17b-16e-instruct"  # or "llama3-70b-8192" based on Groq availability
+        GEN_MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"  # or "llama3-70b-8192" based on Groq availability
     else:
         LLM_PROVIDER = "sanctuary"
         GEN_MODEL_NAME = "claude-3.5-sonnet"

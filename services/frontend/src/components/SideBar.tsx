@@ -17,6 +17,9 @@ import { logger } from '../lib/logger';
 import { config } from '../lib/config';
 import { ChartBrowser } from './ChartBrowser';
 
+import { GraphExplorer } from './GraphExplorer'; // Import 
+import { Network } from 'lucide-react'; // Import Icon
+
 // UI Components
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -181,9 +184,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
 
             <Tabs defaultValue="files" className="flex-1 flex flex-col min-h-0">
                 <div className="px-4 py-2 shrink-0">
-                    <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="files" className="flex gap-2"><FileText className="w-4 h-4" /> Files</TabsTrigger>
+                    <TabsList className="grid w-full grid-cols-3"> {/* Changed to 3 columns */}
+                        <TabsTrigger value="files" className="flex gap-2"><FileText className="w-4 h-4" /> Collections</TabsTrigger>
                         <TabsTrigger value="charts" className="flex gap-2"><LayoutGrid className="w-4 h-4" /> Charts</TabsTrigger>
+                        <TabsTrigger value="graph" className="flex gap-2"><Network className="w-4 h-4" /> Graph</TabsTrigger>
                     </TabsList>
                 </div>
 
@@ -213,7 +217,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                                 <div className="space-y-2">
                                     <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Your Collections</h3>
                                     {collections.length === 0 ? (
-                                        <p className="text-sm text-muted-foreground italic">No collections yet.</p>
+                                        <p className="text-sm text-muted-foreground italic">No collections as of right now.</p>
                                     ) : (
                                         collections.map(c => (
                                             <Card
@@ -258,7 +262,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                                     <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onSessionChange(null)}>
                                         <ArrowLeft className="h-4 w-4 mr-1" /> Back
                                     </Button>
-                                    <h3 className="font-bold truncate text-sm flex-1">{activeCollectionName}</h3>
+                                    <h3 className="font-bold truncate text-sm flex-1">Collection: {activeCollectionName}</h3>
                                 </div>
 
                                 {/* Doc List */}
@@ -285,7 +289,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium flex items-center gap-2">
                                                 Add Documents
-                                                <Badge variant="outline" className="text-[10px]">Model: {selectedModel}</Badge>
+                                                <Badge variant="outline" className="text-[10px]">Vision Model: {selectedModel}</Badge>
                                             </label>
 
                                             {/* Minimal Model Selector */}
@@ -367,6 +371,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                 <TabsContent value="charts" className="flex-1 flex flex-col min-h-0 data-[state=active]:flex overflow-hidden">
                     <div className="flex-1 px-4 py-2 min-h-0">
                         <ChartBrowser collectionId={currentSessionId} />
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="graph" className="flex-1 flex flex-col min-h-0 data-[state=active]:flex overflow-hidden">
+                    <div className="flex-1 min-h-0 bg-white">
+                        <GraphExplorer collectionId={currentSessionId} />
                     </div>
                 </TabsContent>
             </Tabs>

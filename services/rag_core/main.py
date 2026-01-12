@@ -2,6 +2,7 @@ import os
 import uuid
 import shutil
 import traceback
+import requests
 from typing import Dict, List
 from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,6 +31,7 @@ app.mount("/static", StaticFiles(directory=settings.DATA_DIR), name="static")
 
 # In-Memory Status (keyed by collection_id)
 job_status: Dict[str, Dict] = {}
+KG_SERVICE_URL = "http://kg_service:8003"
 
 # --- Models ---
 class CollectionCreate(BaseModel):
@@ -57,12 +59,13 @@ def run_pipeline_task(collection_id: int, filename: str, vision_model: str):
 
         rag = SmartRAG(output_dir=output_dir, vision_model_name=vision_model)
 
+        # 1. Parse & Index (Local Vector)
         job_status[cid] = {"status": "processing", "step": "Parsing & Vision Analysis...", "progress": 30}
-        rag.index_document(str(file_path))
+        markdown_text = rag.index_document(str(file_path))
 
         job_status[cid] = {"status": "processing", "step": "Saving Embeddings...", "progress": 80}
         
-        # Save to Disk & DB
+        # 2. Save to DB (Get ID)
         doc_id = db.add_document_record(
             filename=filename,
             vision_model=vision_model,
@@ -73,6 +76,25 @@ def run_pipeline_task(collection_id: int, filename: str, vision_model: str):
             collection_id=collection_id,
         )
         
+        # 3. Trigger Graph Ingestion
+        # We send the text to KG Service to extract entities/relationships asynchronously
+        try:
+            job_status[cid] = {"status": "processing", "step": "Updating Knowledge Graph...", "progress": 90}
+            requests.post(
+                f"{KG_SERVICE_URL}/ingest",
+                json={
+                    "text": markdown_text[:100000], # Limit payload just in case
+                    "doc_id": doc_id,
+                    "collection_id": collection_id
+                },
+                timeout=5 # Fire and forget (kg_service handles background)
+            )
+            logger.info(f"Triggered KG ingestion for doc {doc_id}")
+        except Exception as e:
+            logger.error(f"Failed to trigger KG ingest: {e}")
+            # Don't fail the whole job if KG fails
+
+        # 4. Save Vector State
         faiss_path, chunks_path = rag.save_state(doc_id)
         db.update_document_paths(doc_id, faiss_path, chunks_path)
 
@@ -114,12 +136,15 @@ def create_collection(req: CollectionCreate):
     cid = db.create_collection(req.name)
     return {"id": cid, "name": req.name}
 
-# --- NEW: Delete Collection Endpoint ---
 @app.delete("/collections/{cid}")
 def delete_collection(cid: int):
+    # Also notify KG service to delete graph data
+    try:
+        requests.delete(f"{KG_SERVICE_URL}/collections/{cid}", timeout=3)
+    except:
+        pass
     db.delete_collection(cid)
     return {"status": "deleted", "id": cid}
-# ---------------------------------------
 
 @app.get("/collections/{cid}/status")
 def get_status(cid: str):
@@ -161,7 +186,7 @@ def query_collection(req: QueryRequest):
     if not docs:
         return {"response": "This collection has no documents.", "results": []}
 
-    # Load pipelines for valid docs
+    # 1. Load Vector Pipelines
     pipelines = []
     for doc in docs:
         if doc['faiss_index_path'] and os.path.exists(doc['faiss_index_path']):
@@ -175,6 +200,7 @@ def query_collection(req: QueryRequest):
     if not pipelines:
         return {"response": "Error loading document indexes.", "results": []}
 
+    # 2. Vector Search (Aggregated)
     all_results = []
     for p in pipelines:
         all_results.extend(p.search(req.question, top_k=3))
@@ -182,14 +208,47 @@ def query_collection(req: QueryRequest):
     all_results.sort(key=lambda x: x[1])
     top_results = all_results[:5]
 
+    # 3. Knowledge Graph Search (Remote)
+    graph_context = ""
+    graph_results_raw = [] # Store raw data
     try:
-        llm_resp = pipelines[0].generate_answer(req.question, top_results)
+        kg_resp = requests.post(
+            f"{KG_SERVICE_URL}/search",
+            json={"query": req.question, "collection_id": req.collection_id},
+            timeout=3
+        )
+        if kg_resp.status_code == 200:
+            data = kg_resp.json()
+            graph_context = data.get("context", "")
+            graph_results_raw = data.get("raw", [])
+    except Exception as e:
+        logger.error(f"KG Search failed: {e}")
+
+    # 4. Generate Answer (Hybrid)
+    try:
+        llm_resp = pipelines[0].generate_answer(
+            req.question, 
+            top_results, 
+            graph_context=graph_context
+        )
+        
         response_text = llm_resp.content or f"Error: {llm_resp.error}"
 
+        # Combine results with a 'type' field
+        # Vector results
         results_formatted = [
-            {"text": c.text, "source": c.source, "page": c.page, "score": s} 
+            {"type": "text", "text": c.text, "source": c.source, "page": c.page, "score": s} 
             for c, s in top_results
         ]
+        
+        # Add Graph results
+        for g in graph_results_raw:
+            results_formatted.append({
+                "type": "graph",
+                "text": f"{g['source']} --[{g['rel']}]--> {g['target']}",
+                "source": "Knowledge Graph",
+                "score": 1.0 # High confidence for graph facts
+            })
         
         db.add_query_record(req.collection_id, req.question, response_text, results_formatted)
         
