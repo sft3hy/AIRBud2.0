@@ -18,7 +18,15 @@ class SmartRAG:
         self.output_dir = output_dir
         self.vision_model_name = vision_model_name
         self.llm = get_llm_client()
-        self.embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL)
+
+        # FIX: Explicitly set device to cpu and disable low_cpu_mem_usage to prevent
+        # "Cannot copy out of meta tensor" errors in Docker environments.
+        self.embedding_model = SentenceTransformer(
+            settings.EMBEDDING_MODEL,
+            device="cpu",
+            model_kwargs={"low_cpu_mem_usage": False},
+        )
+
         self.chunker = DocumentChunker()
 
         # State

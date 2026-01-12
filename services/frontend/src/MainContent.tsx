@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
-import { Send, FileText, Loader2 } from 'lucide-react';
+import { Send, FileText, Loader2, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { fetchSessionDocuments, sendQuery, getSessionHistory } from './lib/api';
@@ -13,6 +13,7 @@ import { SourceViewer } from './components/SourceViewer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 
 // Assets
 import doggieSrc from './assets/doggie.svg';
@@ -53,10 +54,8 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
         enabled: !!sessionId,
     });
 
-    // Sync server history to local state
     useEffect(() => {
         if (serverHistory && Array.isArray(serverHistory)) {
-            logger.info("Syncing session history", { count: serverHistory.length });
             const formatted: ChatMessage[] = serverHistory.flatMap((item: SessionHistoryItem) => [
                 { role: 'user', content: item.question },
                 {
@@ -81,7 +80,6 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
                 ...prev,
                 { role: 'assistant', content: data.response, sources: data.results }
             ]);
-            logger.info("Response received", { sourcesCount: data.results.length });
         },
         onError: (error) => {
             logger.error("Query failed", error);
@@ -92,7 +90,6 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
         }
     });
 
-    // Auto-scroll to bottom
     useEffect(() => {
         setTimeout(() => {
             bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -116,6 +113,7 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
     if (!sessionId) return <WelcomeScreen />;
 
     const queryCount = chatHistory.filter(x => x.role === 'user').length;
+    const visionModel = documents.length > 0 ? documents[0].vision_model_used : null;
 
     return (
         <div className="flex flex-col h-full w-full bg-background">
@@ -134,6 +132,14 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
                         )}
                     </span>
                 </div>
+
+                {/* Vision Model Badge */}
+                {visionModel && (
+                    <Badge variant="secondary" className="gap-1.5 text-xs font-normal border">
+                        <Eye className="h-3.5 w-3.5 text-primary" />
+                        Model: <span className="font-medium text-foreground">{visionModel}</span>
+                    </Badge>
+                )}
             </div>
 
             {/* Chat Area */}

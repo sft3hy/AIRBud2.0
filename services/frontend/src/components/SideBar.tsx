@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Upload, LayoutGrid, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, Upload, LayoutGrid, FileText, CheckCircle2, AlertCircle, X, Play } from 'lucide-react';
 import { getSessions, checkBackendHealth, uploadAndProcessDocument, createSession, getSessionStatus } from '../lib/api';
 import { VisionModel } from '../types';
 import { cn } from '@/lib/utils';
@@ -32,7 +32,11 @@ const VISION_MODELS: { value: VisionModel; label: string; desc: string }[] = [
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionChange, className }) => {
     const queryClient = useQueryClient();
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // State
     const [selectedModel, setSelectedModel] = useState<VisionModel>("Moondream2");
+    const [stagedFiles, setStagedFiles] = useState<File[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
@@ -64,43 +68,65 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
 
         if (jobStatus.status === 'completed') {
             logger.info("Job completed", { sessionId: activeJobId });
-            setActiveJobId(null);
-            setIsUploading(false);
 
-            // Refresh data
+            // Invalidate queries so the main content and sidebar list refresh
             queryClient.invalidateQueries({ queryKey: ['sessions'] });
             queryClient.invalidateQueries({ queryKey: ['documents', currentSessionId] });
             queryClient.invalidateQueries({ queryKey: ['charts', currentSessionId] });
+
+            setActiveJobId(null);
+            setIsUploading(false);
+            setStagedFiles([]);
+
         } else if (jobStatus.status === 'error') {
             logger.error("Job failed", { sessionId: activeJobId });
             setIsUploading(false);
-            // Don't clear activeJobId immediately so user sees the error state
         }
     }, [jobStatus, queryClient, currentSessionId, activeJobId]);
 
-    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        if (!event.target.files || event.target.files.length === 0) return;
-        const files = Array.from(event.target.files);
+    // 1. Add files to stage
+    const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (event.target.files && event.target.files.length > 0) {
+            const newFiles = Array.from(event.target.files);
+            setStagedFiles(prev => {
+                const combined = [...prev, ...newFiles];
+                // Filter duplicates
+                return combined.filter((file, index, self) =>
+                    index === self.findIndex((f) => f.name === file.name)
+                );
+            });
+        }
+        if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+
+    const removeStagedFile = (fileName: string) => {
+        setStagedFiles(prev => prev.filter(f => f.name !== fileName));
+    };
+
+    const handleStartProcessing = async () => {
+        if (stagedFiles.length === 0) return;
 
         setIsUploading(true);
-        logger.info("Starting upload", { count: files.length, model: selectedModel });
+        logger.info("Starting batch processing", { count: stagedFiles.length, model: selectedModel });
 
         try {
-            // 1. Create Session
-            const newSessionId = await createSession(files.map(f => f.name));
+            // Create Session
+            const sessionName = stagedFiles.map(f => f.name);
+            const newSessionId = await createSession(sessionName);
+
+            // CRITICAL FIX: Invalidate sessions query immediately so the new ID exists in the Select list
+            await queryClient.invalidateQueries({ queryKey: ['sessions'] });
+
             onSessionChange(newSessionId);
             setActiveJobId(newSessionId);
 
-            // 2. Process Files
-            for (const file of files) {
+            // Process Files
+            for (const file of stagedFiles) {
                 await uploadAndProcessDocument(newSessionId, file, selectedModel);
             }
 
-            // Clear input
-            event.target.value = "";
-
         } catch (error) {
-            logger.error("Upload process failed", error);
+            logger.error("Batch process failed", error);
             setIsUploading(false);
             setActiveJobId(null);
         }
@@ -153,7 +179,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                                 </Card>
                             )}
 
-                            {/* UPLOAD AREA */}
+                            {/* UPLOAD & STAGING AREA */}
                             {!currentSessionId && !activeJobId && (
                                 <div className="space-y-4">
                                     <div className="space-y-2">
@@ -173,23 +199,67 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                                         </Select>
                                     </div>
 
+                                    {/* Upload Box */}
                                     <Card className="p-6 border-dashed border-2 flex flex-col items-center gap-2 text-center hover:bg-muted/50 transition-colors relative cursor-pointer group">
                                         <input
+                                            ref={fileInputRef}
                                             type="file"
                                             multiple
                                             accept=".pdf,.docx,.pptx"
                                             className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                                            onChange={handleFileUpload}
+                                            onChange={handleFileSelect}
                                             disabled={isUploading || !isBackendOnline}
                                         />
                                         <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center group-hover:scale-110 transition-transform">
                                             <Upload className="h-5 w-5 text-muted-foreground" />
                                         </div>
                                         <div>
-                                            <div className="text-sm font-semibold">Click to Upload Documents</div>
+                                            <div className="text-sm font-semibold">Click to Select Documents</div>
                                             <div className="text-xs text-muted-foreground">PDF, DOCX, PPTX</div>
                                         </div>
                                     </Card>
+
+                                    {/* Staged Files List */}
+                                    {stagedFiles.length > 0 && (
+                                        <div className="space-y-3 animate-in fade-in slide-in-from-top-1">
+                                            <div className="flex items-center justify-between">
+                                                <h4 className="text-xs font-semibold uppercase text-muted-foreground">Staged ({stagedFiles.length})</h4>
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="h-6 text-xs text-red-500 hover:text-red-600"
+                                                    onClick={() => setStagedFiles([])}
+                                                >
+                                                    Clear All
+                                                </Button>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                {stagedFiles.map((f, idx) => (
+                                                    <div key={idx} className="flex items-center justify-between p-2 bg-card border rounded-md text-sm shadow-sm">
+                                                        <span className="truncate max-w-[180px]" title={f.name}>{f.name}</span>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-6 w-6 text-muted-foreground hover:text-red-500"
+                                                            onClick={() => removeStagedFile(f.name)}
+                                                        >
+                                                            <X className="h-3 w-3" />
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            <Button
+                                                className="w-full gap-2"
+                                                onClick={handleStartProcessing}
+                                                disabled={isUploading}
+                                            >
+                                                {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
+                                                Start Processing
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

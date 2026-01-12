@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import { SearchResult, SessionDocument } from '../types';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 interface SourceViewerProps {
     sources: SearchResult[];
@@ -23,18 +24,35 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({ sources }) => {
                         <h5 className="font-semibold text-sm">📄 Text Sources</h5>
                         <div className="grid gap-2">
                             {sources.map((src, idx) => {
-                                const score = src.score ? parseFloat(src.score.toString()) : 1;
-                                const relevance = (1 / (1 + score)) * 100;
+                                // SCORE FIX:
+                                // FAISS IndexFlatL2 returns Squared Euclidean Distance.
+                                // Distance = 0 means exact match (100%).
+                                // Normalized vectors -> Max distance is 4 (opposite direction), or 2 (orthogonal).
+                                // Heuristic: Relevance % = (1 - (Distance / 2)) * 100
+                                const distance = src.score ? parseFloat(src.score.toString()) : 0;
+                                const relevance = Math.max(0, (1 - (distance / 2)) * 100).toFixed(0);
+
                                 const filename = src.source ? src.source.split('/').pop() : 'Unknown';
+                                const pageDisplay = src.page && src.page > 0 ? `Page ${src.page}` : 'Page N/A';
 
                                 return (
                                     <Card key={idx} className="p-3 text-sm bg-muted/50 border-none shadow-sm">
-                                        <div className="font-medium mb-2 text-xs text-blue-500 flex justify-between">
-                                            <span>Source {idx + 1} (from {filename} - Page {src.page || 'N/A'})</span>
-                                            <span>Relevance: {relevance.toFixed(1)}%</span>
+                                        <div className="flex flex-wrap items-center justify-between mb-2 gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-semibold text-blue-600 text-xs">
+                                                    Source {idx + 1}
+                                                </span>
+                                                <span className="text-xs text-muted-foreground">
+                                                    {filename} ({pageDisplay})
+                                                </span>
+                                            </div>
+
+                                            <Badge variant="secondary" className="text-[10px] h-5">
+                                                {relevance}% Match
+                                            </Badge>
                                         </div>
+
                                         <div className="text-muted-foreground text-xs leading-relaxed">
-                                            {/* Safe Markdown usage */}
                                             <ReactMarkdown
                                                 components={{
                                                     p: ({ node, ...props }) => <p className="mb-1 last:mb-0" {...props} />,

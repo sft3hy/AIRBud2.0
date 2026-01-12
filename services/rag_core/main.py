@@ -21,7 +21,7 @@ db = DatabaseManager()
 # --- Middleware ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Tighten this for production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,7 +30,7 @@ app.add_middleware(
 # --- Static Mount ---
 app.mount("/static", StaticFiles(directory=settings.DATA_DIR), name="static")
 
-# --- In-Memory Status (Replace with Redis for scaled env) ---
+# --- In-Memory Status ---
 job_status: Dict[str, Dict] = {}
 
 
@@ -72,7 +72,7 @@ def run_pipeline_task(session_id: int, filename: str, vision_model: str):
             "step": "Parsing Layout & Vision...",
             "progress": 25,
         }
-        rag.index_document(file_path)
+        rag.index_document(str(file_path))
 
         job_status[sid] = {
             "status": "processing",
@@ -218,9 +218,13 @@ def query_session(req: QueryRequest):
             response_text = f"Error generating answer: {llm_resp.error}"
 
         # Save History
+        # --- BUG FIX: Added 'score' field here ---
         results_formatted = [
-            {"text": c.text, "source": c.source, "page": c.page} for c, s in top_results
+            {"text": c.text, "source": c.source, "page": c.page, "score": s}
+            for c, s in top_results
         ]
+        # -----------------------------------------
+
         db.add_query_record(
             req.session_id, req.question, response_text, results_formatted
         )
