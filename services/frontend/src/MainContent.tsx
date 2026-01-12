@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import { Send, FileText, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-import { fetchSessionDocuments, sendQuery, getSessionHistory } from './lib/api';
+import { fetchCollectionDocuments, sendQuery, getCollectionHistory } from './lib/api';
 import { ChatMessage, SessionHistoryItem } from './types';
 import { logger } from './lib/logger';
 import { SourceViewer } from './components/SourceViewer';
@@ -43,13 +43,13 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
 
     const { data: documents = [] } = useQuery({
         queryKey: ['documents', sessionId],
-        queryFn: () => fetchSessionDocuments(sessionId!),
+        queryFn: () => fetchCollectionDocuments(sessionId!), // Updated
         enabled: !!sessionId,
     });
 
     const { data: serverHistory } = useQuery({
         queryKey: ['history', sessionId],
-        queryFn: () => getSessionHistory(sessionId!),
+        queryFn: () => getCollectionHistory(sessionId!), // Updated
         enabled: !!sessionId,
     });
 

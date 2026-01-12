@@ -1,7 +1,14 @@
+export interface CollectionSummary {
+    id: number;
+    name: string;
+    created_at: string;
+    docs: number;
+}
+
 export interface SessionDocument {
-    id?: string;
+    id: number; // Added ID for deletion
     original_filename: string;
-    vision_model_used?: string;
+    vision_model_used: string;
     chart_dir?: string;
     chart_descriptions?: string | Record<string, string>;
     chart_descriptions_json?: string | Record<string, string>;
@@ -26,18 +33,17 @@ export interface QueryResponse {
     error?: string;
 }
 
-export interface SessionSummary {
-    id: string;
-    name: string;
-    docs: number;
-    created_at: string;
+export interface JobStatus {
+    status: 'idle' | 'queued' | 'processing' | 'completed' | 'error';
+    step: string;
+    progress: number;
 }
 
 export interface SessionHistoryItem {
     question: string;
     response: string;
     sources?: SearchResult[];
-    results?: SearchResult[]; // Backend sometimes returns this alias
+    results?: SearchResult[];
 }
 
 export type VisionModel =
@@ -46,9 +52,3 @@ export type VisionModel =
     | 'InternVL3.5-1B'
     | 'Ollama-Gemma3'
     | 'Ollama-Granite3.2-Vision';
-
-export interface JobStatus {
-    status: 'idle' | 'queued' | 'processing' | 'completed' | 'error';
-    step: string;
-    progress: number;
-}

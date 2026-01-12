@@ -1,11 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Upload, LayoutGrid, FileText, CheckCircle2, AlertCircle, X, Play, Cpu, Eye } from 'lucide-react';
-import { getSessions, checkBackendHealth, uploadAndProcessDocument, createSession, getSessionStatus } from '../lib/api';
-import { config } from '../lib/config'; // Import the sync config
+import { Loader2, Upload, LayoutGrid, FileText, CheckCircle2, AlertCircle, X, Play, Cpu, Eye, Trash2, FolderPlus, ArrowLeft, FolderOpen } from 'lucide-react';
+import {
+    getCollections,
+    fetchSystemStatus,
+    uploadAndProcessDocument,
+    createCollection,
+    deleteCollection, // New Import
+    getCollectionStatus,
+    fetchCollectionDocuments,
+    deleteDocument
+} from '../lib/api';
 import { VisionModel } from '../types';
 import { cn } from '@/lib/utils';
 import { logger } from '../lib/logger';
+import { config } from '../lib/config';
 import { ChartBrowser } from './ChartBrowser';
 
 // UI Components
@@ -17,6 +26,7 @@ import { Progress } from '@/components/ui/progress';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 
 interface SidebarProps {
     currentSessionId: string | null;
@@ -41,38 +51,49 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
     const [stagedFiles, setStagedFiles] = useState<File[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [activeJobId, setActiveJobId] = useState<string | null>(null);
+    const [newCollectionName, setNewCollectionName] = useState("");
+    const [viewMode, setViewMode] = useState<'list' | 'active'>('list');
 
-    // Health Check (Kept for Online/Offline indicator)
-    const { data: isBackendOnline } = useQuery({
-        queryKey: ['health'],
-        queryFn: checkBackendHealth,
-        refetchInterval: 10000,
+    // System Status
+    const { data: systemStatus } = useQuery({
+        queryKey: ['system_status'],
+        queryFn: fetchSystemStatus,
+        refetchInterval: 30000,
     });
 
-    // Load Sessions
-    const { data: sessions = [] } = useQuery({
-        queryKey: ['sessions'],
-        queryFn: getSessions,
-        enabled: !!isBackendOnline,
+    // Load Collections
+    const { data: collections = [] } = useQuery({
+        queryKey: ['collections'],
+        queryFn: getCollections,
+        enabled: !!systemStatus?.online,
+    });
+
+    // Load Current Docs
+    const { data: currentDocs = [] } = useQuery({
+        queryKey: ['documents', currentSessionId],
+        queryFn: () => fetchCollectionDocuments(currentSessionId!),
+        enabled: !!currentSessionId,
     });
 
     // Poll Job Status
     const { data: jobStatus } = useQuery({
         queryKey: ['status', activeJobId],
-        queryFn: () => getSessionStatus(activeJobId!),
+        queryFn: () => getCollectionStatus(activeJobId!),
         enabled: !!activeJobId,
         refetchInterval: 1000,
     });
+
+    useEffect(() => {
+        if (currentSessionId) setViewMode('active');
+        else setViewMode('list');
+    }, [currentSessionId]);
 
     // Handle Job Completion
     useEffect(() => {
         if (!jobStatus) return;
 
         if (jobStatus.status === 'completed') {
-            logger.info("Job completed", { sessionId: activeJobId });
-
-            // Invalidate queries so MainContent refreshes
-            queryClient.invalidateQueries({ queryKey: ['sessions'] });
+            queryClient.invalidateQueries({ queryKey: ['collections'] });
             queryClient.invalidateQueries({ queryKey: ['documents', currentSessionId] });
             queryClient.invalidateQueries({ queryKey: ['charts', currentSessionId] });
 
@@ -81,10 +102,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
             setStagedFiles([]);
 
         } else if (jobStatus.status === 'error') {
-            logger.error("Job failed", { sessionId: activeJobId });
             setIsUploading(false);
         }
     }, [jobStatus, queryClient, currentSessionId, activeJobId]);
+
+    const handleCreateCollection = async () => {
+        if (!newCollectionName.trim()) return;
+        const id = await createCollection(newCollectionName);
+        await queryClient.refetchQueries({ queryKey: ['collections'] });
+        onSessionChange(id);
+        setNewCollectionName("");
+    };
+
+    // --- NEW: Delete Collection Handler ---
+    const handleDeleteCollection = async (e: React.MouseEvent, cid: number) => {
+        e.stopPropagation(); // Prevent opening the collection
+        if (!confirm("Are you sure you want to delete this collection and all its documents?")) return;
+
+        await deleteCollection(cid);
+
+        // If we deleted the active one, go back to list
+        if (String(cid) === currentSessionId) {
+            onSessionChange(null);
+        }
+
+        await queryClient.invalidateQueries({ queryKey: ['collections'] });
+    };
+    // -------------------------------------
 
     const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files.length > 0) {
@@ -99,39 +143,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
-    const removeStagedFile = (fileName: string) => {
-        setStagedFiles(prev => prev.filter(f => f.name !== fileName));
-    };
-
-    const handleStartProcessing = async () => {
-        if (stagedFiles.length === 0) return;
-
+    const handleAddFiles = async () => {
+        if (!currentSessionId || stagedFiles.length === 0) return;
         setIsUploading(true);
-        logger.info("Starting batch processing", { count: stagedFiles.length, model: selectedModel });
+        setActiveJobId(currentSessionId);
 
         try {
-            // 1. Create Session
-            const sessionName = stagedFiles.map(f => f.name);
-            const newSessionId = await createSession(sessionName);
-
-            // 2. Force refetch and Wait
-            await queryClient.refetchQueries({ queryKey: ['sessions'] });
-
-            // 3. Select the new session immediately
-            onSessionChange(newSessionId);
-            setActiveJobId(newSessionId);
-
-            // 4. Process Files
             for (const file of stagedFiles) {
-                await uploadAndProcessDocument(newSessionId, file, selectedModel);
+                await uploadAndProcessDocument(currentSessionId, file, selectedModel);
             }
-
         } catch (error) {
-            logger.error("Batch process failed", error);
+            logger.error("Upload failed", error);
             setIsUploading(false);
             setActiveJobId(null);
         }
     };
+
+    const handleDeleteDoc = async (docId: number) => {
+        if (!confirm("Remove this document from the collection?")) return;
+        await deleteDocument(docId);
+        queryClient.invalidateQueries({ queryKey: ['documents', currentSessionId] });
+    };
+
+    const activeCollectionName = collections.find(c => String(c.id) === currentSessionId)?.name;
 
     return (
         <div className={cn("flex flex-col h-full w-full bg-muted/10 border-r", className)}>
@@ -139,8 +173,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                 <h2 className="text-lg font-bold flex items-center gap-2">
                     🧠 Smart RAG
                     <div
-                        className={cn("h-2.5 w-2.5 rounded-full", isBackendOnline ? 'bg-green-500' : 'bg-red-500 animate-pulse')}
-                        title={isBackendOnline ? "Backend Online" : "Backend Offline"}
+                        className={cn("h-2.5 w-2.5 rounded-full", systemStatus?.online ? 'bg-green-500' : 'bg-red-500 animate-pulse')}
+                        title={systemStatus?.online ? "Backend Online" : "Backend Offline"}
                     />
                 </h2>
             </div>
@@ -156,147 +190,160 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                 {/* --- FILES TAB --- */}
                 <TabsContent value="files" className="flex-1 flex flex-col min-h-0 data-[state=active]:flex">
                     <ScrollArea className="flex-1 px-4 py-2">
-                        <div className="space-y-6 pb-6">
 
-                            {/* SESSION HISTORY */}
-                            <div className="space-y-2">
-                                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Session</h3>
-                                <Select
-                                    value={currentSessionId || "new"}
-                                    onValueChange={(val) => onSessionChange(val === "new" ? null : val)}
-                                    disabled={!!activeJobId}
-                                >
-                                    <SelectTrigger className="w-full bg-background border-primary/20">
-                                        <SelectValue placeholder="Select Session" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="new" className="text-primary font-medium">✨ Start New Session</SelectItem>
-                                        <Separator className="my-1" />
-                                        {sessions.map((sess) => (
-                                            <SelectItem key={sess.id} value={String(sess.id)}>
-                                                {sess.name.length > 25 ? sess.name.substring(0, 25) + "..." : sess.name}
-                                                <span className="ml-2 text-muted-foreground text-xs">({sess.docs})</span>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <Separator />
-
-                            {/* UPLOAD & STAGING AREA */}
-                            {!activeJobId && (
-                                <div className="space-y-4">
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium flex items-center gap-2">
-                                            Vision Model
-                                            <Badge variant="outline" className="text-[10px] h-4 px-1 py-0">For New Uploads</Badge>
-                                        </label>
-                                        <Select value={selectedModel} onValueChange={(v) => setSelectedModel(v as VisionModel)}>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                {VISION_MODELS.map((m) => (
-                                                    <SelectItem key={m.value} value={m.value}>
-                                                        <div className="flex flex-col items-start py-1">
-                                                            <span className="font-medium">{m.label}</span>
-                                                            <span className="text-xs text-muted-foreground">{m.desc}</span>
-                                                        </div>
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-
-                                    {/* Upload Box */}
-                                    <Card className="p-6 border-dashed border-2 flex flex-col items-center gap-2 text-center hover:bg-muted/50 transition-colors relative cursor-pointer group">
-                                        <input
-                                            ref={fileInputRef}
-                                            type="file"
-                                            multiple
-                                            accept=".pdf,.docx,.pptx"
-                                            className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                                            onChange={handleFileSelect}
-                                            disabled={isUploading || !isBackendOnline}
+                        {/* VIEW 1: SELECT / CREATE COLLECTION */}
+                        {viewMode === 'list' && (
+                            <div className="space-y-6">
+                                <Card className="p-4 bg-background border-dashed">
+                                    <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                                        <FolderPlus className="h-4 w-4" /> New Collection
+                                    </h3>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            placeholder="Project Name..."
+                                            value={newCollectionName}
+                                            onChange={(e) => setNewCollectionName(e.target.value)}
                                         />
-                                        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center group-hover:scale-110 transition-transform">
-                                            <Upload className="h-6 w-6 text-muted-foreground" />
-                                        </div>
-                                        <div>
-                                            <div className="text-base font-semibold">Click to Select Documents</div>
-                                            <div className="text-sm text-muted-foreground">PDF, DOCX, PPTX</div>
-                                        </div>
-                                    </Card>
+                                        <Button onClick={handleCreateCollection} disabled={!newCollectionName.trim()}>
+                                            Create
+                                        </Button>
+                                    </div>
+                                </Card>
 
-                                    {/* Staged Files List */}
-                                    {stagedFiles.length > 0 && (
-                                        <div className="space-y-3 animate-in fade-in slide-in-from-top-1">
-                                            <div className="flex items-center justify-between">
-                                                <h4 className="text-xs font-semibold uppercase text-muted-foreground">Staged ({stagedFiles.length})</h4>
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    className="h-6 text-xs text-red-500 hover:text-red-600"
-                                                    onClick={() => setStagedFiles([])}
-                                                >
-                                                    Clear All
-                                                </Button>
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                {stagedFiles.map((f, idx) => (
-                                                    <div key={idx} className="flex items-center justify-between p-2 bg-card border rounded-md text-sm shadow-sm">
-                                                        <span className="truncate max-w-[180px]" title={f.name}>{f.name}</span>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-6 w-6 text-muted-foreground hover:text-red-500"
-                                                            onClick={() => removeStagedFile(f.name)}
-                                                        >
-                                                            <X className="h-3 w-3" />
-                                                        </Button>
-                                                    </div>
-                                                ))}
-                                            </div>
-
-                                            <Button
-                                                className="w-full gap-2 text-base py-5"
-                                                onClick={handleStartProcessing}
-                                                disabled={isUploading}
+                                <div className="space-y-2">
+                                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Your Collections</h3>
+                                    {collections.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground italic">No collections yet.</p>
+                                    ) : (
+                                        collections.map(c => (
+                                            <Card
+                                                key={c.id}
+                                                className="p-3 hover:bg-muted/50 cursor-pointer flex justify-between items-center transition-colors group"
+                                                onClick={() => onSessionChange(String(c.id))}
                                             >
-                                                {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Play className="h-5 w-5 fill-current" />}
-                                                Start Processing
-                                            </Button>
-                                        </div>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+                                                        <FolderOpen className="h-4 w-4" />
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-medium text-sm">{c.name}</div>
+                                                        <div className="text-xs text-muted-foreground">{c.docs} documents</div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-primary">
+                                                        <Play className="h-3 w-3" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-muted-foreground hover:text-red-600"
+                                                        onClick={(e) => handleDeleteCollection(e, c.id)}
+                                                    >
+                                                        <Trash2 className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            </Card>
+                                        ))
                                     )}
                                 </div>
-                            )}
+                            </div>
+                        )}
 
-                            {/* JOB STATUS CARD */}
-                            {activeJobId && jobStatus && (
-                                <Card className="p-4 border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 animate-in fade-in slide-in-from-top-2">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        {jobStatus.status === 'completed' ? (
-                                            <CheckCircle2 className="h-5 w-5 text-green-600" />
-                                        ) : jobStatus.status === 'error' ? (
-                                            <AlertCircle className="h-5 w-5 text-red-600" />
-                                        ) : (
-                                            <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                        {/* VIEW 2: INSIDE COLLECTION */}
+                        {viewMode === 'active' && currentSessionId && (
+                            <div className="space-y-6">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onSessionChange(null)}>
+                                        <ArrowLeft className="h-4 w-4 mr-1" /> Back
+                                    </Button>
+                                    <h3 className="font-bold truncate text-sm flex-1">{activeCollectionName}</h3>
+                                </div>
+
+                                {/* Doc List */}
+                                <div className="space-y-2">
+                                    <h4 className="text-xs font-semibold text-muted-foreground uppercase">Documents ({currentDocs.length})</h4>
+                                    {currentDocs.map(doc => (
+                                        <div key={doc.id} className="flex items-center justify-between p-2 bg-card border rounded-md text-sm">
+                                            <span className="truncate flex-1 pr-2" title={doc.original_filename}>{doc.original_filename}</span>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline" className="text-[10px] h-5">{doc.vision_model_used}</Badge>
+                                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-500" onClick={() => handleDeleteDoc(doc.id)}>
+                                                    <Trash2 className="h-3 w-3" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <Separator />
+
+                                {/* Add New Files */}
+                                {(!activeJobId || activeJobId === currentSessionId) && (
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium flex items-center gap-2">
+                                                Add Documents
+                                                <Badge variant="outline" className="text-[10px]">Model: {selectedModel}</Badge>
+                                            </label>
+
+                                            {/* Minimal Model Selector */}
+                                            <Select value={selectedModel} onValueChange={(v) => setSelectedModel(v as VisionModel)}>
+                                                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    {VISION_MODELS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <Card className="p-4 border-dashed border-2 flex flex-col items-center gap-2 text-center hover:bg-muted/50 transition-colors relative cursor-pointer">
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                multiple
+                                                accept=".pdf,.docx,.pptx"
+                                                className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                                onChange={handleFileSelect}
+                                                disabled={isUploading}
+                                            />
+                                            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                                <Upload className="h-4 w-4" /> Click to Upload
+                                            </div>
+                                        </Card>
+
+                                        {stagedFiles.length > 0 && (
+                                            <div className="space-y-2">
+                                                {stagedFiles.map((f, idx) => (
+                                                    <div key={idx} className="flex items-center justify-between text-xs pl-2">
+                                                        <span className="truncate">{f.name}</span>
+                                                        <X className="h-3 w-3 cursor-pointer" onClick={() => setStagedFiles(p => p.filter(x => x !== f))} />
+                                                    </div>
+                                                ))}
+                                                <Button className="w-full h-8 text-xs" onClick={handleAddFiles} disabled={isUploading}>
+                                                    {isUploading ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : "Start Processing"}
+                                                </Button>
+                                            </div>
                                         )}
-                                        <span className="font-semibold text-base">
-                                            {jobStatus.status === 'completed' ? 'Success' : jobStatus.status === 'error' ? 'Error' : 'Processing...'}
-                                        </span>
                                     </div>
-                                    <Progress value={jobStatus.progress} className="h-2 mb-2" />
-                                    <p className="text-xs text-muted-foreground font-mono truncate" title={jobStatus.step}>
-                                        {jobStatus.step}
-                                    </p>
-                                </Card>
-                            )}
+                                )}
 
-                        </div>
+                                {/* Job Status */}
+                                {activeJobId === currentSessionId && jobStatus && (
+                                    <Card className="p-3 bg-blue-50/50 dark:bg-blue-900/20 border-blue-200">
+                                        <div className="flex items-center gap-2 text-xs font-semibold mb-1">
+                                            <Loader2 className="h-3 w-3 animate-spin" /> Processing...
+                                        </div>
+                                        <Progress value={jobStatus.progress} className="h-1" />
+                                        <p className="text-[10px] text-muted-foreground mt-1 truncate">{jobStatus.step}</p>
+                                    </Card>
+                                )}
+                            </div>
+                        )}
+
                     </ScrollArea>
 
-                    {/* SYSTEM INFO FOOTER - Instant Loading */}
+                    {/* SYSTEM INFO FOOTER */}
                     <div className="p-4 border-t bg-muted/20">
                         <div className="space-y-3">
                             <h4 className="text-xs font-bold uppercase text-muted-foreground tracking-widest">System Info</h4>
@@ -312,27 +359,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                                     </p>
                                 </div>
                             </div>
-
-                            <div className="flex items-center gap-3">
-                                <div className="h-8 w-8 rounded-md bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
-                                    <Eye className="h-4 w-4 text-purple-600" />
-                                </div>
-                                <div className="min-w-0">
-                                    <p className="text-xs font-medium text-muted-foreground">Vision Model</p>
-                                    <p className="text-sm font-semibold truncate" title={selectedModel}>
-                                        {selectedModel}
-                                    </p>
-                                </div>
-                            </div>
                         </div>
                     </div>
 
                 </TabsContent>
 
-                {/* --- CHARTS TAB --- */}
                 <TabsContent value="charts" className="flex-1 flex flex-col min-h-0 data-[state=active]:flex overflow-hidden">
                     <div className="flex-1 px-4 py-2 min-h-0">
-                        <ChartBrowser sessionId={currentSessionId} />
+                        <ChartBrowser collectionId={currentSessionId} />
                     </div>
                 </TabsContent>
             </Tabs>

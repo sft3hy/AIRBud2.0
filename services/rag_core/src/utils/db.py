@@ -8,7 +8,6 @@ from datetime import datetime
 from src.config import settings
 from src.utils.logger import logger
 
-
 class DatabaseManager:
     _instance = None
 
@@ -19,18 +18,16 @@ class DatabaseManager:
         return cls._instance
 
     def _init_pool(self):
-        """Initialize connection pool with retry logic."""
         retries = 5
         while retries > 0:
             try:
                 self.pool = psycopg2.pool.ThreadedConnectionPool(
-                    1,
-                    10,  # Min 1, Max 10 connections
+                    1, 10,
                     host=settings.DB_HOST,
                     user=settings.DB_USER,
                     password=settings.DB_PASSWORD,
                     dbname=settings.DB_NAME,
-                    port=settings.DB_PORT,
+                    port=settings.DB_PORT
                 )
                 self._init_tables()
                 logger.info("Database connection established.")
@@ -43,7 +40,6 @@ class DatabaseManager:
 
     @contextmanager
     def get_cursor(self, commit=False):
-        """Context manager for getting a cursor from the pool."""
         conn = self.pool.getconn()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -58,20 +54,19 @@ class DatabaseManager:
 
     def _init_tables(self):
         with self.get_cursor(commit=True) as cur:
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS sessions (
+            # Renamed sessions -> collections
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS collections (
                     id SERIAL PRIMARY KEY,
-                    session_name TEXT,
-                    timestamp TIMESTAMP
+                    name TEXT,
+                    created_at TIMESTAMP
                 )
-            """
-            )
-            cur.execute(
-                """
+            """)
+            # session_id -> collection_id
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS documents (
                     id SERIAL PRIMARY KEY,
-                    session_id INTEGER,
+                    collection_id INTEGER,
                     original_filename TEXT,
                     vision_model_used TEXT,
                     timestamp TIMESTAMP,
@@ -80,99 +75,78 @@ class DatabaseManager:
                     chunks_path TEXT,
                     chart_descriptions_json TEXT
                 )
-            """
-            )
-            cur.execute(
-                """
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS queries (
                     id SERIAL PRIMARY KEY,
-                    session_id INTEGER,
+                    collection_id INTEGER,
                     question TEXT,
                     response TEXT,
                     sources_json TEXT,
                     timestamp TIMESTAMP
                 )
-            """
-            )
+            """)
 
-    # --- Session Operations ---
-    def create_session(self, filenames):
-        name = (
-            filenames[0]
-            if len(filenames) == 1
-            else f"{filenames[0]} + {len(filenames)-1}"
-        )
+    # --- Collection Operations ---
+    def create_collection(self, name):
         with self.get_cursor(commit=True) as cur:
             cur.execute(
-                "INSERT INTO sessions (session_name, timestamp) VALUES (%s, %s) RETURNING id",
-                (name, datetime.now()),
+                "INSERT INTO collections (name, created_at) VALUES (%s, %s) RETURNING id",
+                (name, datetime.now())
             )
-            return cur.fetchone()["id"]
+            return cur.fetchone()['id']
+    
+    def rename_collection(self, collection_id, new_name):
+        with self.get_cursor(commit=True) as cur:
+            cur.execute("UPDATE collections SET name=%s WHERE id=%s", (new_name, collection_id))
 
-    def get_all_sessions(self):
+    def get_all_collections(self):
         with self.get_cursor() as cur:
-            cur.execute(
-                """
-                SELECT s.id, s.session_name, s.timestamp, COUNT(d.id) as docs
-                FROM sessions s 
-                LEFT JOIN documents d ON s.id=d.session_id 
-                GROUP BY s.id, s.session_name, s.timestamp 
-                ORDER BY s.timestamp DESC
-            """
-            )
+            cur.execute("""
+                SELECT c.id, c.name, c.created_at, COUNT(d.id) as docs
+                FROM collections c 
+                LEFT JOIN documents d ON c.id=d.collection_id 
+                GROUP BY c.id, c.name, c.created_at 
+                ORDER BY c.created_at DESC
+            """)
             return cur.fetchall()
 
-    # --- Document Operations ---
-    def add_document_record(
-        self,
-        filename,
-        vision_model,
-        chart_dir,
-        faiss_path,
-        chunks_path,
-        chart_descriptions,
-        session_id,
-    ):
-        desc_json = (
-            json.dumps(chart_descriptions)
-            if isinstance(chart_descriptions, dict)
-            else chart_descriptions
-        )
-
+    def delete_collection(self, collection_id):
+        # Cascading delete usually handled by DB constraints, but here we do manual for safety
         with self.get_cursor(commit=True) as cur:
-            cur.execute(
-                """
+            cur.execute("DELETE FROM queries WHERE collection_id=%s", (collection_id,))
+            cur.execute("DELETE FROM documents WHERE collection_id=%s", (collection_id,))
+            cur.execute("DELETE FROM collections WHERE id=%s", (collection_id,))
+
+    # --- Document Operations ---
+    def add_document_record(self, filename, vision_model, chart_dir, faiss_path, chunks_path, chart_descriptions, collection_id):
+        desc_json = json.dumps(chart_descriptions) if isinstance(chart_descriptions, dict) else chart_descriptions
+        
+        with self.get_cursor(commit=True) as cur:
+            cur.execute("""
                 INSERT INTO documents 
-                (session_id, original_filename, vision_model_used, timestamp, chart_dir, faiss_index_path, chunks_path, chart_descriptions_json)
+                (collection_id, original_filename, vision_model_used, timestamp, chart_dir, faiss_index_path, chunks_path, chart_descriptions_json)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            """,
-                (
-                    session_id,
-                    filename,
-                    vision_model,
-                    datetime.now(),
-                    chart_dir,
-                    faiss_path,
-                    chunks_path,
-                    desc_json,
-                ),
-            )
-            return cur.fetchone()["id"]
+            """, (collection_id, filename, vision_model, datetime.now(), chart_dir, faiss_path, chunks_path, desc_json))
+            return cur.fetchone()['id']
+
+    def delete_document(self, doc_id):
+        with self.get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM documents WHERE id=%s", (doc_id,))
 
     def update_document_paths(self, doc_id, faiss_path, chunks_path):
         with self.get_cursor(commit=True) as cur:
             cur.execute(
                 "UPDATE documents SET faiss_index_path=%s, chunks_path=%s WHERE id=%s",
-                (faiss_path, chunks_path, doc_id),
+                (faiss_path, chunks_path, doc_id)
             )
 
-    def get_session_documents(self, session_id):
+    def get_collection_documents(self, collection_id):
         with self.get_cursor() as cur:
-            cur.execute("SELECT * FROM documents WHERE session_id=%s", (session_id,))
+            cur.execute("SELECT * FROM documents WHERE collection_id=%s ORDER BY original_filename ASC", (collection_id,))
             rows = cur.fetchall()
-
-            # Clean up JSON fields
+            
             for row in rows:
                 raw = row.get("chart_descriptions_json")
                 if raw and isinstance(raw, str):
@@ -187,22 +161,22 @@ class DatabaseManager:
             return rows
 
     # --- Query History ---
-    def add_query_record(self, session_id, question, response, sources):
+    def add_query_record(self, collection_id, question, response, sources):
         with self.get_cursor(commit=True) as cur:
             cur.execute(
-                "INSERT INTO queries (session_id, question, response, sources_json, timestamp) VALUES (%s, %s, %s, %s, %s)",
-                (session_id, question, response, json.dumps(sources), datetime.now()),
+                "INSERT INTO queries (collection_id, question, response, sources_json, timestamp) VALUES (%s, %s, %s, %s, %s)",
+                (collection_id, question, response, json.dumps(sources), datetime.now())
             )
 
-    def get_queries_for_session(self, session_id):
+    def get_queries_for_collection(self, collection_id):
         with self.get_cursor() as cur:
             cur.execute(
-                "SELECT question, response, sources_json FROM queries WHERE session_id=%s ORDER BY timestamp ASC",
-                (session_id,),
+                "SELECT question, response, sources_json FROM queries WHERE collection_id=%s ORDER BY timestamp ASC",
+                (collection_id,)
             )
             results = cur.fetchall()
             for r in results:
-                if isinstance(r["sources_json"], str):
-                    r["sources"] = json.loads(r["sources_json"])
-                    r["results"] = r["sources"]  # Alias for frontend compatibility
+                if isinstance(r['sources_json'], str):
+                    r['sources'] = json.loads(r['sources_json'])
+                    r['results'] = r['sources']
             return results

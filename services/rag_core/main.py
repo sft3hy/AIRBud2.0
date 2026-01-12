@@ -18,48 +18,38 @@ from src.core.services import ChartService
 app = FastAPI(title="Smart RAG API", version=settings.VERSION)
 db = DatabaseManager()
 
-# --- Middleware ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- Static Mount ---
 app.mount("/static", StaticFiles(directory=settings.DATA_DIR), name="static")
 
-# --- In-Memory Status ---
+# In-Memory Status (keyed by collection_id)
 job_status: Dict[str, Dict] = {}
 
-
 # --- Models ---
-class SessionCreate(BaseModel):
-    filenames: List[str]
-
+class CollectionCreate(BaseModel):
+    name: str
 
 class ProcessRequest(BaseModel):
-    session_id: int
+    collection_id: int
     filename: str
     vision_model: str
 
-
 class QueryRequest(BaseModel):
-    session_id: int
+    collection_id: int
     question: str
 
-
-# --- Helpers ---
-def run_pipeline_task(session_id: int, filename: str, vision_model: str):
-    sid = str(session_id)
+# --- Pipeline Task ---
+def run_pipeline_task(collection_id: int, filename: str, vision_model: str):
+    cid = str(collection_id)
     try:
-        job_status[sid] = {
-            "status": "processing",
-            "step": "Initializing...",
-            "progress": 10,
-        }
-
+        job_status[cid] = {"status": "processing", "step": f"Processing {filename}...", "progress": 10}
+        
         file_path = settings.UPLOAD_DIR / filename
         unique_folder = f"{uuid.uuid4()}_{filename}"
         output_dir = settings.CHARTS_DIR / unique_folder
@@ -67,20 +57,12 @@ def run_pipeline_task(session_id: int, filename: str, vision_model: str):
 
         rag = SmartRAG(output_dir=output_dir, vision_model_name=vision_model)
 
-        job_status[sid] = {
-            "status": "processing",
-            "step": "Parsing Layout & Vision...",
-            "progress": 25,
-        }
+        job_status[cid] = {"status": "processing", "step": "Parsing & Vision Analysis...", "progress": 30}
         rag.index_document(str(file_path))
 
-        job_status[sid] = {
-            "status": "processing",
-            "step": "Saving Embeddings...",
-            "progress": 80,
-        }
-
-        # Save to Disk
+        job_status[cid] = {"status": "processing", "step": "Saving Embeddings...", "progress": 80}
+        
+        # Save to Disk & DB
         doc_id = db.add_document_record(
             filename=filename,
             vision_model=vision_model,
@@ -88,32 +70,28 @@ def run_pipeline_task(session_id: int, filename: str, vision_model: str):
             faiss_path="",
             chunks_path="",
             chart_descriptions=rag.chart_descriptions,
-            session_id=session_id,
+            collection_id=collection_id,
         )
-
+        
         faiss_path, chunks_path = rag.save_state(doc_id)
         db.update_document_paths(doc_id, faiss_path, chunks_path)
 
-        job_status[sid] = {"status": "completed", "step": "Ready!", "progress": 100}
+        job_status[cid] = {"status": "completed", "step": "Ready!", "progress": 100}
 
     except Exception as e:
-        logger.error(f"Pipeline failed for session {sid}: {e}", exc_info=True)
-        job_status[sid] = {"status": "error", "step": str(e), "progress": 0}
-
+        logger.error(f"Pipeline failed for collection {cid}: {e}", exc_info=True)
+        job_status[cid] = {"status": "error", "step": str(e), "progress": 0}
 
 # --- Routes ---
 
-
 @app.get("/")
 def health_check():
-    # UPDATED: Returns system info for the frontend sidebar
     return {
-        "status": "online",
+        "status": "online", 
         "service": settings.SERVICE_NAME,
         "llm_model": settings.GEN_MODEL_NAME,
-        "llm_provider": settings.LLM_PROVIDER,
+        "llm_provider": settings.LLM_PROVIDER
     }
-
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
@@ -125,79 +103,71 @@ async def upload_file(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# --- Collections ---
+@app.get("/collections")
+def get_collections():
+    return [{"id": s['id'], "name": s['name'], "created_at": s['created_at'], "docs": s['docs']} 
+            for s in db.get_all_collections()]
 
-@app.get("/sessions")
-def get_sessions():
-    return [
-        {
-            "id": s["id"],
-            "name": s["session_name"],
-            "date": s["timestamp"],
-            "docs": s["docs"],
-        }
-        for s in db.get_all_sessions()
-    ]
+@app.post("/collections")
+def create_collection(req: CollectionCreate):
+    cid = db.create_collection(req.name)
+    return {"id": cid, "name": req.name}
 
+# --- NEW: Delete Collection Endpoint ---
+@app.delete("/collections/{cid}")
+def delete_collection(cid: int):
+    db.delete_collection(cid)
+    return {"status": "deleted", "id": cid}
+# ---------------------------------------
 
-@app.post("/sessions")
-def create_session(req: SessionCreate):
-    session_id = db.create_session(req.filenames)
-    return {"session_id": session_id}
+@app.get("/collections/{cid}/status")
+def get_status(cid: str):
+    return job_status.get(str(cid), {"status": "idle", "step": "", "progress": 0})
 
-
-@app.get("/sessions/{session_id}/status")
-def get_session_status(session_id: str):
-    return job_status.get(
-        str(session_id), {"status": "idle", "step": "", "progress": 0}
-    )
-
-
+# --- Documents ---
 @app.post("/process")
 def process_document(req: ProcessRequest, background_tasks: BackgroundTasks):
     file_path = settings.UPLOAD_DIR / req.filename
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
 
-    job_status[str(req.session_id)] = {
-        "status": "queued",
-        "step": "Queued...",
-        "progress": 5,
-    }
-    background_tasks.add_task(
-        run_pipeline_task, req.session_id, req.filename, req.vision_model
-    )
+    job_status[str(req.collection_id)] = {"status": "queued", "step": "Queued...", "progress": 5}
+    background_tasks.add_task(run_pipeline_task, req.collection_id, req.filename, req.vision_model)
     return {"status": "queued"}
 
+@app.get("/collections/{cid}/documents")
+def get_documents(cid: int):
+    return db.get_collection_documents(cid)
 
-@app.get("/sessions/{session_id}/documents")
-def get_documents(session_id: int):
-    return db.get_session_documents(session_id)
+@app.delete("/documents/{doc_id}")
+def delete_document(doc_id: int):
+    db.delete_document(doc_id)
+    return {"status": "deleted"}
 
+@app.get("/collections/{cid}/charts")
+def get_charts(cid: int):
+    docs = db.get_collection_documents(cid)
+    return ChartService.get_charts_for_session(docs) 
 
-@app.get("/sessions/{session_id}/charts")
-def get_charts(session_id: int):
-    docs = db.get_session_documents(session_id)
-    return ChartService.get_charts_for_session(docs)
-
-
-@app.get("/sessions/{session_id}/history")
-def get_history(session_id: int):
-    return db.get_queries_for_session(session_id)
-
+# --- Chat ---
+@app.get("/collections/{cid}/history")
+def get_history(cid: int):
+    return db.get_queries_for_collection(cid)
 
 @app.post("/query")
-def query_session(req: QueryRequest):
-    docs = db.get_session_documents(req.session_id)
+def query_collection(req: QueryRequest):
+    docs = db.get_collection_documents(req.collection_id)
     if not docs:
-        return {"response": "No documents found.", "results": []}
+        return {"response": "This collection has no documents.", "results": []}
 
-    # Load pipelines for all docs
+    # Load pipelines for valid docs
     pipelines = []
     for doc in docs:
-        if doc["faiss_index_path"] and os.path.exists(doc["faiss_index_path"]):
+        if doc['faiss_index_path'] and os.path.exists(doc['faiss_index_path']):
             try:
-                p = SmartRAG(output_dir=doc["chart_dir"])
-                p.load_state(doc["faiss_index_path"], doc["chunks_path"])
+                p = SmartRAG(output_dir=doc['chart_dir'])
+                p.load_state(doc['faiss_index_path'], doc['chunks_path'])
                 pipelines.append(p)
             except Exception as e:
                 logger.error(f"Failed to load doc {doc['id']}: {e}")
@@ -205,39 +175,28 @@ def query_session(req: QueryRequest):
     if not pipelines:
         return {"response": "Error loading document indexes.", "results": []}
 
-    # Search & Aggregation
     all_results = []
     for p in pipelines:
         all_results.extend(p.search(req.question, top_k=3))
-
-    # Sort by relevance (vector distance)
+    
     all_results.sort(key=lambda x: x[1])
     top_results = all_results[:5]
 
-    # Generate
     try:
-        # Use the first pipeline's LLM client to generate
         llm_resp = pipelines[0].generate_answer(req.question, top_results)
+        response_text = llm_resp.content or f"Error: {llm_resp.error}"
 
-        response_text = llm_resp.content
-        if llm_resp.error:
-            response_text = f"Error generating answer: {llm_resp.error}"
-
-        # Save History
         results_formatted = [
-            {"text": c.text, "source": c.source, "page": c.page, "score": s}
+            {"text": c.text, "source": c.source, "page": c.page, "score": s} 
             for c, s in top_results
         ]
-
-        db.add_query_record(
-            req.session_id, req.question, response_text, results_formatted
-        )
-
-        return {"response": response_text, "results": results_formatted}
+        
+        db.add_query_record(req.collection_id, req.question, response_text, results_formatted)
+        
+        return {
+            "response": response_text,
+            "results": results_formatted
+        }
     except Exception as e:
         logger.error(f"Query error: {e}", exc_info=True)
-        return {
-            "response": "An unexpected error occurred.",
-            "results": [],
-            "error": str(e),
-        }
+        return {"response": "An unexpected error occurred.", "results": [], "error": str(e)}
