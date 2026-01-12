@@ -1,9 +1,9 @@
+import os
 import re
 from typing import List, Tuple, Dict
 from src.core.data_models import Chunk
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from uuid import uuid4
-
 
 
 class DocumentChunker:
@@ -25,7 +25,6 @@ class DocumentChunker:
             chunk_overlap=child_chunk_overlap,
             separators=["\n\n", "\n", ". ", " ", ""],
         )
-        # using Recursive here as it's generally safer than Markdown only for generic text
         self.parent_splitter = RecursiveCharacterTextSplitter(
             chunk_size=parent_chunk_size,
             chunk_overlap=parent_chunk_overlap,
@@ -42,16 +41,17 @@ class DocumentChunker:
 
         parent_map = {}
         child_chunks = []
-        if "/" in source:
-            source = source.split("/")[-1]
+
+        # Robustly handle source path -> filename
+        filename = os.path.basename(str(source))
 
         for p_idx, p_doc in enumerate(parent_docs):
             # Create Parent Chunk
             parent_id = str(uuid4())
             parent_chunk = Chunk(
                 text=p_doc.page_content,
-                source=source,
-                page=0,  # Page handling would require more complex parsing logic
+                source=filename,
+                page=0,
                 chunk_id=parent_id,
                 is_parent=True,
                 metadata={"index": p_idx},
@@ -65,7 +65,7 @@ class DocumentChunker:
                 child_id = str(uuid4())
                 child_chunk = Chunk(
                     text=c_doc.page_content,
-                    source=source,
+                    source=filename,
                     page=0,
                     chunk_id=child_id,
                     parent_id=parent_id,
@@ -74,5 +74,3 @@ class DocumentChunker:
                 child_chunks.append(child_chunk)
 
         return child_chunks, parent_map
-
-

@@ -24,17 +24,28 @@ services:
     ports:
       - "8000:8000"
     environment:
+      # --- FIX 1: Switch from Sanctuary to Groq ---
+      - LLM_PROVIDER=groq
       - GROQ_API_KEY=${GROQ_API_KEY}
+      # --------------------------------------------
       - SANCTUARY_API_KEY=${SANCTUARY_API_KEY}
       - PARSER_API_URL=http://parser:8001
       - VISION_API_URL=http://vision:8002
       - PYTHONUNBUFFERED=1
-      - TEST=${TEST}
+      # Postgres Config
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_USER=rag_user
+      - POSTGRES_PASSWORD=rag_password
+      - POSTGRES_DB=rag_db
     volumes:
       - shared_data:/app/data
     depends_on:
-      - parser
-      - vision
+      parser:
+        condition: service_started
+      vision:
+        condition: service_started
+      postgres:
+        condition: service_healthy
 
   # 3. Parser
   parser:
@@ -44,11 +55,10 @@ services:
       - "8001:8001"
     environment:
       - PYTHONUNBUFFERED=1
-      - TEST=${TEST}
     volumes:
       - shared_data:/app/data
 
-  # 4. Vision (Connects to Mac Host)
+  # 4. Vision
   vision:
     build: ./services/vision
     container_name: smart_rag_vision
@@ -56,39 +66,38 @@ services:
       - "8002:8002"
     environment:
       - PYTHONUNBUFFERED=1
-      # Force "Test Mode" so it uses the Local Host URL
-      - TEST=True 
-      # This is the magic address to reach your Mac from inside Docker
-      - OLLAMA_HOST_LOCAL=http://host.docker.internal:11434
-      # Fallback (unused if TEST=True)
-      - OLLAMA_HOST_PROD=http://ollama:11434
+      # --- FIX 2: Point to Host Ollama ---
+      # host.docker.internal allows Docker to talk to your actual machine
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      # -----------------------------------
     volumes:
       - shared_data:/app/data
       - huggingface_cache:/root/.cache/huggingface
+    # This section is critical for Linux support of host.docker.internal
+    # (It works by default on Mac/Windows Docker Desktop, but this makes it universal)
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  # 5. Ollama (DISABLED - Using Mac App)
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   container_name: smart_rag_ollama
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - ollama_storage:/root/.ollama
-
-  # 6. DB Viewer
-  db_viewer:
-    image: python:3.10-slim
-    container_name: smart_rag_db_viewer
+  # 5. Postgres DB
+  postgres:
+    image: postgres:15-alpine
+    container_name: smart_rag_postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=rag_user
+      - POSTGRES_PASSWORD=rag_password
+      - POSTGRES_DB=rag_db
     ports:
-      - "8080:8080"
+      - "5432:5432"
     volumes:
-      - shared_data:/data
-    command: >
-      sh -c "pip install sqlite-web && sqlite_web /data/history.db -H 0.0.0.0 -p 8080"
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag_user -d rag_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   shared_data:
   huggingface_cache:
-  ollama_storage:
+  postgres_data:

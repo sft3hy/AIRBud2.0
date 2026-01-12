@@ -1,10 +1,14 @@
 fastapi
 uvicorn
+# ML Core
 torch
 transformers
+accelerate
+# Image Processing
 pillow
-qwen_vl_utils
-ollama
 timm
 einops
-accelerate
+# Specific Model Utils
+qwen_vl_utils
+# Ollama Client
+ollama

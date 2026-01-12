@@ -1,15 +1,14 @@
+import os
+import torch
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from src.vision.vision_models import VisionModelFactory
 from PIL import Image
-import os
-import gc
-import torch
 
-app = FastAPI()
+from src.config import config
+from src.utils.logger import logger
+from src.core.manager import manager
 
-active_model = None
-active_model_name = ""
+app = FastAPI(title="Vision Service", version=config.VERSION)
 
 
 class DescriptionRequest(BaseModel):
@@ -21,38 +20,35 @@ class DescriptionRequest(BaseModel):
 @app.get("/health")
 def health():
     return {
-        "status": "ok",
+        "status": "online",
         "device": "cuda" if torch.cuda.is_available() else "cpu",
-        "test_mode": os.environ.get("TEST"),
+        "ollama_host": config.OLLAMA_BASE_URL,
+        "active_model": manager.active_model_name or "None",
     }
 
 
 @app.post("/describe")
 def describe_image(req: DescriptionRequest):
-    global active_model, active_model_name
+    logger.info(f"Request: Describe image with {req.model_name}")
 
-    # Check if model swap needed
-    if active_model_name != req.model_name:
-        if active_model:
-            active_model.offload_model()
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-
-        print(f"Loading model: {req.model_name}")
-        active_model = VisionModelFactory.create_model(req.model_name)
-        if not active_model:
-            raise HTTPException(status_code=500, detail="Failed to load model")
-        active_model_name = req.model_name
-
+    # 1. Validate File
     if not os.path.exists(req.image_path):
-        raise HTTPException(status_code=404, detail="Image file not found")
+        raise HTTPException(
+            status_code=404, detail=f"Image file not found: {req.image_path}"
+        )
 
+    # 2. Get Model (Auto-loads/offloads)
+    model = manager.get_model(req.model_name)
+    if not model:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to load model: {req.model_name}"
+        )
+
+    # 3. Process
     try:
         image = Image.open(req.image_path).convert("RGB")
-        # print(req.prompt)
-        description = active_model.describe_image(image, req.prompt)
+        description = model.describe(image, req.prompt)
         return {"description": description}
     except Exception as e:
-        print(f"Vision Error: {e}")
+        logger.error(f"Inference error: {e}", exc_info=True)
         return {"description": f"Error analyzing image: {str(e)}"}

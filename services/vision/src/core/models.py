@@ -1,71 +1,63 @@
 import torch
-from PIL import Image
-from abc import ABC, abstractmethod
-from typing import Optional
-import warnings
-import time
 import gc
-import io
-import os
+import warnings
+from abc import ABC, abstractmethod
+from PIL import Image
+from src.config import config
+from src.utils.logger import logger
 
 warnings.filterwarnings("ignore")
 
 
 class VisionModel(ABC):
     def __init__(self):
-        self.device = self._get_device()
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self._is_loaded = False
         self.model = None
         self.tokenizer = None
         self.processor = None
-        self._is_loaded = False
-
-    def _get_device(self) -> str:
-        if torch.cuda.is_available():
-            return "cuda"
-        return "cpu"
 
     @abstractmethod
-    def load_model(self):
+    def load(self) -> bool:
         pass
 
     @abstractmethod
-    def describe_image(self, image: Image.Image, prompt: str) -> str:
+    def describe(self, image: Image.Image, prompt: str) -> str:
         pass
 
     @abstractmethod
-    def get_model_name(self) -> str:
+    def get_name(self) -> str:
         pass
 
-    def offload_model(self):
+    def offload(self):
         if not self._is_loaded:
             return
-        print(f"Offloading {self.get_model_name()}...")
 
-        # Dereference
+        logger.info(f"Offloading {self.get_name()}...")
         self.model = None
         self.tokenizer = None
         self.processor = None
 
-        # Cleanup
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
 
         self._is_loaded = False
-        print("✓ Offloaded.")
+        logger.info("Offload complete.")
 
 
-# --- Native Models ---
+# --- Native Transformers Models ---
+
+
 class Moondream2Model(VisionModel):
-    def load_model(self):
+    def load(self) -> bool:
         try:
             from transformers import AutoModelForCausalLM, AutoTokenizer
 
-            print(f"Loading Moondream2 on {self.device}...")
-            model_id = "vikhyatk/moondream2"
+            logger.info(f"Loading Moondream2 on {self.device}...")
 
-            # Trust remote code needed for Moondream
+            model_id = "vikhyatk/moondream2"
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_id,
                 revision="2025-06-21",
@@ -78,10 +70,10 @@ class Moondream2Model(VisionModel):
             self._is_loaded = True
             return True
         except Exception as e:
-            print(f"Error loading Moondream: {e}")
+            logger.error(f"Failed to load Moondream: {e}")
             return False
 
-    def describe_image(self, image: Image.Image, prompt: str) -> str:
+    def describe(self, image: Image.Image, prompt: str) -> str:
         if not self._is_loaded:
             return "Model not loaded."
         try:
@@ -90,16 +82,17 @@ class Moondream2Model(VisionModel):
         except Exception as e:
             return f"Error: {e}"
 
-    def get_model_name(self):
+    def get_name(self):
         return "Moondream2"
 
 
 class Qwen3VLModel(VisionModel):
-    def load_model(self):
+    def load(self) -> bool:
         try:
             from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
 
-            print(f"Loading Qwen3-VL on {self.device}...")
+            logger.info(f"Loading Qwen3-VL on {self.device}...")
+
             model_id = "Qwen/Qwen3-VL-2B-Instruct"
             self.processor = AutoProcessor.from_pretrained(
                 model_id, trust_remote_code=True
@@ -113,12 +106,10 @@ class Qwen3VLModel(VisionModel):
             self._is_loaded = True
             return True
         except Exception as e:
-            print(f"Error Qwen: {e}")
+            logger.error(f"Failed to load Qwen3: {e}")
             return False
 
-    def describe_image(self, image: Image.Image, prompt: str) -> str:
-        if not self._is_loaded:
-            return "Model not loaded."
+    def describe(self, image: Image.Image, prompt: str) -> str:
         try:
             from qwen_vl_utils import process_vision_info
 
@@ -142,6 +133,7 @@ class Qwen3VLModel(VisionModel):
                 padding=True,
                 return_tensors="pt",
             ).to(self.device)
+
             with torch.inference_mode():
                 generated_ids = self.model.generate(**inputs, max_new_tokens=512)
                 generated_ids_trimmed = [
@@ -154,18 +146,20 @@ class Qwen3VLModel(VisionModel):
         except Exception as e:
             return f"Error: {e}"
 
-    def get_model_name(self):
+    def get_name(self):
         return "Qwen3-VL-2B"
 
 
 class InternVL3Model(VisionModel):
-    def load_model(self):
+    def load(self) -> bool:
         try:
             from transformers import AutoModel, AutoTokenizer
 
-            print(f"Loading InternVL on {self.device}...")
+            logger.info(f"Loading InternVL on {self.device}...")
+
             model_id = "OpenGVLab/InternVL3_5-1B-Flash"
             dtype = torch.float16 if self.device == "cuda" else torch.float32
+
             self.model = AutoModel.from_pretrained(
                 model_id, dtype=dtype, trust_remote_code=True, device_map=self.device
             )
@@ -176,12 +170,10 @@ class InternVL3Model(VisionModel):
             self._is_loaded = True
             return True
         except Exception as e:
-            print(f"Error InternVL: {e}")
+            logger.error(f"Failed to load InternVL: {e}")
             return False
 
-    def describe_image(self, image: Image.Image, prompt: str) -> str:
-        if not self._is_loaded:
-            return "Model not loaded."
+    def describe(self, image: Image.Image, prompt: str) -> str:
         try:
             from torchvision import transforms as T
             from torchvision.transforms.functional import InterpolationMode
@@ -211,46 +203,42 @@ class InternVL3Model(VisionModel):
         except Exception as e:
             return f"Error: {e}"
 
-    def get_model_name(self):
+    def get_name(self):
         return "InternVL3.5"
 
 
 # --- Ollama Wrapper ---
+
+
 class OllamaVisionModel(VisionModel):
-    def __init__(self, model_name="gemma3"):
+    def __init__(self, model_name):
         super().__init__()
         self.ollama_model_name = model_name
+        self.host = config.OLLAMA_BASE_URL
 
-        # DYNAMIC HOST SELECTION BASED ON TEST ENV VAR
-        if os.environ.get("TEST") == "True":
-            self.host = os.environ.get(
-                "OLLAMA_HOST_LOCAL", "http://host.docker.internal:11434"
-            )
-            print(f"[Ollama] TEST mode: Using local host ({self.host})")
-        else:
-            self.host = os.environ.get("OLLAMA_HOST_PROD", "http://ollama:11434")
-            print(f"[Ollama] PROD mode: Using container service ({self.host})")
-
-    def load_model(self):
+    def load(self) -> bool:
         import ollama
 
+        logger.info(
+            f"Connecting to Ollama at {self.host} for model {self.ollama_model_name}..."
+        )
         client = ollama.Client(host=self.host)
         try:
-            # Check connection
-            client.list()
+            client.list()  # Simple ping check
             self._is_loaded = True
             return True
         except Exception as e:
-            print(f"Ollama connection failed to {self.host}: {e}")
+            logger.error(f"Ollama connection failed: {e}")
             return False
 
-    def describe_image(self, image: Image.Image, prompt: str) -> str:
+    def describe(self, image: Image.Image, prompt: str) -> str:
         import ollama
         import io
 
         client = ollama.Client(host=self.host)
         img_byte_arr = io.BytesIO()
         image.save(img_byte_arr, format="PNG")
+
         try:
             response = client.chat(
                 model=self.ollama_model_name,
@@ -266,23 +254,5 @@ class OllamaVisionModel(VisionModel):
         except Exception as e:
             return f"[Ollama Error: {e}]"
 
-    def get_model_name(self):
+    def get_name(self):
         return f"Ollama-{self.ollama_model_name}"
-
-
-class VisionModelFactory:
-    MODELS = {
-        "Moondream2": Moondream2Model,
-        "Qwen3-VL-2B": Qwen3VLModel,
-        "InternVL3.5-1B": InternVL3Model,
-        "Ollama-Gemma3": lambda: OllamaVisionModel("gemma3"),
-        "Ollama-Granite3.2-Vision": lambda: OllamaVisionModel("granite3.2-vision"),
-    }
-
-    @classmethod
-    def create_model(cls, model_name: str) -> Optional[VisionModel]:
-        if model_name not in cls.MODELS:
-            return None
-        factory = cls.MODELS[model_name]
-        instance = factory() if isinstance(factory, type) else factory()
-        return instance if instance.load_model() else None
