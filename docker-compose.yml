@@ -105,11 +105,15 @@ services:
       PGADMIN_DEFAULT_PASSWORD: admin
       PGADMIN_CONFIG_CONSOLE_LOG_LEVEL: 50
       PGADMIN_CONFIG_FILE_LOG_LEVEL: 50
-      PGADMIN_CONFIG_LOG_FILE: "dev/null"
+      # Don't set LOG_FILE at all - let it use default but suppress with high log level
     ports:
       - "5050:80"
     depends_on:
       - postgres
+    volumes:
+      - /dev/null:/var/log/pgadmin  # Mount /dev/null as the log directory
+    logging:
+      driver: "none"  # Also suppress Docker logs
 
 volumes:
   shared_data:
