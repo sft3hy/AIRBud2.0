@@ -2,15 +2,15 @@ import os
 import shutil
 import uuid
 import traceback
-from typing import List, Optional
+from typing import List, Dict
 import glob
 import json
-from fastapi import FastAPI, BackgroundTasks, HTTPException, UploadFile, File
+
+from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-# Import your custom modules
 from src.core.rag_pipeline import SmartRAG
 from src.utils.db_utils import DatabaseManager
 
@@ -42,6 +42,7 @@ app.add_middleware(
 # Mounts /app/data to /static so React can load images via URL
 # e.g. http://localhost:8000/static/charts/xyz/image.png
 app.mount("/static", StaticFiles(directory=DATA_DIR), name="static")
+job_status: Dict[str, Dict] = {}
 
 
 # --- Pydantic Models ---
@@ -133,16 +134,10 @@ def health_check():
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
-    """
-    Receives a file from the React frontend and saves it to the shared volume.
-    """
     try:
         file_location = os.path.join(UPLOAD_DIR, file.filename)
-
-        # Save file to disk
         with open(file_location, "wb+") as file_object:
             shutil.copyfileobj(file.file, file_object)
-
         return {"info": "File saved successfully", "path": file_location}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
@@ -179,90 +174,118 @@ def get_session_documents(session_id: int):
     return db.get_session_documents(session_id)
 
 
-@app.post("/process")
-def process_document(req: ProcessRequest):
-    """
-    Triggers the RAG pipeline: Parser -> Vision -> Embedding.
-    NOTE: This is a long-running synchronous process.
-    """
-    file_path = os.path.join(UPLOAD_DIR, req.filename)
+@app.get("/sessions/{session_id}/status")
+def get_session_status(session_id: str):
+    """Frontend polls this to get updates."""
+    return job_status.get(
+        str(session_id), {"status": "idle", "step": "", "progress": 0}
+    )
 
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail=f"File not found at {file_path}")
 
-    # Generate a unique directory for charts
-    # We use uuid to prevent collisions if same filename uploaded twice
-    unique_folder = f"{uuid.uuid4()}_{req.filename}"
-    output_dir = os.path.join(CHARTS_DIR, unique_folder)
-    os.makedirs(output_dir, exist_ok=True)
-
-    print(f"🚀 Starting processing for {req.filename} using {req.vision_model}")
-
+# --- BACKGROUND WORKER ---
+def run_pipeline_task(session_id: int, filename: str, vision_model: str):
+    sid = str(session_id)
     try:
-        # 1. Initialize Pipeline
-        rag = SmartRAG(output_dir=output_dir, vision_model_name=req.vision_model)
+        # 1. Update Status
+        job_status[sid] = {
+            "status": "processing",
+            "step": "Initializing Pipeline...",
+            "progress": 10,
+        }
 
-        # 2. Index (Calls Parser Microservice -> Vision Microservice -> Local Embeds)
+        file_path = os.path.join(UPLOAD_DIR, filename)
+        unique_folder = f"{uuid.uuid4()}_{filename}"
+        output_dir = os.path.join(CHARTS_DIR, unique_folder)
+        os.makedirs(output_dir, exist_ok=True)
+
+        rag = SmartRAG(output_dir=output_dir, vision_model_name=vision_model)
+
+        # 2. Update Status: Parsing
+        job_status[sid] = {
+            "status": "processing",
+            "step": "Parsing Document Layout...",
+            "progress": 25,
+        }
+
+        # Note: We can't easily hook into rag.index_document internals without modifying it,
+        # but we can update status before/after major blocks if you broke them up.
+        # For now, we assume this step takes the bulk of time.
+
+        # 3. Update Status: Vision
+        # We simulate a "step" update here. In a deeper refactor, you'd pass a callback to SmartRAG.
+        # Since this call blocks, the UI will stay on "Parsing/Analyzing" for a while.
         rag.index_document(file_path)
 
-        # 3. Add initial record to DB
+        # 4. Update Status: Saving
+        job_status[sid] = {
+            "status": "processing",
+            "step": "Generating Embeddings...",
+            "progress": 80,
+        }
+
         doc_id = db.add_document_record(
-            filename=req.filename,
-            vision_model=req.vision_model,
+            filename=filename,
+            vision_model=vision_model,
             chart_dir=output_dir,
-            faiss_path="",  # Placeholder, updated below
-            chunks_path="",  # Placeholder, updated below
+            faiss_path="",
+            chunks_path="",
             chart_descriptions=rag.chart_descriptions,
-            session_id=req.session_id,
+            session_id=session_id,
         )
 
-        # 4. Save FAISS Index and Chunks to disk
         rag.save_state(doc_id)
 
-        # 5. Update DB with the specific paths where FAISS/Chunks were saved
-        # Note: SmartRAG.save_state usually saves to data/faiss_indexes/...
-        # We need to ensure these paths match what your SmartRAG class actually does.
         faiss_path = f"/app/data/faiss_indexes/index_{doc_id}.faiss"
         chunks_path = f"/app/data/chunks/chunks_{doc_id}.pkl"
-
         db.update_document_paths(doc_id, faiss_path, chunks_path)
 
-        return {"status": "success", "doc_id": doc_id}
+        # 5. Done
+        job_status[sid] = {"status": "completed", "step": "Ready!", "progress": 100}
 
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+        job_status[sid] = {"status": "error", "step": str(e), "progress": 0}
+
+
+@app.post("/process")
+def process_document(req: ProcessRequest, background_tasks: BackgroundTasks):
+    """
+    Now returns immediately and runs logic in background.
+    """
+    file_path = os.path.join(UPLOAD_DIR, req.filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Set initial status
+    job_status[str(req.session_id)] = {
+        "status": "queued",
+        "step": "Queued for processing...",
+        "progress": 5,
+    }
+
+    # Dispatch to background
+    background_tasks.add_task(
+        run_pipeline_task, req.session_id, req.filename, req.vision_model
+    )
+
+    return {"status": "queued", "message": "Processing started in background"}
 
 
 @app.post("/query")
 def query(req: QueryRequest):
-    """
-    Orchestrates a query across all documents in the session.
-    """
-    # 1. Get docs
     docs = db.get_session_documents(req.session_id)
     if not docs:
         return {"response": "No documents found in this session.", "results": []}
 
     pipelines = []
-
-    # 2. Re-hydrate RAG pipelines for each document
-    # (In a production app, we would cache these in memory to avoid reloading FAISS every time)
     try:
         for doc in docs:
-            # We don't need to load the vision model again for querying, just the vector store
             p = SmartRAG(output_dir=doc["chart_dir"], load_vision=False)
-
-            # Check if files exist before loading
             if os.path.exists(doc["faiss_index_path"]) and os.path.exists(
                 doc["chunks_path"]
             ):
                 p.load_state(doc["faiss_index_path"], doc["chunks_path"])
                 pipelines.append(p)
-            else:
-                print(
-                    f"⚠️ Warning: Index files missing for doc {doc.get('original_filename')}"
-                )
 
         if not pipelines:
             return {
@@ -270,21 +293,12 @@ def query(req: QueryRequest):
                 "results": [],
             }
 
-        # 3. Execute Query
-        # Use the first pipeline instance to drive the multi-doc logic
         result = pipelines[0].query_multiple(req.question, pipelines)
-
         if "error" not in result:
             db.add_query_record(
                 req.session_id, req.question, result["response"], result["results"]
             )
-
         return result
-
     except Exception as e:
         traceback.print_exc()
-        return {
-            "response": "An error occurred during generation.",
-            "results": [],
-            "error": str(e),
-        }
+        return {"response": "An error occurred.", "results": [], "error": str(e)}

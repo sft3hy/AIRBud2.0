@@ -1,19 +1,18 @@
 services:
-  # 1. Frontend (React + Vite)
+  # 1. Frontend (React)
   frontend:
     build: 
       context: ./services/frontend
       dockerfile: Dockerfile
     container_name: smart_rag_frontend
     ports:
-      - "5173:5173"  # Standard Vite Port
+      - "5173:5173"
     environment:
-      - VITE_API_URL=http://localhost:8000 # Browser talks to Host Localhost
-      - WATCHPACK_POLLING=true # Helps with hot-reload on Docker/Mac
+      - VITE_API_URL=http://localhost:8000
+      - WATCHPACK_POLLING=true
     volumes:
       - ./services/frontend:/app
-      - /app/node_modules # Prevent host node_modules from breaking container
-    # Command to run Vite and expose it to the network
+      - /app/node_modules
     command: npm run dev -- --host
     depends_on:
       - rag_core
@@ -49,7 +48,7 @@ services:
     volumes:
       - shared_data:/app/data
 
-  # 4. Vision
+  # 4. Vision (Connects to Mac Host)
   vision:
     build: ./services/vision
     container_name: smart_rag_vision
@@ -57,17 +56,19 @@ services:
       - "8002:8002"
     environment:
       - PYTHONUNBUFFERED=1
-      - TEST=${TEST}
-      # When running fully in Docker, we point to the ollama service name
-      - OLLAMA_HOST_LOCAL=http://localhost:11434
-      - OLLAMA_HOST_PROD=http://localhost:11434
+      # Force "Test Mode" so it uses the Local Host URL
+      - TEST=True 
+      # This is the magic address to reach your Mac from inside Docker
+      - OLLAMA_HOST_LOCAL=http://host.docker.internal:11434
+      # Fallback (unused if TEST=True)
+      - OLLAMA_HOST_PROD=http://ollama:11434
     volumes:
       - shared_data:/app/data
       - huggingface_cache:/root/.cache/huggingface
-    depends_on:
-      - ollama
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
-  # 5. Ollama (Disabled)
+  # 5. Ollama (DISABLED - Using Mac App)
   # ollama:
   #   image: ollama/ollama:latest
   #   container_name: smart_rag_ollama
@@ -75,8 +76,6 @@ services:
   #     - "11434:11434"
   #   volumes:
   #     - ollama_storage:/root/.ollama
-  #   tty: true # Keeps the container running
-  #   restart: unless-stopped
 
   # 6. DB Viewer
   db_viewer:

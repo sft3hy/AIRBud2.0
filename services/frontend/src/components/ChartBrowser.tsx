@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, ImageIcon, Maximize2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ImageIcon } from 'lucide-react';
 import { getSessionCharts } from '../lib/api';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import ReactMarkdown from 'react-markdown';
-
 
 interface ChartBrowserProps {
     sessionId: string | null;
@@ -51,38 +49,42 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ sessionId }) => {
                 </Button>
             </div>
 
-            {/* Image Area - UPDATED BG */}
+            {/* Image Area */}
             <Card className="overflow-hidden bg-muted/20 flex items-center justify-center min-h-[200px] max-h-[300px] mb-4 relative group border">
-                {currentChart.url ? (
-                    <a href={currentChart.url} target="_blank" rel="noopener noreferrer">
+                {currentChart && currentChart.url ? (
+                    <a href={currentChart.url} target="_blank" rel="noopener noreferrer" title="Click to view full size">
                         <img
                             src={currentChart.url}
-                            alt="Chart"
-                            // Removed bg-white, added p-1
-                            className="w-full h-full object-contain"
+                            alt={`Chart from ${currentChart.doc_name}`}
+                            className="w-full h-full object-contain hover:scale-105 transition-transform"
                         />
-                        {/* ... hover icon ... */}
                     </a>
                 ) : (
-                    <ImageIcon className="h-10 w-10 text-muted-foreground/30" />
+                    <div className="flex flex-col items-center gap-2">
+                        <ImageIcon className="h-10 w-10 text-muted-foreground/30" />
+                        <span className="text-xs text-muted-foreground">Image unavailable</span>
+                    </div>
                 )}
             </Card>
 
             {/* Metadata */}
             <ScrollArea className="flex-1">
                 <div className="space-y-3 px-1">
-                    <div>
-                        <span className="text-xs font-semibold text-primary">Source Document:</span>
-                        <p className="text-xs text-muted-foreground">{currentChart.doc_name} (Page {currentChart.page})</p>
-                    </div>
+                    {currentChart && (
+                        <>
+                            <div>
+                                <span className="text-xs font-semibold text-primary">Source Document:</span>
+                                <p className="text-xs text-muted-foreground">{currentChart.doc_name} (Page {currentChart.page})</p>
+                            </div>
 
-                    <div>
-                        <span className="text-xs font-semibold text-primary">AI Description:</span>
-                        {/* UPDATED BG */}
-                        <div className="mt-1 text-xs text-muted-foreground leading-relaxed bg-muted/40 p-2 rounded border">
-                            {currentChart.description || "No description available."}
-                        </div>
-                    </div>
+                            <div>
+                                <span className="text-xs font-semibold text-primary">AI Description:</span>
+                                <div className="mt-1 text-xs text-muted-foreground leading-relaxed bg-muted/40 p-2 rounded border">
+                                    {currentChart.description || "No description available."}
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
             </ScrollArea>
         </div>

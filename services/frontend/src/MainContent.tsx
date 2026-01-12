@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import { Send, FileText, Loader2 } from 'lucide-react';
-import { Link } from 'react-router-dom'; // <--- Add this import
+import { Link } from 'react-router-dom';
 
 import { fetchSessionDocuments, sendQuery, getSessionHistory } from './lib/api';
-import { ChatMessage } from './types';
+import { ChatMessage, SessionHistoryItem } from './types';
+import { logger } from './lib/logger';
 import { SourceViewer } from './components/SourceViewer';
-// REMOVED: import { ChartBrowser } ...
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -27,8 +27,6 @@ const WelcomeScreen = () => (
         <p className="text-lg text-muted-foreground mb-4 max-w-md">
             Upload a document or load a past session from the sidebar to begin.
         </p>
-
-        {/* ADD THIS LINK */}
         <Link to="/how-it-works">
             <Button variant="link" className="text-primary gap-1 text-base">
                 How it works <span aria-hidden="true">&rarr;</span>
@@ -36,6 +34,7 @@ const WelcomeScreen = () => (
         </Link>
     </div>
 );
+
 export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
@@ -54,11 +53,17 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
         enabled: !!sessionId,
     });
 
+    // Sync server history to local state
     useEffect(() => {
         if (serverHistory && Array.isArray(serverHistory)) {
-            const formatted: ChatMessage[] = serverHistory.flatMap((item: any) => [
+            logger.info("Syncing session history", { count: serverHistory.length });
+            const formatted: ChatMessage[] = serverHistory.flatMap((item: SessionHistoryItem) => [
                 { role: 'user', content: item.question },
-                { role: 'assistant', content: item.response, sources: item.sources || item.results || [] }
+                {
+                    role: 'assistant',
+                    content: item.response,
+                    sources: item.sources || item.results || []
+                }
             ]);
             setChatHistory(formatted);
         } else if (sessionId && !serverHistory) {
@@ -76,15 +81,18 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
                 ...prev,
                 { role: 'assistant', content: data.response, sources: data.results }
             ]);
+            logger.info("Response received", { sourcesCount: data.results.length });
         },
         onError: (error) => {
+            logger.error("Query failed", error);
             setChatHistory(prev => [
                 ...prev,
-                { role: 'assistant', content: `Error: ${error.message}` }
+                { role: 'assistant', content: `Error: ${error instanceof Error ? error.message : "Unknown error"}` }
             ]);
         }
     });
 
+    // Auto-scroll to bottom
     useEffect(() => {
         setTimeout(() => {
             bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -128,7 +136,7 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
                 </div>
             </div>
 
-            {/* Chat Area - UPDATED BG */}
+            {/* Chat Area */}
             <div className="flex-1 overflow-hidden relative bg-muted/20">
                 <ScrollArea className="h-full px-4 md:px-20 py-4" ref={scrollRef}>
                     <div className="space-y-8 pb-4 max-w-4xl mx-auto min-h-[500px]">
@@ -136,7 +144,6 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
                             <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
 
                                 {msg.role === 'assistant' && (
-                                    // UPDATED BG
                                     <div className="h-10 w-10 rounded-full bg-card p-1 flex items-center justify-center shrink-0 border shadow-sm mt-1">
                                         <img src={doggieSrc} alt="Bot" className="h-full w-full object-contain" />
                                     </div>
@@ -145,7 +152,6 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
                                 <div className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                                     <div className={`px-5 py-4 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.role === 'user'
                                         ? 'bg-primary text-primary-foreground rounded-br-sm prose-invert'
-                                        // UPDATED BG and BORDER
                                         : 'bg-card border rounded-bl-sm text-card-foreground'
                                         }`}>
                                         <ReactMarkdown
@@ -155,14 +161,11 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
                                                 ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />,
                                                 li: ({ node, ...props }) => <li className="" {...props} />,
                                                 strong: ({ node, ...props }) => <span className="font-bold" {...props} />,
-                                                // Updated Link Color
-                                                a: ({ node, ...props }) => <a className="underline font-medium text-primary" target="_blank" {...props} />,
+                                                a: ({ node, ...props }) => <a className="underline font-medium text-primary" target="_blank" rel="noopener noreferrer" {...props} />,
                                                 code: ({ node, ...props }) => (
-                                                    // Updated Code BG
                                                     <code className="px-1 py-0.5 rounded font-mono text-xs bg-muted text-foreground" {...props} />
                                                 ),
                                                 pre: ({ node, ...props }) => (
-                                                    // Updated Pre Block BG
                                                     <pre className="p-3 rounded-lg overflow-x-auto my-2 bg-muted text-foreground border" {...props} />
                                                 ),
                                             }}
@@ -191,7 +194,7 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
                                 </div>
                                 <div className="bg-card border px-5 py-4 rounded-2xl rounded-bl-sm text-sm text-muted-foreground flex items-center gap-2 shadow-sm">
                                     <Loader2 className="h-4 w-4 animate-spin" />
-                                    <span className="italic">Thinking...</span>
+                                    <span className="italic">Finding answer...</span>
                                 </div>
                             </div>
                         )}
@@ -200,7 +203,7 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
                 </ScrollArea>
             </div>
 
-            {/* Input Area - UPDATED BG */}
+            {/* Input Area */}
             <div className="p-4 bg-background border-t">
                 <div className="max-w-3xl mx-auto relative flex items-center gap-2">
                     <Input
@@ -208,7 +211,6 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        // UPDATED BG
                         className="pr-12 py-6 rounded-full shadow-sm text-base bg-card text-card-foreground"
                         disabled={sendMessageMutation.isPending}
                     />

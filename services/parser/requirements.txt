@@ -1,11 +1,13 @@
 fastapi
 uvicorn
 python-multipart
+requests
+# Image Processing
 opencv-python-headless
 numpy
 pillow
+# Document Formats
 pdf2image
 python-docx
 python-pptx
 pymupdf
-requests
