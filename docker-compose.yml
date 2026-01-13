@@ -39,14 +39,15 @@ services:
   rag_core:
     build: ./services/rag_core
     container_name: smart_rag_core
-    ports:
-      - "8000:8000"
+    # ports:
+    #   - "8000:8000"
     environment:
       # --- UPDATED: Dynamic Provider Logic ---
       # We removed "LLM_PROVIDER=groq" so config.py can decide based on TEST env var
       - GROQ_API_KEY=${GROQ_API_KEY}
       - SANCTUARY_API_KEY=${SANCTUARY_API_KEY}
-      - TEST=False
+      - TEST=False                # Enforce Real CAC Auth (via Nginx headers)
+      - LLM_PROVIDER=groq         # Force Groq LLM (Ignore default Prod setting)
       # ---------------------------------------
       - PARSER_API_URL=http://parser:8001
       - VISION_API_URL=http://vision:8002

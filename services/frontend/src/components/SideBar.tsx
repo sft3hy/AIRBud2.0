@@ -361,13 +361,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                     {/* SYSTEM INFO FOOTER */}
                     <div className="p-4 border-t bg-muted/20">
                         <div className="space-y-3">
-
                             {systemStatus?.user && (
-                                <div className="flex items-center gap-3 p-2 bg-background rounded-lg border shadow-sm">
+                                < div className="flex items-center gap-3 p-2 bg-background rounded-lg border shadow-sm">
+                                    {console.log(systemStatus.user)}
+
                                     <UserCircle className="h-8 w-8 text-primary/80" />
                                     <div className="min-w-0">
-                                        <p className="text-xs font-bold truncate">{systemStatus.user.display_name}</p>
-                                        <p className="text-[10px] text-muted-foreground truncate">{systemStatus.user.organization}</p>
+                                        <p className="text-xs font-bold truncate">{systemStatus.user.cn}</p>
+                                        <p className="text-[10px] text-muted-foreground truncate">{systemStatus.user.org}</p>
                                     </div>
                                 </div>
                             )}
@@ -402,6 +403,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                     </div>
                 </TabsContent>
             </Tabs>
-        </div>
+        </div >
     );
 };

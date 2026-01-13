@@ -140,7 +140,8 @@ def get_collections(user: Dict = Depends(auth_handler.require_user)):
 @app.post("/collections")
 def create_collection(req: CollectionCreate, user: Dict = Depends(auth_handler.require_user)):
     cid = db.create_collection(req.name, user['id'])  # Pass Owner ID
-    return {"id": cid, "name": req.name, "owner": user['display_name']}
+    print(user)
+    return {"id": cid, "name": req.name, "owner": user['cn']}
 
 @app.delete("/collections/{cid}")
 def delete_collection(cid: int, user: Dict = Depends(auth_handler.require_user)):
