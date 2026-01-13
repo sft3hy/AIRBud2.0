@@ -119,17 +119,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
 
     // --- NEW: Delete Collection Handler ---
     const handleDeleteCollection = async (e: React.MouseEvent, cid: number) => {
-        e.stopPropagation(); // Prevent opening the collection
-        if (!confirm("Are you sure you want to delete this collection and all its documents?")) return;
+        e.stopPropagation(); // Stop click from selecting the card
 
-        await deleteCollection(cid);
+        if (window.confirm("Are you sure you want to delete this collection? This action cannot be undone.")) {
+            try {
+                await deleteCollection(cid);
 
-        // If we deleted the active one, go back to list
-        if (String(cid) === currentSessionId) {
-            onSessionChange(null);
+                // If we deleted the active one, clear selection
+                if (String(cid) === currentSessionId) {
+                    onSessionChange(null);
+                }
+                // Refresh list
+                await queryClient.invalidateQueries({ queryKey: ['collections'] });
+            } catch (err) {
+                console.error("Failed to delete collection:", err);
+                alert("Failed to delete collection. Check console for details.");
+            }
         }
-
-        await queryClient.invalidateQueries({ queryKey: ['collections'] });
     };
     // -------------------------------------
 
@@ -163,9 +169,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
     };
 
     const handleDeleteDoc = async (docId: number) => {
-        if (!confirm("Remove this document from the collection?")) return;
-        await deleteDocument(docId);
-        queryClient.invalidateQueries({ queryKey: ['documents', currentSessionId] });
+        if (window.confirm("Remove this document from the collection?")) {
+            try {
+                await deleteDocument(docId);
+                await queryClient.invalidateQueries({ queryKey: ['documents', currentSessionId] });
+            } catch (err) {
+                console.error("Failed to delete document:", err);
+            }
+        }
     };
 
     const activeCollectionName = collections.find(c => String(c.id) === currentSessionId)?.name;
