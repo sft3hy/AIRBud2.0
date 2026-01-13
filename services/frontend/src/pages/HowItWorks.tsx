@@ -1,9 +1,21 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Eye, Layers, Database, Cpu, FileText, Code, Server, Search, Box } from 'lucide-react';
+import {
+    ArrowLeft,
+    Eye,
+    Layers,
+    Database,
+    Cpu,
+    FileText,
+    Code,
+    Server,
+    Search,
+    Box,
+    Network,
+    Share2
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 
 // Helper for consistent external links
 const ExtLink = ({ href, children }: { href: string; children: React.ReactNode }) => (
@@ -34,7 +46,7 @@ export const HowItWorks = () => {
                             How Smart RAG Works
                         </h1>
                         <p className="text-xl text-muted-foreground">
-                            A deep dive into the architecture, computer vision, and retrieval strategies powering this application.
+                            A deep dive into the architecture, computer vision, and hybrid retrieval strategies powering this application.
                         </p>
                     </div>
                 </div>
@@ -54,6 +66,23 @@ export const HowItWorks = () => {
 
                         <Card className="bg-card/50">
                             <CardHeader className="flex flex-row items-center gap-4 pb-2">
+                                <div className="h-10 w-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                                    <Network className="h-5 w-5" />
+                                </div>
+                                <CardTitle className="text-lg">GraphRAG & Knowledge Graphs</CardTitle>
+                            </CardHeader>
+                            <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-2">
+                                <p>
+                                    Vector search is great for similarity, but bad at structure. We use <ExtLink href="https://neo4j.com/">Neo4j</ExtLink> to build a <strong>Knowledge Graph</strong>.
+                                </p>
+                                <p>
+                                    An LLM extracts entities (People, Companies, Concepts) and their relationships from your docs. This allows us to perform "multi-hop" reasoning—connecting facts across different documents that might use different wording but refer to the same entity.
+                                </p>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="bg-card/50">
+                            <CardHeader className="flex flex-row items-center gap-4 pb-2">
                                 <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
                                     <Eye className="h-5 w-5" />
                                 </div>
@@ -61,10 +90,10 @@ export const HowItWorks = () => {
                             </CardHeader>
                             <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-2">
                                 <p>
-                                    Standard RAG blindly extracts text, losing the meaning of charts. We use <ExtLink href="https://github.com/facebookresearch/detectron2">Detectron2</ExtLink> (a Facebook AI Research library) with a ResNet50 backbone trained on the <ExtLink href="https://github.com/ibm-aur-nlp/PubLayNet">PubLayNet</ExtLink> dataset.
+                                    Standard RAG blindly extracts text, losing the meaning of charts. We use <ExtLink href="https://github.com/facebookresearch/detectron2">Detectron2</ExtLink> to draw bounding boxes around figures and tables.
                                 </p>
                                 <p>
-                                    This allows us to draw bounding boxes around figures and tables. We then crop these images and feed them to Multimodal LLMs like <ExtLink href="https://huggingface.co/vikhyatk/moondream2">Moondream2</ExtLink> or <ExtLink href="https://ollama.com/library/gemma3">Gemma 3</ExtLink> to generate detailed text descriptions, making your charts "readable" to the search engine.
+                                    We then crop these images and feed them to Multimodal LLMs like <ExtLink href="https://huggingface.co/vikhyatk/moondream2">Moondream2</ExtLink> or <strong>Qwen-VL</strong> to generate detailed text descriptions, making your charts "readable" to the search engine.
                                 </p>
                             </CardContent>
                         </Card>
@@ -78,27 +107,10 @@ export const HowItWorks = () => {
                             </CardHeader>
                             <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-2">
                                 <p>
-                                    Splitting text into arbitrary 500-character chunks often destroys context. We use a <ExtLink href="https://medium.com/@seahorse.technologies.sl/parent-child-chunking-in-langchain-for-advanced-rag-e7c37171995a">Parent-Child strategy</ExtLink> via <ExtLink href="https://www.langchain.com/">LangChain</ExtLink>.
+                                    Splitting text into arbitrary fragments destroys context. We use a <ExtLink href="https://medium.com/@seahorse.technologies.sl/parent-child-chunking-in-langchain-for-advanced-rag-e7c37171995a">Parent-Child strategy</ExtLink>.
                                 </p>
                                 <p>
-                                    We index small "Child" chunks (high specificity) for the search algorithm, but we return the larger "Parent" chunk (rich context) to the LLM. This ensures the model gets full paragraphs or pages of context, not just fragments.
-                                </p>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="bg-card/50">
-                            <CardHeader className="flex flex-row items-center gap-4 pb-2">
-                                <div className="h-10 w-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
-                                    <Database className="h-5 w-5" />
-                                </div>
-                                <CardTitle className="text-lg">Hybrid Storage (SQL + Vector)</CardTitle>
-                            </CardHeader>
-                            <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-2">
-                                <p>
-                                    We don't rely solely on a vector store. We use <ExtLink href="https://www.postgresql.org/">PostgreSQL</ExtLink> to manage Collection metadata, file paths, and chat history relationally.
-                                </p>
-                                <p>
-                                    Alongside this, we use <ExtLink href="https://github.com/facebookresearch/faiss">FAISS</ExtLink> (Facebook AI Similarity Search) for high-performance dense vector clustering. This hybrid approach allows for robust data management (renaming, deleting) that pure vector DBs often struggle with.
+                                    We index small "Child" chunks for high-precision search, but we return the larger "Parent" chunk (rich context) to the LLM. This ensures the model gets full paragraphs or pages of context, not just half-sentences.
                                 </p>
                             </CardContent>
                         </Card>
@@ -108,17 +120,17 @@ export const HowItWorks = () => {
                                 <div className="h-10 w-10 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400">
                                     <Cpu className="h-5 w-5" />
                                 </div>
-                                <CardTitle className="text-lg">Containerized Microservices</CardTitle>
+                                <CardTitle className="text-lg">Microservice Architecture</CardTitle>
                             </CardHeader>
                             <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-2">
                                 <p>
-                                    The application is split into <ExtLink href="https://www.docker.com/">Docker</ExtLink> containers for scalability:
+                                    The application is split into specialized <ExtLink href="https://www.docker.com/">Docker</ExtLink> containers:
                                 </p>
                                 <ul className="list-disc pl-4 space-y-1">
-                                    <li><strong>Parser:</strong> CPU-optimized <ExtLink href="https://pytorch.org/">PyTorch</ExtLink> & Detectron2.</li>
-                                    <li><strong>Vision:</strong> GPU-accelerated inference service.</li>
-                                    <li><strong>Core:</strong> FastAPI orchestration & Logic.</li>
-                                    <li><strong>Frontend:</strong> <ExtLink href="https://react.com/">React</ExtLink> /<ExtLink href="https://vite.dev/">Vite</ExtLink> UI.</li>
+                                    <li><strong>KG Service:</strong> Graph extraction & <ExtLink href="https://neo4j.com/">Neo4j</ExtLink>.</li>
+                                    <li><strong>Vision:</strong> GPU-accelerated inference.</li>
+                                    <li><strong>Core:</strong> Orchestration & Vector Search.</li>
+                                    <li><strong>Parser:</strong> PDF/Docx processing.</li>
                                 </ul>
                             </CardContent>
                         </Card>
@@ -129,17 +141,16 @@ export const HowItWorks = () => {
                 {/* Section 3: The Tech Stack */}
                 <section className="space-y-6">
                     <h2 className="text-2xl font-bold">3. Under the Hood: Technology Stack</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {[
+                            { name: "Neo4j", role: "Graph Database", icon: Share2, url: "https://neo4j.com/" },
                             { name: "Detectron2", role: "Layout Analysis", icon: Box, url: "https://github.com/facebookresearch/detectron2" },
                             { name: "FAISS", role: "Vector Index", icon: Search, url: "https://github.com/facebookresearch/faiss" },
-                            { name: "PostgreSQL", role: "Metadata DB", icon: Database, url: "https://www.postgresql.org/" },
+                            { name: "PostgreSQL", role: "Relational DB", icon: Database, url: "https://www.postgresql.org/" },
                             { name: "FastAPI", role: "Backend API", icon: Server, url: "https://fastapi.tiangolo.com/" },
                             { name: "React + Vite", role: "Frontend", icon: Code, url: "https://react.dev/" },
                             { name: "LangChain", role: "Orchestration", icon: Layers, url: "https://www.langchain.com/" },
-                            { name: "all-MiniLM-L6-v2", role: "Embeddings", icon: FileText, url: "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2" },
                             { name: "Docker", role: "Containerization", icon: Box, url: "https://www.docker.com/" },
-                            { name: "Ollama", role: "Local Inference", icon: Cpu, url: "https://ollama.com/" },
                         ].map((tech) => (
                             <a
                                 key={tech.name}
@@ -160,16 +171,16 @@ export const HowItWorks = () => {
 
                 {/* Section 4: The Data Pipeline */}
                 <section className="space-y-6">
-                    <h2 className="text-2xl font-bold">4. The Processing Pipeline</h2>
+                    <h2 className="text-2xl font-bold">4. The Hybrid Pipeline</h2>
                     <div className="bg-card border rounded-xl p-6 md:p-8 space-y-8 relative overflow-hidden">
 
                         {/* Step 1 */}
                         <div className="relative z-10 flex gap-4 md:gap-8 items-start">
                             <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0 mt-1">1</div>
                             <div className="space-y-2">
-                                <h3 className="font-bold text-lg">Ingestion & Layout Analysis</h3>
+                                <h3 className="font-bold text-lg">Ingestion & Analysis</h3>
                                 <p className="text-muted-foreground text-sm leading-relaxed">
-                                    Files (PDF/DOCX) are uploaded. The <strong>Parser Service</strong> uses <ExtLink href="https://github.com/pymupdf/PyMuPDF">PyMuPDF</ExtLink> to extract raw text and renders pages as images. <ExtLink href="https://github.com/facebookresearch/detectron2">Detectron2</ExtLink> scans these images to identify bounding boxes for charts, graphs, and tables.
+                                    Files are uploaded. <ExtLink href="https://github.com/facebookresearch/detectron2">Detectron2</ExtLink> extracts charts, which are described by <strong>Vision Models</strong>. Simultaneously, an LLM scans the text to extract Entities (Nodes) and Relationships (Edges).
                                 </p>
                             </div>
                         </div>
@@ -178,10 +189,13 @@ export const HowItWorks = () => {
                         <div className="relative z-10 flex gap-4 md:gap-8 items-start">
                             <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0 mt-1">2</div>
                             <div className="space-y-2">
-                                <h3 className="font-bold text-lg">Vision Inference</h3>
-                                <p className="text-muted-foreground text-sm leading-relaxed">
-                                    Cropped images of charts are sent to the <strong>Vision Service</strong>. A specialized model (like <ExtLink href="https://huggingface.co/vikhyatk/moondream2">Moondream2</ExtLink> or <ExtLink href="https://ollama.com/library/gemma3">Gemma 3</ExtLink>) generates a dense textual description of the visual data, including trends, labels, and numeric values.
-                                </p>
+                                <h3 className="font-bold text-lg">Dual Indexing</h3>
+                                <div className="text-muted-foreground text-sm leading-relaxed">
+                                    <ul className="list-disc pl-4 space-y-1">
+                                        <li><strong>Vector Path:</strong> Text is chunked and embedded into <ExtLink href="https://github.com/facebookresearch/faiss">FAISS</ExtLink> for semantic search.</li>
+                                        <li><strong>Graph Path:</strong> Extracted triples are written to <ExtLink href="https://neo4j.com/">Neo4j</ExtLink> to build a connected web of knowledge.</li>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
 
@@ -189,9 +203,9 @@ export const HowItWorks = () => {
                         <div className="relative z-10 flex gap-4 md:gap-8 items-start">
                             <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0 mt-1">3</div>
                             <div className="space-y-2">
-                                <h3 className="font-bold text-lg">Embedding & Indexing</h3>
+                                <h3 className="font-bold text-lg">Hybrid Retrieval</h3>
                                 <p className="text-muted-foreground text-sm leading-relaxed">
-                                    The original text and the new image descriptions are combined. <ExtLink href="https://www.langchain.com/">LangChain</ExtLink> splits this content into <ExtLink href="https://medium.com/@seahorse.technologies.sl/parent-child-chunking-in-langchain-for-advanced-rag-e7c37171995a">Parent/Child chunks</ExtLink>. The Child chunks are converted into 384-dimensional vectors using <ExtLink href="https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2">all-MiniLM-L6-v2</ExtLink> and stored in a local <ExtLink href="https://github.com/facebookresearch/faiss">FAISS</ExtLink> index unique to the document. Metadata is committed to <ExtLink href="https://www.postgresql.org/">PostgreSQL</ExtLink>.
+                                    When you ask a question, we query <strong>FAISS</strong> for relevant text chunks AND query <strong>Neo4j</strong> for related entities and their neighbors.
                                 </p>
                             </div>
                         </div>
@@ -200,9 +214,9 @@ export const HowItWorks = () => {
                         <div className="relative z-10 flex gap-4 md:gap-8 items-start">
                             <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0 mt-1">4</div>
                             <div className="space-y-2">
-                                <h3 className="font-bold text-lg">Retrieval & Generation</h3>
+                                <h3 className="font-bold text-lg">Synthesis</h3>
                                 <p className="text-muted-foreground text-sm leading-relaxed">
-                                    When you ask a question, we convert it to a vector. We query <strong>FAISS</strong> for the nearest Child chunks, map them back to their Parent chunks, and feed that rich context into the LLM (via <ExtLink href="https://ollama.com/">Ollama</ExtLink> or Groq) to generate the final answer.
+                                    The LLM receives a rich context containing specific text excerpts, chart descriptions, and structural graph relationships to generate a comprehensive, fact-based answer.
                                 </p>
                             </div>
                         </div>

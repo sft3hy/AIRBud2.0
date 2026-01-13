@@ -1,139 +1,72 @@
-# 🧠 Smart RAG Document Analyzer (Microservices Architecture)
+# 🧠 Smart RAG Document Analyzer
 
-**An enterprise-grade, visual-first RAG system designed to understand charts, tables, and layouts in complex documents.**
+**An enterprise-grade, visual-first RAG system featuring GraphRAG, Computer Vision, and Hybrid Search.**
 
-Unlike traditional RAG systems that only read text, Smart RAG uses computer vision and object detection to identify, crop, and analyze visual elements (charts, slides, diagrams) using state-of-the-art Vision Language Models (VLMs) before indexing.
+Unlike traditional RAG systems that only match text keywords, Smart RAG combines **Computer Vision** (to read charts), **Knowledge Graphs** (to understand relationships), and **Vector Search** (for semantic similarity).
 
 ---
 
 ## 🏗 High-Level Architecture
 
-The system is split into specialized microservices to ensure scalability, modularity, and hardware efficiency.
+The system uses a Microservices architecture orchestrated by Docker Compose.
 
 ```mermaid
 graph TD
-    User((User)) -->|Browser| Frontend[Frontend Service - React/Vite]
-    Frontend -->|HTTP API| Core[RAG Core Service - FastAPI]
+    User((User)) -->|Browser| Frontend[Frontend - React/Vite]
+    Frontend -->|HTTP| Core[RAG Core - FastAPI]
     
-    subgraph Processing_Pipeline
-        Core -->|HTTP| Parser[Parser Service - Detectron2]
-        Core -->|HTTP| Vision[Vision Service - Moondream/Qwen]
-        Vision -.->|Network| Ollama[Ollama Provider - Gemma3/Granite]
+    subgraph "Ingestion Pipeline"
+        Core -->|1. Layout| Parser[Parser - Detectron2]
+        Core -->|2. Vision| Vision[Vision - Moondream/Qwen]
+        Core -->|3. Entities| KG[KG Service - LLM Extractor]
     end
     
-    subgraph Storage
-        Core -->|Read Write| DB[(PostgreSQL)]
-        Core -->|Read Write| FAISS[(FAISS Vector Store)]
-        SharedVol[Shared Volume - /app/data]
+    subgraph "Storage Layer"
+        Core -->|Relational| Postgres[(PostgreSQL)]
+        Core -->|Vector| FAISS[(FAISS Index)]
+        KG -->|Graph| Neo4j[(Neo4j Graph DB)]
+        SharedVol[Shared Volume]
     end
     
-    Frontend -.->|Serve Static Images| SharedVol
-    Parser -.->|Write Crops| SharedVol
-    Core -.->|Read Write| SharedVol
+    Vision -.->|Inference| Ollama[Ollama Provider]
 ```
 
 ---
 
-## 🧩 Microservices Breakdown
+## 🧩 Technology Stack
 
-| Service | Technology | Description |
+| Service | Tech | Role |
 | :--- | :--- | :--- |
-| **Frontend** | React, Vite, Tailwind, Shadcn UI | A modern, responsive dashboard for managing collections, uploading files, and visualizing data. |
-| **RAG Core** | FastAPI, LangChain, FAISS | The "Brain". Handles orchestration, embedding generation, vector storage, and **PostgreSQL** metadata management. |
-| **Parser** | Detectron2, PyMuPDF | The "Eyes". Converts PDFs/Docs to images and runs **PubLayNet** to detect tables/figures for cropping. |
-| **Vision** | PyTorch, Transformers | The "Visual Cortex". Runs local VLMs (Moondream2, Qwen-VL, InternVL) to generate text descriptions of charts. |
-| **Ollama** | Ollama | The "Heavy Lifter". Runs larger reasoning models (Gemma 3, Granite Vision) via API for complex tasks. |
-| **Postgres** | PostgreSQL 15 | Relational storage for Collections, Documents, and Chat History. |
+| **Frontend** | React, Tailwind, Recharts, ForceGraph | Modern UI for chat, document management, and graph visualization. |
+| **RAG Core** | FastAPI, LangChain, FAISS | Orchestrator. Handles embedding, hybrid search logic, and DB management. |
+| **KG Service** | FastAPI, [Neo4j](https://neo4j.com) | **GraphRAG**. Extracts entities/relationships and performs 2-hop neighbor retrieval. |
+| **Parser** | Detectron2, PyMuPDF | Layout Analysis. Detects and crops tables/figures from PDFs. |
+| **Vision** | PyTorch, Transformers | Runs local VLMs (Moondream2, Qwen-VL) to transcribe charts into text. |
+| **Database** | PostgreSQL 15 | Stores collection metadata, chat history, and raw text chunks. |
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Features
 
-### Prerequisites
-
-*   **Docker & Docker Compose**
-*   **API Keys:**
-    *   **Groq API Key:** For high-speed text generation (Llama 3/4) in Test Mode.
-    *   **Sanctuary API Key:** For production LLM usage (Claude 3.5 Sonnet).
-*   **Ollama:**
-    *   *Mac/Dev:* Install the [Ollama Desktop App](https://ollama.com).
-    *   *Linux/Prod:* Docker handles the Ollama container automatically.
-
-### 1. Configuration (`.env`)
-
-Create a `.env` file in the root directory:
-
-```ini
-# API Keys
-GROQ_API_KEY=your_groq_api_key_here
-SANCTUARY_API_KEY=your_sanctuary_key_here
-
-# Environment Mode
-# "True" = Mac/Local Dev (Uses CPU, Local Ollama, Groq Llama)
-# "False" = Linux/Prod (Uses NVIDIA GPU, Docker Ollama, Claude 3.5)
-TEST=True
-```
-
-### 2. Running Locally (Mac M-Series / Dev)
-
-In this mode, the system runs lightweight services in Docker and offloads heavy AI inference to your Mac's native NPU/GPU via the host Ollama app.
-
-1.  **Configure Local Ollama:**
-    Docker needs permission to access your Mac's Ollama. Run this in your terminal:
-    ```bash
-    launchctl setenv OLLAMA_HOST "0.0.0.0"
-    ```
-    *Restart the Ollama app after running this.*
-
-2.  **Pull Vision Models:**
-    ```bash
-    ollama pull gemma3
-    ollama pull granite3.2-vision
-    ```
-
-3.  **Start the System:**
-    ```bash
-    # Passing TEST=True allows the frontend to show the correct model info
-    TEST=True docker-compose up --build
-    ```
-
-4.  **Access the App:** Open **http://localhost:5173**
-
-### 3. Running in Production (Linux + NVIDIA GPU)
-
-In this mode, Docker manages everything, including the Ollama instance, and maps the NVIDIA GPU to the containers.
-
-1.  **Set Environment:**
-    Change `TEST=False` in your `.env` file.
-
-2.  **Start with GPU Overrides:**
-    ```bash
-    docker-compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
-    ```
-
----
-
-## 🛠 Features
-
-### 1. Collections Management
-Organize your research into **Collections**. Unlike static sessions, Collections are mutable workspaces where you can:
-*   Add new documents over time.
-*   Remove outdated documents.
-*   Chat with the aggregate context of the entire folder.
+### 1. GraphRAG (Knowledge Graph)
+We use **Neo4j** to build a semantic graph of your documents.
+*   **Extraction:** An LLM scans your text to identify entities (People, Places, Concepts) and how they connect.
+*   **Visualization:** Interactive 2D Force-Directed Graph explorer to see connections in your data.
+*   **Hybrid Search:** Queries combine Vector Similarity + Graph Traversal for deeper answers.
 
 ### 2. Intelligent Chart Browser
-The system automatically detects, crops, and analyzes visual elements.
-*   **Visual Analysis:** Every chart is passed through a Vision Model to extract trends, axis labels, and data points.
-*   **Searchable:** These descriptions are embedded, meaning you can search for "Sales trend in Q3" and retrieve a chart image even if the text didn't explicitly mention it.
+The system "looks" at your documents using Computer Vision.
+*   **Detection:** Detectron2 identifies charts, graphs, and tables.
+*   **Analysis:** Vision Models (Moondream/Qwen) generate detailed textual descriptions of data trends.
+*   **Retrieval:** You can search for data points hidden inside images.
 
-### 3. Parent-Child Chunking
+### 3. Collections Management
+Organize research into **Collections** (folders). You can add or remove documents dynamically, and the Knowledge Graph updates automatically to reflect the current state of the collection.
+
+### 4. Parent-Child Chunking
 We use a **Parent-Child** retrieval strategy:
 *   **Child Chunks:** Small, specific text fragments used for high-precision vector search.
-*   **Parent Chunks:** Larger context blocks (pages or paragraphs) returned to the LLM to ensure the answer is comprehensive and accurate.
-
-### 4. Hybrid Search Architecture
-*   **FAISS:** Used for dense vector similarity search.
-*   **PostgreSQL:** Used for structured filtering, history management, and relational mapping between Charts, Documents, and Collections.
+*   **Parent Chunks:** Larger context blocks returned to the LLM to ensure the answer is comprehensive.
 
 ---
 
@@ -141,40 +74,38 @@ We use a **Parent-Child** retrieval strategy:
 
 ```text
 .
-├── docker-compose.yml          # Base config (CPU/Mac compatible)
-├── docker-compose.prod.yml     # Production overrides (GPU support)
-├── .env                        # Secrets and Config
-├── data/                       # Mapped volume
-│   ├── uploads/                # Raw PDFs/Docx
+├── docker-compose.yml          # Main orchestration
+├── .env                        # Config & API Keys
+├── data/                       # Persistent Volumes
+│   ├── uploads/                # Raw files
 │   ├── charts/                 # Extracted images
-│   ├── faiss_indexes/          # Vector stores
-│   └── chunks/                 # Serialized text chunks
+│   ├── faiss_indexes/          # Vector indices
+│   ├── neo4j_data/             # Graph DB storage
+│   └── postgres_data/          # SQL DB storage
 └── services/
-    ├── frontend/               # React + Vite Application
-    │   ├── src/                # Components, Pages, API Logic
-    │   └── Dockerfile
-    ├── rag_core/               # FastAPI Orchestrator
-    │   ├── src/core/           # Pipeline, Chunking, LLM Clients
-    │   ├── src/utils/          # DB Connection Pooling
-    │   └── Dockerfile
-    ├── parser/                 # Document Parsing Service
-    │   ├── src/core/           # Detectron2 & PyMuPDF Logic
-    │   └── Dockerfile
-    └── vision/                 # Vision Inference Service
-        ├── src/core/           # Model Manager (Moondream/Qwen)
-        └── Dockerfile
+    ├── frontend/               # React UI
+    ├── rag_core/               # Main Logic & Vector Search
+    ├── kg_service/             # Neo4j & Graph Extraction
+    ├── parser/                 # Document Layout Analysis
+    └── vision/                 # Image Inference
 ```
 
 ---
 
-## 🔧 Troubleshooting
+## ⚡️ Quick Start
 
-**"Ollama connection failed"**
-*   *Mac:* Ensure you ran `launchctl setenv OLLAMA_HOST "0.0.0.0"` and restarted the Ollama app.
-*   *Linux:* Ensure the `ollama` container is running and healthy.
+1.  **Configure `.env`**:
+    ```ini
+    GROQ_API_KEY=your_key
+    SANCTUARY_API_KEY=your_key
+    TEST=True  # True = Mac/Local (CPU), False = Prod (GPU)
+    ```
 
-**"Column collection_id does not exist"**
-*   If you migrated from an older version, your database schema might be outdated. Run `docker-compose down -v` to wipe the DB volume and restart.
+2.  **Start Services**:
+    ```bash
+    docker-compose up -d --build
+    ```
 
-**"Cannot copy out of meta tensor"**
-*   Ensure you are using the correct `rag_core` Dockerfile which forces CPU-only PyTorch to prevent `accelerate` from trying to use a non-existent GPU.
+3.  **Access the App**:
+    *   **Frontend:** [http://localhost:5173](http://localhost:5173)
+    *   **Neo4j Browser:** [http://localhost:7474](http://localhost:7474) (User: `neo4j`, Pass: `smartrag_password`)
