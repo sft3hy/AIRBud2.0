@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { useQuery } from '@tanstack/react-query';
 import { getCollectionGraph } from '../lib/api';
@@ -26,7 +26,6 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({ collectionId }) =>
 
         const resizeObserver = new ResizeObserver((entries) => {
             for (const entry of entries) {
-                // Only update if dimensions actually changed > 0
                 if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
                     setDimensions({
                         w: entry.contentRect.width,
@@ -39,6 +38,89 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({ collectionId }) =>
         resizeObserver.observe(containerRef.current);
         return () => resizeObserver.disconnect();
     }, []);
+
+    // --- Custom Node Rendering (Circle + Label Below) ---
+    const nodeCanvasObject = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+        if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
+
+        const label = node.id as string;
+        const fontSize = 12 / globalScale;
+        const radius = 5; // Node size
+
+        // 1. Draw Node Circle
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
+        ctx.fillStyle = node.group === 'Document' ? '#3b82f6' : '#a855f7'; // Blue for Doc, Purple for Entity
+        ctx.fill();
+
+        // Node Border
+        ctx.lineWidth = 1.5 / globalScale;
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+
+        // 2. Draw Label (Text)
+        ctx.font = `${fontSize}px Sans-Serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        // White outline for text (readability)
+        ctx.lineWidth = 3 / globalScale;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineJoin = 'round';
+        ctx.strokeText(label, node.x, node.y + radius + 2);
+
+        // Actual Text
+        ctx.fillStyle = '#0f172a'; // Dark slate
+        ctx.fillText(label, node.x, node.y + radius + 2);
+    }, []);
+
+    // --- Custom Link Rendering (Relationship Label) ---
+    const linkCanvasObject = useCallback((link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+        // Wait for physics simulation to assign coordinates
+        if (!link.source.x || !link.target.x) return;
+
+        const label = link.label;
+        if (!label) return;
+
+        const start = link.source;
+        const end = link.target;
+
+        // Calculate Midpoint
+        const textPos = {
+            x: start.x + (end.x - start.x) / 2,
+            y: start.y + (end.y - start.y) / 2
+        };
+
+        const fontSize = 10 / globalScale;
+        ctx.font = `${fontSize}px Sans-Serif`;
+        const textWidth = ctx.measureText(label).width;
+        const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.2);
+
+        ctx.save();
+        ctx.translate(textPos.x, textPos.y);
+
+        // Calculate Rotation
+        const angle = Math.atan2(end.y - start.y, end.x - start.x);
+        let rotation = angle;
+        // Flip text if it's upside down
+        if (angle > Math.PI / 2 || angle < -Math.PI / 2) {
+            rotation += Math.PI;
+        }
+        ctx.rotate(rotation);
+
+        // Draw Label Background (so line doesn't strike through text)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.fillRect(-bckgDimensions[0] / 2, -bckgDimensions[1] / 2, bckgDimensions[0], bckgDimensions[1]);
+
+        // Draw Label Text
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#64748b'; // Muted gray
+        ctx.fillText(label, 0, 0);
+
+        ctx.restore();
+    }, []);
+
 
     if (!collectionId) return <div className="p-8 text-center text-muted-foreground">Select a collection to view the graph.</div>;
     if (isLoading) return <div className="flex items-center justify-center h-full"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
@@ -66,7 +148,6 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({ collectionId }) =>
             <div className="flex-1 overflow-hidden cursor-move">
                 {hasData ? (
                     <ForceGraph2D
-                        // KEY FIX: Force re-render when dimensions change (e.g. switching tabs)
                         key={`${dimensions.w}-${dimensions.h}`}
                         ref={graphRef}
                         width={dimensions.w}
@@ -78,37 +159,16 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({ collectionId }) =>
                         d3AlphaDecay={0.02}
                         d3VelocityDecay={0.3}
 
-                        // Node Styling
-                        nodeLabel="id"
-                        nodeColor={node => node.group === 'Document' ? '#3b82f6' : '#a855f7'}
-                        nodeRelSize={6}
-
                         // Link Styling
-                        linkColor={() => 'rgba(150, 150, 150, 0.5)'}
+                        linkColor={() => '#cbd5e1'} // Light gray lines
                         linkDirectionalArrowLength={3.5}
                         linkDirectionalArrowRelPos={1}
                         linkWidth={1.5}
 
-                        // Custom Render (Simplified for reliability)
-                        nodeCanvasObject={(node, ctx, globalScale) => {
-                            const label = node.id as string;
-                            const fontSize = 12 / globalScale;
-                            ctx.font = `${fontSize}px Sans-Serif`;
-                            const textWidth = ctx.measureText(label).width;
-                            const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.2);
-
-                            // Draw text background
-                            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-                            if (Number.isFinite(node.x) && Number.isFinite(node.y)) {
-                                ctx.fillRect(node.x! - bckgDimensions[0] / 2, node.y! - bckgDimensions[1] / 2, bckgDimensions[0], bckgDimensions[1]);
-
-                                // Draw text
-                                ctx.textAlign = 'center';
-                                ctx.textBaseline = 'middle';
-                                ctx.fillStyle = node.group === 'Document' ? '#1d4ed8' : '#7e22ce';
-                                ctx.fillText(label, node.x!, node.y!);
-                            }
-                        }}
+                        // Custom Renderers
+                        nodeCanvasObject={nodeCanvasObject}
+                        linkCanvasObject={linkCanvasObject}
+                        linkCanvasObjectMode={() => 'after'} // Draw default line/arrow first, then text on top
                     />
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm">
