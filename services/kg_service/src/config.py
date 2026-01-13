@@ -5,7 +5,7 @@ class Config:
     VERSION = "1.0"
     
     # Environment
-    TEST_MODE = os.getenv("TEST", "False").lower() == "true"
+    TEST_MODE = "False" # os.getenv("TEST", "False").lower() == "true"
     
     # Neo4j
     NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")

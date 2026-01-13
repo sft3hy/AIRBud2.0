@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Upload, LayoutGrid, FileText, CheckCircle2, AlertCircle, X, Play, Cpu, Eye, Trash2, FolderPlus, ArrowLeft, FolderOpen } from 'lucide-react';
+import { Loader2, Upload, LayoutGrid, FileText, CheckCircle2, AlertCircle, X, Play, Cpu, Eye, Trash2, FolderPlus, ArrowLeft, FolderOpen, UserCircle } from 'lucide-react';
 import {
     getCollections,
     fetchSystemStatus,
@@ -361,6 +361,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentSessionId, onSessionCha
                     {/* SYSTEM INFO FOOTER */}
                     <div className="p-4 border-t bg-muted/20">
                         <div className="space-y-3">
+
+                            {systemStatus?.user && (
+                                <div className="flex items-center gap-3 p-2 bg-background rounded-lg border shadow-sm">
+                                    <UserCircle className="h-8 w-8 text-primary/80" />
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold truncate">{systemStatus.user.display_name}</p>
+                                        <p className="text-[10px] text-muted-foreground truncate">{systemStatus.user.organization}</p>
+                                    </div>
+                                </div>
+                            )}
+
                             <h4 className="text-xs font-bold uppercase text-muted-foreground tracking-widest">System Info</h4>
 
                             <div className="flex items-center gap-3">

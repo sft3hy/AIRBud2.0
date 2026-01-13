@@ -3,17 +3,19 @@ import uuid
 import shutil
 import traceback
 import requests
-from typing import Dict, List
-from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
+from typing import Dict, List, Optional
+from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from fastapi.responses import JSONResponse # Add this
 
 from src.config import settings
 from src.utils.db import DatabaseManager
 from src.utils.logger import logger
 from src.core.pipeline import SmartRAG
 from src.core.services import ChartService
+from src.core.auth import auth_handler  # <--- Import Auth
 
 # --- Initialization ---
 app = FastAPI(title="Smart RAG API", version=settings.VERSION)
@@ -83,11 +85,11 @@ def run_pipeline_task(collection_id: int, filename: str, vision_model: str):
             requests.post(
                 f"{KG_SERVICE_URL}/ingest",
                 json={
-                    "text": markdown_text[:100000], # Limit payload just in case
+                    "text": markdown_text[:100000],  # Limit payload just in case
                     "doc_id": doc_id,
                     "collection_id": collection_id
                 },
-                timeout=5 # Fire and forget (kg_service handles background)
+                timeout=5  # Fire and forget (kg_service handles background)
             )
             logger.info(f"Triggered KG ingestion for doc {doc_id}")
         except Exception as e:
@@ -106,17 +108,20 @@ def run_pipeline_task(collection_id: int, filename: str, vision_model: str):
 
 # --- Routes ---
 
+# 1. PUBLIC ROUTE (Allows Guest)
 @app.get("/")
-def health_check():
+def health_check(request: Request):
+    user = auth_handler.get_current_user(request)
     return {
         "status": "online", 
         "service": settings.SERVICE_NAME,
-        "llm_model": settings.GEN_MODEL_NAME,
-        "llm_provider": settings.LLM_PROVIDER
+        "user": user  # Frontend checks this. If id=0, show Login Page.
     }
 
+# 2. PROTECTED ROUTES (Require Smart Card)
+
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...), user: Dict = Depends(auth_handler.require_user)):
     try:
         file_location = settings.UPLOAD_DIR / file.filename
         with open(file_location, "wb+") as file_object:
@@ -127,17 +132,18 @@ async def upload_file(file: UploadFile = File(...)):
 
 # --- Collections ---
 @app.get("/collections")
-def get_collections():
-    return [{"id": s['id'], "name": s['name'], "created_at": s['created_at'], "docs": s['docs']} 
+def get_collections(user: Dict = Depends(auth_handler.require_user)):
+    # In future, we can filter by user['id'] here
+    return [{"id": s['id'], "name": s['name'], "created_at": s['created_at'], "docs": s['docs'], "owner": s.get('owner_name')} 
             for s in db.get_all_collections()]
 
 @app.post("/collections")
-def create_collection(req: CollectionCreate):
-    cid = db.create_collection(req.name)
-    return {"id": cid, "name": req.name}
+def create_collection(req: CollectionCreate, user: Dict = Depends(auth_handler.require_user)):
+    cid = db.create_collection(req.name, user['id'])  # Pass Owner ID
+    return {"id": cid, "name": req.name, "owner": user['display_name']}
 
 @app.delete("/collections/{cid}")
-def delete_collection(cid: int):
+def delete_collection(cid: int, user: Dict = Depends(auth_handler.require_user)):
     # Also notify KG service to delete graph data
     try:
         requests.delete(f"{KG_SERVICE_URL}/collections/{cid}", timeout=3)
@@ -147,12 +153,12 @@ def delete_collection(cid: int):
     return {"status": "deleted", "id": cid}
 
 @app.get("/collections/{cid}/status")
-def get_status(cid: str):
+def get_status(cid: str, user: Dict = Depends(auth_handler.require_user)):
     return job_status.get(str(cid), {"status": "idle", "step": "", "progress": 0})
 
 # --- Documents ---
 @app.post("/process")
-def process_document(req: ProcessRequest, background_tasks: BackgroundTasks):
+def process_document(req: ProcessRequest, background_tasks: BackgroundTasks, user: Dict = Depends(auth_handler.require_user)):
     file_path = settings.UPLOAD_DIR / req.filename
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
@@ -162,26 +168,43 @@ def process_document(req: ProcessRequest, background_tasks: BackgroundTasks):
     return {"status": "queued"}
 
 @app.get("/collections/{cid}/documents")
-def get_documents(cid: int):
+def get_documents(cid: int, user: Dict = Depends(auth_handler.require_user)):
     return db.get_collection_documents(cid)
 
 @app.delete("/documents/{doc_id}")
-def delete_document(doc_id: int):
+def delete_document(doc_id: int, user: Dict = Depends(auth_handler.require_user)):
     db.delete_document(doc_id)
     return {"status": "deleted"}
 
 @app.get("/collections/{cid}/charts")
-def get_charts(cid: int):
+def get_charts(cid: int, user: Dict = Depends(auth_handler.require_user)):
     docs = db.get_collection_documents(cid)
     return ChartService.get_charts_for_session(docs) 
 
 # --- Chat ---
 @app.get("/collections/{cid}/history")
-def get_history(cid: int):
+def get_history(cid: int, user: Dict = Depends(auth_handler.require_user)):
     return db.get_queries_for_collection(cid)
 
+@app.get("/auth/debug")
+def auth_debug(request: Request):
+    """
+    Returns raw headers relevant to Auth to diagnose Nginx/Cert issues.
+    """
+    headers = dict(request.headers)
+    
+    # Filter for relevant headers to return safely
+    debug_info = {
+        "x-subject-dn": headers.get("x-subject-dn", "MISSING"),
+        "x-client-verify": headers.get("x-client-verify", "MISSING"),
+        "x-real-ip": headers.get("x-real-ip", "MISSING"),
+        "host": headers.get("host", "MISSING"),
+        "test_mode": settings.TEST_MODE
+    }
+    return debug_info
+
 @app.post("/query")
-def query_collection(req: QueryRequest):
+def query_collection(req: QueryRequest, user: Dict = Depends(auth_handler.require_user)):
     docs = db.get_collection_documents(req.collection_id)
     if not docs:
         return {"response": "This collection has no documents.", "results": []}
@@ -210,7 +233,7 @@ def query_collection(req: QueryRequest):
 
     # 3. Knowledge Graph Search (Remote)
     graph_context = ""
-    graph_results_raw = [] # Store raw data
+    graph_results_raw = []  # Store raw data
     try:
         kg_resp = requests.post(
             f"{KG_SERVICE_URL}/search",
@@ -247,7 +270,7 @@ def query_collection(req: QueryRequest):
                 "type": "graph",
                 "text": f"{g['source']} --[{g['rel']}]--> {g['target']}",
                 "source": "Knowledge Graph",
-                "score": 1.0 # High confidence for graph facts
+                "score": 1.0  # High confidence for graph facts
             })
         
         db.add_query_record(req.collection_id, req.question, response_text, results_formatted)

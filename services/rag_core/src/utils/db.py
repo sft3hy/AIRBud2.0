@@ -54,15 +54,30 @@ class DatabaseManager:
 
     def _init_tables(self):
         with self.get_cursor(commit=True) as cur:
-            # Renamed sessions -> collections
+            # --- NEW: Users Table ---
+            # piv_id is the unique identifier from the smart card (EDIPI or UUID)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    piv_id TEXT UNIQUE NOT NULL, 
+                    display_name TEXT,
+                    organization TEXT,
+                    email TEXT,
+                    last_login TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+
+            # Collections (Updated with user_id)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS collections (
                     id SERIAL PRIMARY KEY,
                     name TEXT,
+                    owner_id INTEGER REFERENCES users(id), -- Link to User
                     created_at TIMESTAMP
                 )
             """)
-            # session_id -> collection_id
+            
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS documents (
                     id SERIAL PRIMARY KEY,
@@ -76,6 +91,7 @@ class DatabaseManager:
                     chart_descriptions_json TEXT
                 )
             """)
+            
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS queries (
                     id SERIAL PRIMARY KEY,
@@ -87,41 +103,70 @@ class DatabaseManager:
                 )
             """)
 
-    # --- Collection Operations ---
-    def create_collection(self, name):
+    # --- User Operations ---
+    def upsert_user(self, piv_id, display_name, organization, email=""):
+        """
+        Inserts a new user or updates the last_login if they exist.
+        Returns the user ID.
+        """
+        with self.get_cursor(commit=True) as cur:
+            # Check if exists
+            cur.execute("SELECT id FROM users WHERE piv_id = %s", (piv_id,))
+            res = cur.fetchone()
+            
+            if res:
+                uid = res['id']
+                cur.execute("UPDATE users SET last_login=%s WHERE id=%s", (datetime.now(), uid))
+                return uid
+            else:
+                cur.execute("""
+                    INSERT INTO users (piv_id, display_name, organization, email, last_login)
+                    VALUES (%s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (piv_id, display_name, organization, email, datetime.now()))
+                return cur.fetchone()['id']
+
+    def get_user_by_id(self, uid):
+        with self.get_cursor() as cur:
+            cur.execute("SELECT * FROM users WHERE id = %s", (uid,))
+            return cur.fetchone()
+
+    # --- Collection Operations (Updated with Owner) ---
+    def create_collection(self, name, owner_id):
         with self.get_cursor(commit=True) as cur:
             cur.execute(
-                "INSERT INTO collections (name, created_at) VALUES (%s, %s) RETURNING id",
-                (name, datetime.now())
+                "INSERT INTO collections (name, owner_id, created_at) VALUES (%s, %s, %s) RETURNING id",
+                (name, owner_id, datetime.now())
             )
             return cur.fetchone()['id']
     
-    def rename_collection(self, collection_id, new_name):
-        with self.get_cursor(commit=True) as cur:
-            cur.execute("UPDATE collections SET name=%s WHERE id=%s", (new_name, collection_id))
-
-    def get_all_collections(self):
+    def get_all_collections(self, owner_id=None):
+        # In a real secure app, we'd filter by owner_id. 
+        # For now, we list all but show ownership.
         with self.get_cursor() as cur:
             cur.execute("""
-                SELECT c.id, c.name, c.created_at, COUNT(d.id) as docs
+                SELECT c.id, c.name, c.created_at, c.owner_id, u.display_name as owner_name, COUNT(d.id) as docs
                 FROM collections c 
-                LEFT JOIN documents d ON c.id=d.collection_id 
-                GROUP BY c.id, c.name, c.created_at 
+                LEFT JOIN documents d ON c.id=d.collection_id
+                LEFT JOIN users u ON c.owner_id = u.id
+                GROUP BY c.id, c.name, c.created_at, c.owner_id, u.display_name
                 ORDER BY c.created_at DESC
             """)
             return cur.fetchall()
 
+    # ... (Rest of functions: rename, delete, add_document, etc. remain the same) ...
+    def rename_collection(self, collection_id, new_name):
+        with self.get_cursor(commit=True) as cur:
+            cur.execute("UPDATE collections SET name=%s WHERE id=%s", (new_name, collection_id))
+
     def delete_collection(self, collection_id):
-        # Cascading delete usually handled by DB constraints, but here we do manual for safety
         with self.get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM queries WHERE collection_id=%s", (collection_id,))
             cur.execute("DELETE FROM documents WHERE collection_id=%s", (collection_id,))
             cur.execute("DELETE FROM collections WHERE id=%s", (collection_id,))
 
-    # --- Document Operations ---
     def add_document_record(self, filename, vision_model, chart_dir, faiss_path, chunks_path, chart_descriptions, collection_id):
         desc_json = json.dumps(chart_descriptions) if isinstance(chart_descriptions, dict) else chart_descriptions
-        
         with self.get_cursor(commit=True) as cur:
             cur.execute("""
                 INSERT INTO documents 
@@ -146,7 +191,6 @@ class DatabaseManager:
         with self.get_cursor() as cur:
             cur.execute("SELECT * FROM documents WHERE collection_id=%s ORDER BY original_filename ASC", (collection_id,))
             rows = cur.fetchall()
-            
             for row in rows:
                 raw = row.get("chart_descriptions_json")
                 if raw and isinstance(raw, str):
@@ -160,7 +204,6 @@ class DatabaseManager:
                     row["chart_descriptions"] = {}
             return rows
 
-    # --- Query History ---
     def add_query_record(self, collection_id, question, response, sources):
         with self.get_cursor(commit=True) as cur:
             cur.execute(
