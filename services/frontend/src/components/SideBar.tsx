@@ -14,7 +14,7 @@ import {
     fetchCollectionDocuments,
     deleteDocument,
     getMyGroups,
-    createGroup // Import this
+    createGroup
 } from '../lib/api';
 import { VisionModel } from '../types';
 import { cn } from '@/lib/utils';
@@ -22,7 +22,7 @@ import { logger } from '../lib/logger';
 import { config } from '../lib/config';
 import { ChartBrowser } from './ChartBrowser';
 import { GraphExplorer } from './GraphExplorer'; 
-import { SidebarMode } from '../types'; // <--- UPDATED IMPORT
+import { SidebarMode } from '../types';
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -53,6 +53,8 @@ interface SidebarProps {
     setMode: (m: SidebarMode) => void;
     currentSessionId: string | null;
     onSessionChange: (id: string | null) => void;
+    activeJobId: string | null;
+    setActiveJobId: (id: string | null) => void;
     className?: string;
 }
 
@@ -65,7 +67,8 @@ const VISION_MODELS: { value: VisionModel; label: string; desc: string }[] = [
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
-    mode, setMode, currentSessionId, onSessionChange, className 
+    mode, setMode, currentSessionId, onSessionChange, 
+    activeJobId, setActiveJobId, className 
 }) => {
     const queryClient = useQueryClient();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -75,24 +78,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const [selectedModel, setSelectedModel] = useState<VisionModel>("Moondream2");
     const [stagedFiles, setStagedFiles] = useState<File[]>([]);
     const [isUploading, setIsUploading] = useState(false);
-    const [activeJobId, setActiveJobId] = useState<string | null>(null);
     
     // Creation Forms
     const [newCollectionName, setNewCollectionName] = useState("");
     const [selectedGroupId, setSelectedGroupId] = useState<string>("personal");
-    
-    // Group Creation State
     const [newGroupName, setNewGroupName] = useState("");
     const [newGroupDesc, setNewGroupDesc] = useState("");
     const [newGroupPublic, setNewGroupPublic] = useState(false);
 
     // --- Data Fetching ---
     const { data: systemStatus } = useQuery({
-        queryKey: ['session'], // Was ['system_status']
+        queryKey: ['session'],
         queryFn: fetchSystemStatus,
-        // No refetchInterval needed here, App.tsx handles the global polling.
-        // But we can keep it if we want independent updates.
-        // It's safer to let App.tsx drive the session state.
     });
 
     const { data: collections = [] } = useQuery({
@@ -120,22 +117,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
         refetchInterval: 1000,
     });
 
-    // --- Effects ---
+    // --- Effects: Job Completion ---
     useEffect(() => {
         if (!jobStatus) return;
+
         if (jobStatus.status === 'completed') {
-            queryClient.invalidateQueries({ queryKey: ['collections'] });
-            queryClient.invalidateQueries({ queryKey: ['documents', currentSessionId] });
-            queryClient.invalidateQueries({ queryKey: ['charts', currentSessionId] });
-            if (activeJobId) toast({ title: "Processing Complete", description: "Documents indexed." });
-            setActiveJobId(null);
-            setIsUploading(false);
-            setStagedFiles([]);
+            const refreshData = async () => {
+                // --- FIX: Broad Invalidation ensures all UI parts update ---
+                await queryClient.invalidateQueries({ queryKey: ['collections'] });
+                await queryClient.invalidateQueries({ queryKey: ['documents'] }); // Matches any 'documents' query
+                await queryClient.invalidateQueries({ queryKey: ['charts'] });
+                await queryClient.invalidateQueries({ queryKey: ['graph'] });
+                // -----------------------------------------------------------
+                
+                if (activeJobId) {
+                    toast({ title: "Processing Complete", description: "Documents indexed." });
+                }
+                setActiveJobId(null);
+                setIsUploading(false);
+                setStagedFiles([]);
+            };
+            refreshData();
+
         } else if (jobStatus.status === 'error') {
             setIsUploading(false);
+            setActiveJobId(null);
             toast({ variant: "destructive", title: "Failed", description: jobStatus.step });
         }
-    }, [jobStatus, queryClient, currentSessionId, activeJobId]);
+    }, [jobStatus, queryClient, activeJobId, setActiveJobId, toast]);
 
     // --- Handlers ---
 
@@ -144,7 +153,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         const groupId = selectedGroupId === "personal" ? undefined : parseInt(selectedGroupId);
         try {
             const id = await createCollection(newCollectionName, groupId);
-            await queryClient.refetchQueries({ queryKey: ['collections'] });
+            await queryClient.invalidateQueries({ queryKey: ['collections'] });
             onSessionChange(id);
             setNewCollectionName("");
             toast({ title: "Collection Created" });
@@ -157,8 +166,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         if (!newGroupName.trim()) return;
         try {
             await createGroup(newGroupName, newGroupDesc, newGroupPublic);
-            await queryClient.refetchQueries({ queryKey: ['my_groups'] });
-            await queryClient.refetchQueries({ queryKey: ['public_groups'] });
+            await queryClient.invalidateQueries({ queryKey: ['my_groups'] });
+            await queryClient.invalidateQueries({ queryKey: ['public_groups'] });
             setNewGroupName("");
             setNewGroupDesc("");
             toast({ title: "Group Created" });
@@ -191,18 +200,48 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     const handleAddFiles = async () => {
         if (!currentSessionId || stagedFiles.length === 0) return;
-        setIsUploading(true);
-        setActiveJobId(currentSessionId);
+        
+        setIsUploading(true); // Show spinner on button
+        
         try {
+            // 1. FORCE CLEAR CACHE
+            // Remove any stale 'completed' status from React Query so we don't trigger early finish
+            queryClient.removeQueries({ queryKey: ['status', currentSessionId] });
+
+            // 2. Perform Upload & Init Processing
+            // The backend sets status to 'queued' during this call
             for (const file of stagedFiles) {
                 await uploadAndProcessDocument(currentSessionId, file, selectedModel);
             }
+            
+            // 3. ACTIVATE ANIMATION
+            // Only now, after backend is definitely in 'queued' state, do we show the view.
+            setActiveJobId(currentSessionId); 
+            
         } catch (error) {
-            setIsUploading(false);
+            console.error(error);
+            setIsUploading(false); // Only reset if we failed to start
             setActiveJobId(null);
-            toast({ variant: "destructive", title: "Upload Failed" });
+            toast({ variant: "destructive", title: "Upload Failed", description: "Could not start processing." });
         }
     };
+
+    // --- FIX: Robust Delete Handler ---
+    const handleDeleteDoc = async (docId: number) => {
+        try {
+            await deleteDocument(docId);
+            
+            // Invalidate aggressively to force UI update
+            await queryClient.invalidateQueries({ queryKey: ['documents'] });
+            await queryClient.invalidateQueries({ queryKey: ['collections'] });
+            await queryClient.invalidateQueries({ queryKey: ['graph'] });
+            
+            toast({ title: "Document Removed" });
+        } catch (err) {
+            toast({ variant: "destructive", title: "Error", description: "Could not delete document." });
+        }
+    };
+    // ----------------------------------
 
     const activeCollectionName = collections.find(c => String(c.id) === currentSessionId)?.name;
 
@@ -273,7 +312,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                     </div>
                                 </Card>
 
-                                {/* List */}
                                 <div className="space-y-2">
                                     <h3 className="text-xs font-bold uppercase text-muted-foreground tracking-wider mb-2">Available Collections</h3>
                                     {collections.length === 0 ? (
@@ -351,9 +389,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                 {currentDocs.map(doc => (
                                                     <div key={doc.id} className="flex items-center justify-between p-2 bg-card border rounded-md text-xs group">
                                                         <span className="truncate flex-1 pr-2">{doc.original_filename}</span>
-                                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100" onClick={() => deleteDocument(doc.id)}>
-                                                            <Trash2 className="h-3 w-3" />
-                                                        </Button>
+                                                        <div className="flex items-center gap-2">
+                                                            <Badge variant="outline" className="text-[10px] h-5">{doc.vision_model_used}</Badge>
+                                                            
+                                                            <AlertDialog>
+                                                                <AlertDialogTrigger asChild>
+                                                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100">
+                                                                        <Trash2 className="h-3 w-3" />
+                                                                    </Button>
+                                                                </AlertDialogTrigger>
+                                                                <AlertDialogContent>
+                                                                    <AlertDialogHeader>
+                                                                        <AlertDialogTitle>Delete Document?</AlertDialogTitle>
+                                                                        <AlertDialogDescription>Remove <b>{doc.original_filename}</b>?</AlertDialogDescription>
+                                                                    </AlertDialogHeader>
+                                                                    <AlertDialogFooter>
+                                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                        <AlertDialogAction onClick={() => handleDeleteDoc(doc.id)} className="bg-destructive">Delete</AlertDialogAction>
+                                                                    </AlertDialogFooter>
+                                                                </AlertDialogContent>
+                                                            </AlertDialog>
+                                                        </div>
                                                     </div>
                                                 ))}
                                                 {currentDocs.length === 0 && <p className="text-xs text-muted-foreground text-center py-4">No documents.</p>}
@@ -390,14 +446,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                     )}
                                                 </div>
                                             )}
-
-                                            {activeJobId === currentSessionId && jobStatus && (
-                                                <div className="mt-4 space-y-2">
-                                                    <div className="flex items-center gap-2 text-xs font-semibold"><Loader2 className="h-3 w-3 animate-spin" /> Processing...</div>
-                                                    <Progress value={jobStatus.progress} className="h-1" />
-                                                    <p className="text-[10px] text-muted-foreground truncate">{jobStatus.step}</p>
-                                                </div>
-                                            )}
                                         </ScrollArea>
                                     </TabsContent>
 
@@ -423,7 +471,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {/* === MODE: GROUPS === */}
                 {mode === 'groups' && (
                     <ScrollArea className="flex-1 px-4 py-4">
-                        {/* Group Creation */}
                         <Card className="p-4 bg-background border-dashed mb-6">
                             <h3 className="text-xs font-bold uppercase text-muted-foreground mb-3 flex items-center gap-2">
                                 <Users className="h-4 w-4" /> Create Group
@@ -439,7 +486,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             </div>
                         </Card>
 
-                        {/* Group List Sidebar View */}
                         <div className="space-y-2">
                             <h3 className="text-xs font-bold uppercase text-muted-foreground tracking-wider mb-2">My Groups</h3>
                             {userGroups.map((g: any) => (
@@ -454,13 +500,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t bg-muted/20 shrink-0">
+            <div className="p-6 border-t bg-muted/20 shrink-0 min-h-[100px] flex items-center">
                  {systemStatus?.user && (
-                    <div className="flex items-center gap-3">
-                        <UserCircle className="h-8 w-8 text-primary/80" />
-                        <div className="min-w-0">
-                            <p className="text-xs font-bold truncate">{systemStatus.user.cn}</p>
-                            <p className="text-[10px] text-muted-foreground truncate">{systemStatus.user.org}</p>
+                    <div className="flex items-center gap-3 w-full">
+                        <UserCircle className="h-10 w-10 text-primary/80" />
+                        <div className="min-w-0 flex-1">
+                            <p className="text-sm font-bold truncate">{systemStatus.user.cn}</p>
+                            <p className="text-xs text-muted-foreground truncate">{systemStatus.user.org}</p>
                         </div>
                     </div>
                 )}

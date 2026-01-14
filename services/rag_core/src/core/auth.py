@@ -1,6 +1,6 @@
 import re
 from fastapi import Request, HTTPException
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from src.config import settings
 from src.utils.db import DatabaseManager
 from src.utils.logger import logger
@@ -12,14 +12,16 @@ class AuthHandler:
     def _format_friendly_name(self, raw_cn: str) -> str:
         """
         Converts CAC format 'LAST.FIRST.MIDDLE.12345' -> 'First Last'.
+        Input: TOWNSEND.SAMUEL.F.1000000001
+        Output: Samuel Townsend
         """
-        if not raw_cn:
-            return "Unknown User"
+        if not raw_cn or raw_cn == "Unknown User":
+            return "Guest User"
 
         # 1. Split by '.'
         parts = raw_cn.split('.')
         
-        # 2. Filter out the EDIPI (pure digits usually at the end)
+        # 2. Filter out the EDIPI (digits)
         name_parts = [p for p in parts if not p.isdigit()]
         
         # 3. Reformat
@@ -29,8 +31,32 @@ class AuthHandler:
             first = name_parts[1].lower().capitalize()
             return f"{first} {last}"
         
-        # Fallback: Title case whatever is there
+        # Fallback
         return raw_cn.replace('.', ' ').title()
+
+    def _format_organization(self, dn_str: str, raw_org: str) -> str:
+        """
+        Extracts Role (Contractor, Civilian, etc) from DN and combines with Org.
+        Input DN: ...OU=CONTRACTOR...O=U.S. Government...
+        Output: Contractor, U.S. Government
+        """
+        dn_upper = dn_str.upper()
+        role = ""
+
+        # Check for common DoD roles in the full DN string
+        if "OU=CONTRACTOR" in dn_upper:
+            role = "Contractor"
+        elif "OU=CIVILIAN" in dn_upper:
+            role = "Civilian"
+        elif "OU=MILITARY" in dn_upper:
+            role = "Military"
+        
+        # Clean up the base Organization (remove extra chars if any)
+        org_clean = raw_org.strip()
+
+        if role:
+            return f"{role}, {org_clean}"
+        return org_clean
 
     def get_current_user(self, request: Request) -> Dict:
         """
@@ -42,7 +68,7 @@ class AuthHandler:
             return self._upsert_mock_user()
 
         # 2. PROD MODE
-        subject_dn = request.headers.get("X-Subject-DN")
+        subject_dn = request.headers.get("X-Subject-DN", "")
         verify_result = request.headers.get("X-Client-Verify")
 
         if verify_result != "SUCCESS":
@@ -57,21 +83,22 @@ class AuthHandler:
         # Parse the DN to get raw attributes
         user_info = self._parse_dn(subject_dn)
         
-        # FORMATTING STEP: Clean the CN for display
+        # FORMATTING STEPS
         friendly_name = self._format_friendly_name(user_info['cn'])
+        friendly_org = self._format_organization(subject_dn, user_info['org'])
 
-        # Upsert into DB (Stores the Clean Name)
+        # Upsert into DB (Stores the Clean Name and Org)
         user_id = self.db.upsert_user(
             user_info['piv_id'], 
             friendly_name, 
-            user_info['org']
+            friendly_org
         )
         
         return {
             "id": user_id,
             "piv_id": user_info['piv_id'],
-            "cn": friendly_name,       # Frontend receives "First Last"
-            "org": user_info['org']
+            "cn": friendly_name,       # "Samuel Townsend"
+            "org": friendly_org        # "Contractor, U.S. Government"
         }
 
     def require_user(self, request: Request) -> Dict:
@@ -82,21 +109,21 @@ class AuthHandler:
         return user
 
     def _upsert_mock_user(self):
-        # Mock Data (Format matches raw CAC for testing the cleaner)
+        # Mock Data matching your format for testing
         piv_id = "1000000001"
-        raw_cn = "DOE.JOHN.TEST.1000000001" 
-        organization = "U.S. GOVERNMENT"
+        raw_cn = "TOWNSEND.SAMUEL.F.1000000001" 
+        raw_dn = "CN=TOWNSEND.SAMUEL.F.1000000001,OU=CONTRACTOR,O=U.S. Government"
         
-        # Clean it
         friendly_name = self._format_friendly_name(raw_cn)
+        friendly_org = self._format_organization(raw_dn, "U.S. Government")
         
-        user_id = self.db.upsert_user(piv_id, friendly_name, organization)
+        user_id = self.db.upsert_user(piv_id, friendly_name, friendly_org)
         
         return {
             "id": user_id, 
             "piv_id": piv_id, 
             "cn": friendly_name, 
-            "org": organization
+            "org": friendly_org
         }
 
     def _parse_dn(self, dn: str) -> Dict:
@@ -111,13 +138,14 @@ class AuthHandler:
         matches = re.findall(pattern, dn)
         
         for key, val in matches:
-            data[key.upper()] = val.strip()
+            # We take the first occurrence for CN and O usually
+            if key.upper() not in data:
+                data[key.upper()] = val.strip()
             
         cn = data.get('CN', 'Unknown User')
         org = data.get('O', 'Unknown Org')
         
         # Extract EDIPI/PivID from raw CN (digits at end)
-        # Ex: "LAST.FIRST.12345" -> "12345"
         piv_id = cn
         if '.' in cn:
             parts = cn.split('.')
@@ -126,7 +154,7 @@ class AuthHandler:
 
         return {
             "piv_id": piv_id,
-            "cn": cn, # Return RAW CN here, clean it later
+            "cn": cn, 
             "org": org
         }
 

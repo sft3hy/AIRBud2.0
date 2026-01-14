@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, ImageIcon } from 'lucide-react';
-import { getCollectionCharts } from '../lib/api'; // Updated import
+import { getCollectionCharts } from '../lib/api';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface ChartBrowserProps {
-    collectionId: string | null; // Renamed from sessionId
+    collectionId: string | null;
 }
 
 export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
@@ -73,7 +73,10 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
                     </div>
 
                     <div>
-                        <span className="text-xs font-semibold text-primary">AI Description:</span>
+                        {/* Display the Model Name */}
+                        <span className="text-xs font-semibold text-primary">
+                            AI Description ({currentChart.vision_model_used || "Unknown"}):
+                        </span>
                         <div className="mt-1 text-xs text-muted-foreground leading-relaxed bg-muted/40 p-2 rounded border max-h-[200px] overflow-y-auto">
                             {currentChart.description || "No description available."}
                         </div>

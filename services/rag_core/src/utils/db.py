@@ -334,3 +334,8 @@ class DatabaseManager:
                     r['sources'] = json.loads(r['sources_json'])
                     r['results'] = r['sources']
             return results
+        
+    def get_document_by_id(self, doc_id):
+        with self.get_cursor() as cur:
+            cur.execute("SELECT * FROM documents WHERE id = %s", (doc_id,))
+            return cur.fetchone()

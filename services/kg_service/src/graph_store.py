@@ -72,3 +72,28 @@ class Neo4jStore:
                 session.run(query, cid=collection_id)
         except Exception as e:
             print(f"Neo4j Delete Error: {e}")
+    def delete_document(self, doc_id):
+        """
+        Deletes the Document node and any Entities that are no longer 
+        connected to any other documents (orphans).
+        """
+        # 1. Detach and delete the Document node
+        query_doc = """
+        MATCH (d:Document {id: $doc_id})
+        DETACH DELETE d
+        """
+        
+        # 2. Cleanup Orphans: Find Entities with NO relationships
+        # (Since we just deleted the links to the Document, unique entities become isolated)
+        query_orphans = """
+        MATCH (e:Entity)
+        WHERE NOT (e)--()
+        DELETE e
+        """
+        
+        try:
+            with self.driver.session() as session:
+                session.run(query_doc, doc_id=doc_id)
+                session.run(query_orphans)
+        except Exception as e:
+            print(f"Neo4j Document Delete Error: {e}")

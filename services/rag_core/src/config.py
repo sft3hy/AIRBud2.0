@@ -7,13 +7,15 @@ class Config:
     VERSION = "2.0"
     
     # Environment Logic
-    # TEST_MODE=True  -> Uses Mock User (No CAC required)
-    # TEST_MODE=False -> Uses Real User (Requires CAC headers from Nginx)
     TEST_MODE = os.getenv("TEST", "False").lower() == "true"
     
     # Paths
     BASE_DIR = Path("/app")
-    DATA_DIR = BASE_DIR / "data"
+    
+    # --- FIX: Move Data out of /app to avoid Permission Conflicts ---
+    DATA_DIR = Path("/data") 
+    # ----------------------------------------------------------------
+    
     UPLOAD_DIR = DATA_DIR / "uploads"
     CHARTS_DIR = DATA_DIR / "charts"
     FAISS_DIR = DATA_DIR / "faiss_indexes"
@@ -34,17 +36,13 @@ class Config:
     SANCTUARY_API_KEY = os.getenv("SANCTUARY_API_KEY")
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
     
-    # --- DECOUPLED LOGIC ---
-    # 1. Determine Provider: Use env var if set, otherwise default based on mode
     default_provider = "groq" if TEST_MODE else "sanctuary"
     LLM_PROVIDER = os.getenv("LLM_PROVIDER", default_provider).lower()
 
-    # 2. Set Model Name based on the selected Provider
     if LLM_PROVIDER == "groq":
-        GEN_MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct" # Updated to latest stable Groq model
+        GEN_MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"
     else:
         GEN_MODEL_NAME = "claude-3.5-sonnet"
-    # -----------------------
     
     # RAG Settings
     EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"

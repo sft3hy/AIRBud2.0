@@ -1,0 +1,22 @@
+# Version Control
+.git
+.gitignore
+
+# Python/Environment
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+
+# IDEs
+.idea
+.vscode
+
+# Docker specific
+Dockerfile
+.dockerignore

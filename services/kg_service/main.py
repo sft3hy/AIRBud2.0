@@ -94,3 +94,8 @@ def get_full_graph(cid: int):
 def delete_collection(cid: int):
     graph_store.delete_collection(cid)
     return {"status": "deleted"}
+
+@app.delete("/documents/{doc_id}")
+def delete_document_nodes(doc_id: int):
+    graph_store.delete_document(doc_id)
+    return {"status": "deleted"}

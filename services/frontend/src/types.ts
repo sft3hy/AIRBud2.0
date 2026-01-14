@@ -102,3 +102,10 @@ export interface Group {
 }
 
 export type SidebarMode = 'collections' | 'groups'
+
+export interface JobStatus {
+    status: 'idle' | 'queued' | 'processing' | 'completed' | 'error';
+    stage: 'parsing' | 'vision' | 'indexing' | 'graph' | 'done' | 'error'; // NEW
+    step: string;
+    progress: number;
+}

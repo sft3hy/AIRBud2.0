@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication Required</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: #f8fafc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .card {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            text-align: center;
+            max-width: 400px;
+            border-top: 4px solid #ef4444;
+        }
+        h1 { color: #0f172a; margin-bottom: 0.5rem; font-size: 1.5rem; }
+        p { color: #64748b; line-height: 1.5; margin-bottom: 1.5rem; }
+        .icon { font-size: 3rem; margin-bottom: 1rem; display: block; }
+        .btn {
+            background-color: #0f172a;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-block;
+            transition: background 0.2s;
+        }
+        .btn:hover { background-color: #334155; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <span class="icon">🔒</span>
+        <h1>Smart Card Required</h1>
+        <p>Access denied. You must insert a valid CAC/PIV card and select your certificate to proceed.</p>
+        <p style="font-size: 0.875rem; background: #fff7ed; padding: 0.5rem; border-radius: 0.3rem; color: #9a3412;">
+            If you hit Cancel, you may need to restart your browser.
+        </p>
+        <a href="/" class="btn">Try Again</a>
+    </div>
+</body>
+</html>

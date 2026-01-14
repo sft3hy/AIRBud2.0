@@ -1,5 +1,5 @@
 services:
-  # --- NEW: Nginx Gateway ---
+  # --- Gateway ---
   nginx:
     image: nginx:alpine
     container_name: smart_rag_nginx
@@ -9,11 +9,18 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/certs:/etc/nginx/certs:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
     depends_on:
       - frontend
       - rag_core
       - kg_service
-  # 1. Frontend (React)
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 1. Frontend
   frontend:
     build:
       context: ./services/frontend
@@ -23,9 +30,7 @@ services:
       - "5173:5173"
     environment:
       - VITE_API_URL=http://localhost:8000
-      # --- FIX: Default to False if TEST is unset ---
       - VITE_TEST_MODE=${TEST:-False}
-      # ----------------------------------------------
       - WATCHPACK_POLLING=true
     volumes:
       - ./services/frontend:/app
@@ -34,30 +39,26 @@ services:
     depends_on:
       - rag_core
 
-    # 2. RAG Core
+  # 2. RAG Core
   rag_core:
     build: ./services/rag_core
     container_name: smart_rag_core
-    # ports:
-    #   - "8000:8000"
     environment:
-      # --- UPDATED: Dynamic Provider Logic ---
-      # We removed "LLM_PROVIDER=groq" so config.py can decide based on TEST env var
       - GROQ_API_KEY=${GROQ_API_KEY}
       - SANCTUARY_API_KEY=${SANCTUARY_API_KEY}
-      - TEST=False # Enforce Real CAC Auth (via Nginx headers)
-      - LLM_PROVIDER=groq # Force Groq LLM (Ignore default Prod setting)
-      # ---------------------------------------
+      - TEST=False
+      - LLM_PROVIDER=groq
       - PARSER_API_URL=http://parser:8001
       - VISION_API_URL=http://vision:8002
       - PYTHONUNBUFFERED=1
-      # Postgres Config
       - POSTGRES_SERVER=postgres
       - POSTGRES_USER=rag_user
       - POSTGRES_PASSWORD=rag_password
       - POSTGRES_DB=rag_db
+      - HF_HOME=/data/huggingface
     volumes:
-      - shared_data:/app/data
+      - shared_data:/data
+      - ./services/rag_core:/app
     depends_on:
       parser:
         condition: service_started
@@ -65,6 +66,9 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
+    # --- FIX: Add ( ... || true) to ignore permission errors on existing files ---
+    command: /bin/sh -c "mkdir -p /data/uploads /data/charts /data/faiss_indexes /data/chunks /data/huggingface && (chmod -R 777 /data/uploads /data/charts /data/faiss_indexes /data/chunks /data/huggingface || true) && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    # ----------------------------------------------------------------------------
 
   # 3. Parser
   parser:
@@ -75,7 +79,10 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
     volumes:
-      - shared_data:/app/data
+      - shared_data:/data
+      - ./services/parser:/app
+    # --- FIX: Add || true ---
+    command: /bin/sh -c "mkdir -p /data/charts && (chmod -R 777 /data/charts || true) && uvicorn main:app --host 0.0.0.0 --port 8001 --reload"
 
   # 4. Vision
   vision:
@@ -85,19 +92,17 @@ services:
       - "8002:8002"
     environment:
       - PYTHONUNBUFFERED=1
-      # --- FIX 2: Point to Host Ollama ---
-      # host.docker.internal allows Docker to talk to your actual machine
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
-      # -----------------------------------
     volumes:
-      - shared_data:/app/data
+      - shared_data:/data
       - huggingface_cache:/root/.cache/huggingface
-    # This section is critical for Linux support of host.docker.internal
-    # (It works by default on Mac/Windows Docker Desktop, but this makes it universal)
+      - ./services/vision:/app
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # --- FIX: Add || true ---
+    command: /bin/sh -c "mkdir -p /data/charts && (chmod -R 777 /data/charts || true) && uvicorn main:app --host 0.0.0.0 --port 8002 --reload"
 
-  # 5. Postgres DB
+  # 5. Postgres
   postgres:
     image: postgres:15-alpine
     container_name: smart_rag_postgres
@@ -116,7 +121,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # 6. pgadmin
+  # 6. PGAdmin
   pgadmin:
     image: dpage/pgadmin4
     container_name: pgadmin
@@ -133,9 +138,12 @@ services:
       - pgadmin_data:/var/lib/pgadmin
       - /dev/null:/var/log/pgadmin
     logging:
-      driver: none
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # 7. --- NEW: Knowledge Graph Service ---
+  # 7. KG Service
   kg_service:
     build: ./services/kg_service
     container_name: smart_rag_kg
@@ -149,20 +157,22 @@ services:
       - SANCTUARY_API_KEY=${SANCTUARY_API_KEY}
       - TEST=${TEST}
       - PYTHONUNBUFFERED=1
+    volumes:
+      - ./services/kg_service:/app
     depends_on:
       neo4j:
         condition: service_healthy
+    command: uvicorn main:app --host 0.0.0.0 --port 8003 --reload
 
-  # 8. --- NEW: Neo4j Database ---
+  # 8. Neo4j
   neo4j:
     image: neo4j:5.15-community
     container_name: smart_rag_neo4j
     ports:
-      - "7474:7474" # HTTP Browser
-      - "7687:7687" # Bolt Protocol
+      - "7474:7474"
+      - "7687:7687"
     environment:
       - NEO4J_AUTH=neo4j/smartrag_password
-      # Performance tuning for Docker
       - NEO4J_dbms_memory_heap_initial__size=512m
       - NEO4J_dbms_memory_heap_max__size=1G
     volumes:
@@ -182,4 +192,4 @@ volumes:
   shared_data:
   huggingface_cache:
   postgres_data:
-  neo4j_data: # New volume
+  neo4j_data:

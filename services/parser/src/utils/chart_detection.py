@@ -113,29 +113,34 @@ class PubLayNetDetector(ChartDetector):
             print("Falling back to CV heuristics.")
 
     def _ensure_publaynet_weights(self):
-        """Download weights if not present."""
-        model_url = "https://www.dropbox.com/s/dgy9c10wykk4lq4/model_final.pth?dl=1"
+        """Use pre-downloaded weights or download if not present."""
         cache_dir = Path.home() / ".torch" / "detectron2_models"
         cache_dir.mkdir(parents=True, exist_ok=True)
         model_path = cache_dir / "publaynet_faster_rcnn_R_50_FPN_3x.pth"
 
-        if not model_path.exists():
-            print(f"Downloading PubLayNet weights (~330MB)...")
-            try:
-                response = requests.get(model_url, stream=True, allow_redirects=True)
-                response.raise_for_status()
-                with open(model_path, "wb") as f:
-                    for chunk in response.iter_content(chunk_size=1024 * 1024):
-                        if chunk:
-                            f.write(chunk)
-                print("Download complete.")
-            except Exception as e:
-                if model_path.exists():
-                    model_path.unlink()
-                raise e
+        if model_path.exists():
+            print(f"✓ Using cached weights at {model_path}")
+            self.cfg.MODEL.WEIGHTS = str(model_path)
+            return
+
+        # Fallback: download if not found
+        model_url = "https://www.dropbox.com/s/dgy9c10wykk4lq4/model_final.pth?dl=1"
+        print(f"Downloading PubLayNet weights (~330MB)...")
+        try:
+            response = requests.get(model_url, stream=True, allow_redirects=True)
+            response.raise_for_status()
+            with open(model_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        f.write(chunk)
+            print("Download complete.")
+        except Exception as e:
+            if model_path.exists():
+                model_path.unlink()
+            raise e
 
         self.cfg.MODEL.WEIGHTS = str(model_path)
-
+        
     def detect(self, page_image: Image.Image) -> List[Tuple[int, int, int, int]]:
         """
         Runs detection on a PIL Image.

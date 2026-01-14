@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
-import { Send, FileText, Loader2 } from 'lucide-react';
+import { Send, FolderOpen, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-import { fetchCollectionDocuments, sendQuery, getCollectionHistory } from './lib/api';
-import { ChatMessage, SessionHistoryItem } from './types';
+import { fetchCollectionDocuments, sendQueryStream, getCollectionHistory, getCollections, getCollectionStatus } from './lib/api';import { ChatMessage, SessionHistoryItem } from './types';
 import { logger } from './lib/logger';
 import { SourceViewer } from './components/SourceViewer';
+import { ProcessingView } from './components/ProcessingView'; // Ensure this exists
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -35,21 +35,40 @@ const WelcomeScreen = () => (
     </div>
 );
 
-export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
+// --- FIX: Add activeJobId to props destructuring ---
+export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | null, activeJobId: string | null }) => {
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
     const scrollRef = useRef<HTMLDivElement>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
+    const [queryStatus, setQueryStatus] = useState("Finding answer...");
+
+
+    // --- NEW: Poll Job Status if active ---
+    const { data: jobStatus } = useQuery({
+        queryKey: ['status', activeJobId],
+        queryFn: () => getCollectionStatus(activeJobId!),
+        enabled: !!activeJobId,
+        refetchInterval: 500, 
+    });
+
+    const { data: collections = [] } = useQuery({
+        queryKey: ['collections'],
+        queryFn: getCollections,
+        staleTime: 1000 * 60 * 5, 
+    });
+
+    const activeCollection = collections.find(c => String(c.id) === sessionId);
 
     const { data: documents = [] } = useQuery({
         queryKey: ['documents', sessionId],
-        queryFn: () => fetchCollectionDocuments(sessionId!), // Updated
+        queryFn: () => fetchCollectionDocuments(sessionId!),
         enabled: !!sessionId,
     });
 
     const { data: serverHistory } = useQuery({
         queryKey: ['history', sessionId],
-        queryFn: () => getCollectionHistory(sessionId!), // Updated
+        queryFn: () => getCollectionHistory(sessionId!),
         enabled: !!sessionId,
     });
 
@@ -72,7 +91,14 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
     const sendMessageMutation = useMutation({
         mutationFn: async (question: string) => {
             if (!sessionId) throw new Error("No Session");
-            return await sendQuery(sessionId, question);
+            
+            // Reset status
+            setQueryStatus("Initiating Search...");
+            
+            // Use Streaming API
+            return await sendQueryStream(sessionId, question, (step) => {
+                setQueryStatus(step); // Update UI on every chunk
+            });
         },
         onSuccess: (data) => {
             setChatHistory(prev => [
@@ -109,42 +135,42 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
         }
     };
 
+    // --- RENDER PROCESSING VIEW ---
+    if (activeJobId && jobStatus && jobStatus.status !== 'idle' && jobStatus.status !== 'completed' && jobStatus.status !== 'error') {
+        return <ProcessingView status={jobStatus} />;
+    }
+
     if (!sessionId) return <WelcomeScreen />;
 
     const queryCount = chatHistory.filter(x => x.role === 'user').length;
 
     return (
         <div className="flex flex-col h-full w-full bg-background">
-            {/* Header */}
             <div className="px-6 py-4 border-b flex items-center justify-between bg-card shadow-sm z-10">
                 <div className="flex items-center gap-2">
-                    <FileText className="h-6 w-6 text-primary" />
-                    <span className="font-semibold text-lg">
-                        {documents.length > 0 ? (
-                            <>
-                                {documents.length === 1 ? documents[0].original_filename : `${documents.length} documents`}
-                                <span className="text-muted-foreground ml-3 text-base">| {queryCount} queries</span>
-                            </>
-                        ) : (
-                            "Select a session or uploading a document"
-                        )}
-                    </span>
+                    <FolderOpen className="h-6 w-6 text-primary"/>
+                    <p className="font-semibold text-lg flex items-center">
+                        <span>
+                            Collection: {activeCollection ? activeCollection.name : "Active Session"}
+                        </span>
+
+                        <span className="text-muted-foreground ml-3 text-base">{queryCount} queries
+                        </span>
+                        </p>
+
                 </div>
             </div>
 
-            {/* Chat Area */}
             <div className="flex-1 overflow-hidden relative bg-muted/20">
                 <ScrollArea className="h-full px-4 md:px-20 py-4" ref={scrollRef}>
                     <div className="space-y-10 pb-4 max-w-4xl mx-auto min-h-[500px]">
                         {chatHistory.map((msg, idx) => (
                             <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-
                                 {msg.role === 'assistant' && (
                                     <div className="h-12 w-12 rounded-full bg-card p-1.5 flex items-center justify-center shrink-0 border shadow-sm mt-1">
                                         <img src={doggieSrc} alt="Bot" className="h-full w-full object-contain" />
                                     </div>
                                 )}
-
                                 <div className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                                     <div className={`px-6 py-5 rounded-3xl text-base leading-relaxed shadow-sm ${msg.role === 'user'
                                         ? 'bg-primary text-primary-foreground rounded-br-sm prose-invert'
@@ -169,12 +195,10 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
                                             {msg.content}
                                         </ReactMarkdown>
                                     </div>
-
                                     {msg.role === 'assistant' && msg.sources && (
                                         <SourceViewer sources={msg.sources} documents={documents} />
                                     )}
                                 </div>
-
                                 {msg.role === 'user' && (
                                     <div className="h-12 w-12 rounded-full bg-muted p-1 flex items-center justify-center shrink-0 border shadow-sm mt-1">
                                         <img src={userSrc} alt="User" className="h-full w-full object-cover rounded-full" />
@@ -182,7 +206,6 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
                                 )}
                             </div>
                         ))}
-
                         {sendMessageMutation.isPending && (
                             <div className="flex gap-4">
                                 <div className="h-12 w-12 rounded-full bg-card p-1.5 flex items-center justify-center shrink-0 border shadow-sm mt-1">
@@ -190,7 +213,7 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
                                 </div>
                                 <div className="bg-card border px-6 py-5 rounded-3xl rounded-bl-sm text-base text-muted-foreground flex items-center gap-3 shadow-sm">
                                     <Loader2 className="h-5 w-5 animate-spin" />
-                                    <span className="italic">Finding answer...</span>
+                                    <span className="italic font-medium animate-pulse">{queryStatus}</span>
                                 </div>
                             </div>
                         )}
@@ -199,7 +222,6 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
                 </ScrollArea>
             </div>
 
-            {/* Input Area */}
             <div className="p-6 bg-background border-t">
                 <div className="max-w-3xl mx-auto relative flex items-center gap-3">
                     <Input

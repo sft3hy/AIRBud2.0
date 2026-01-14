@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getMyGroups, getPublicGroups, deleteGroup, joinPublicGroup } from '../lib/api'; // Removed createGroup (moved to sidebar)
-import { Globe, Copy, Trash2, LogIn, Lock, Check, Users, Search } from 'lucide-react';
+import { getMyGroups, getPublicGroups, deleteGroup, joinPublicGroup } from '../lib/api';
+import { Globe, Copy, Trash2, LogIn, Lock, Check, Users, Search, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input'; // Ensure Input is imported
 import { useToast } from "@/components/ui/use-toast";
 import { 
     AlertDialog, 
@@ -19,45 +20,27 @@ import {
     AlertDialogTrigger 
 } from "@/components/ui/alert-dialog";
 import { ScrollArea } from './ui/scroll-area';
-
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom'; // Ensure routing hooks are here
 import { joinGroup } from '../lib/api';
-
-export const InviteHandler = () => {
-    const { token } = useParams();
-    const navigate = useNavigate();
-    const { toast } = useToast();
-    const { mutate } = useMutation({
-        mutationFn: () => joinGroup(token!),
-        onSuccess: () => {
-            toast({ title: "Joined Group", description: "You have been added to the group." });
-            navigate("/"); // Redirect to Dashboard
-        },
-        onError: () => {
-            toast({ variant: "destructive", title: "Error", description: "Invalid link or you are already a member." });
-            navigate("/"); // Redirect to Dashboard
-        }
-    });
-
-    React.useEffect(() => {
-        if (token) mutate();
-    }, [token]);
-
-    return (
-        <div className="h-screen w-screen flex flex-col items-center justify-center bg-background gap-4">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <p className="text-muted-foreground animate-pulse">Joining Group...</p>
-        </div>
-    );
-};
 
 export const GroupManager = () => {
     const queryClient = useQueryClient();
     const { toast } = useToast();
     
-    // We only handle listing/joining/deleting here. Creation is in Sidebar.
+    // Search State
+    const [searchQuery, setSearchQuery] = useState("");
+
     const { data: myGroups = [] } = useQuery({ queryKey: ['my_groups'], queryFn: getMyGroups });
     const { data: publicGroups = [] } = useQuery({ queryKey: ['public_groups'], queryFn: getPublicGroups });
+
+    // Filter Logic
+    const filteredPublicGroups = publicGroups.filter((group: any) => {
+        const query = searchQuery.toLowerCase();
+        return (
+            group.name.toLowerCase().includes(query) || 
+            group.owner_name.toLowerCase().includes(query)
+        );
+    });
 
     const deleteMutation = useMutation({
         mutationFn: deleteGroup,
@@ -163,8 +146,25 @@ export const GroupManager = () => {
                         </TabsContent>
 
                         <TabsContent value="explore" className="mt-0">
+                            {/* --- Search Bar --- */}
+                            <div className="mb-6 relative max-w-lg mx-auto">
+                                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                <Input 
+                                    placeholder="Search by group name or owner..." 
+                                    className="pl-9 h-10 shadow-sm"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                                {searchQuery && (
+                                    <XCircle 
+                                        className="absolute right-3 top-3 h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" 
+                                        onClick={() => setSearchQuery("")}
+                                    />
+                                )}
+                            </div>
+
                             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                {publicGroups.map((group: any) => (
+                                {filteredPublicGroups.map((group: any) => (
                                     <Card key={group.id} className="bg-white dark:bg-card border-dashed">
                                         <CardHeader>
                                             <CardTitle className="text-lg flex items-center gap-2">
@@ -190,7 +190,7 @@ export const GroupManager = () => {
                                         </CardContent>
                                     </Card>
                                 ))}
-                                {publicGroups.length === 0 && (
+                                {filteredPublicGroups.length === 0 && (
                                     <div className="col-span-2 flex flex-col items-center justify-center py-12 text-muted-foreground">
                                         <Search className="h-10 w-10 mb-2 opacity-20" />
                                         <p>No public groups found.</p>
@@ -201,6 +201,35 @@ export const GroupManager = () => {
                     </ScrollArea>
                 </Tabs>
             </div>
+        </div>
+    );
+};
+
+// Invite Handler Wrapper
+export const InviteHandler = () => {
+    const { token } = useParams();
+    const navigate = useNavigate();
+    const { toast } = useToast();
+    const { mutate } = useMutation({
+        mutationFn: () => joinGroup(token!),
+        onSuccess: () => {
+            toast({ title: "Joined Group", description: "You have been added to the group." });
+            navigate("/"); 
+        },
+        onError: () => {
+            toast({ variant: "destructive", title: "Error", description: "Invalid link or you are already a member." });
+            navigate("/"); 
+        }
+    });
+
+    React.useEffect(() => {
+        if (token) mutate();
+    }, [token]);
+
+    return (
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-background gap-4">
+            <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+            <p className="text-muted-foreground animate-pulse">Joining Group...</p>
         </div>
     );
 };

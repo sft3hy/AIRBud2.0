@@ -11,7 +11,14 @@ warnings.filterwarnings("ignore")
 
 class VisionModel(ABC):
     def __init__(self):
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        # Detect MPS (Mac) vs CUDA vs CPU
+        if torch.cuda.is_available():
+            self.device = "cuda"
+        elif torch.backends.mps.is_available():
+            self.device = "mps"
+        else:
+            self.device = "cpu"
+            
         self._is_loaded = False
         self.model = None
         self.tokenizer = None
@@ -42,6 +49,8 @@ class VisionModel(ABC):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
+        elif torch.backends.mps.is_available():
+            torch.mps.empty_cache()
 
         self._is_loaded = False
         logger.info("Offload complete.")
@@ -58,12 +67,25 @@ class Moondream2Model(VisionModel):
             logger.info(f"Loading Moondream2 on {self.device}...")
 
             model_id = "vikhyatk/moondream2"
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_id,
-                revision="2025-06-21",
-                trust_remote_code=True,
-                device_map={"": self.device},
-            )
+            
+            # --- FIX: Avoid device_map on CPU/MPS to prevent Meta Tensor errors ---
+            if self.device in ["cpu", "mps"]:
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_id,
+                    revision="2025-06-21",
+                    trust_remote_code=True,
+                    # No device_map="auto" or {"": device} for CPU/MPS
+                ).to(self.device)
+            else:
+                # CUDA supports device_map well
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_id,
+                    revision="2025-06-21",
+                    trust_remote_code=True,
+                    device_map={"": self.device},
+                )
+            # ----------------------------------------------------------------------
+
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_id, trust_remote_code=True
             )
@@ -99,9 +121,18 @@ class Qwen3VLModel(VisionModel):
             )
 
             dtype = torch.float16 if self.device == "cuda" else torch.float32
+            
+            # Qwen usually handles device_map better, but let's be explicit for safety
             self.model = Qwen3VLForConditionalGeneration.from_pretrained(
-                model_id, dtype=dtype, device_map=self.device, trust_remote_code=True
+                model_id, 
+                dtype=dtype, 
+                device_map="auto" if self.device == "cuda" else None, 
+                trust_remote_code=True
             )
+            
+            if self.device != "cuda":
+                self.model = self.model.to(self.device)
+                
             self.model.eval()
             self._is_loaded = True
             return True
@@ -160,9 +191,17 @@ class InternVL3Model(VisionModel):
             model_id = "OpenGVLab/InternVL3_5-1B-Flash"
             dtype = torch.float16 if self.device == "cuda" else torch.float32
 
+            # Use explicit loading for CPU safety
             self.model = AutoModel.from_pretrained(
-                model_id, dtype=dtype, trust_remote_code=True, device_map=self.device
+                model_id, 
+                dtype=dtype, 
+                trust_remote_code=True, 
+                device_map="auto" if self.device == "cuda" else None
             )
+            
+            if self.device != "cuda":
+                self.model = self.model.to(self.device)
+
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_id, trust_remote_code=True, use_fast=True
             )
@@ -190,12 +229,14 @@ class InternVL3Model(VisionModel):
                     T.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
                 ]
             )
-            pixel_values = (
-                transform(image)
-                .unsqueeze(0)
-                .to(torch.float16 if self.device == "cuda" else torch.float32)
-                .to(self.device)
-            )
+            
+            # Ensure proper casting for CPU/GPU mix
+            pixel_values = transform(image).unsqueeze(0)
+            if self.device == "cuda":
+                pixel_values = pixel_values.to(torch.float16).to(self.device)
+            else:
+                pixel_values = pixel_values.to(torch.float32).to(self.device)
+            
             question = f"<image>\n{prompt}"
             return self.model.chat(
                 self.tokenizer, pixel_values, question, dict(max_new_tokens=512)

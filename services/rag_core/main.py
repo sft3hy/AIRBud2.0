@@ -8,7 +8,10 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, R
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+
+import json
+import time
 
 from src.config import settings
 from src.utils.db import DatabaseManager
@@ -56,19 +59,38 @@ class QueryRequest(BaseModel):
 def run_pipeline_task(collection_id: int, filename: str, vision_model: str):
     cid = str(collection_id)
     try:
-        job_status[cid] = {"status": "processing", "step": f"Processing {filename}...", "progress": 10}
+        # 1. PARSING
+        job_status[cid] = {
+            "status": "processing", 
+            "stage": "parsing", # <--- NEW
+            "step": f"Analyzing Layout & Structure ({filename})...", 
+            "progress": 10
+        }
         
         file_path = settings.UPLOAD_DIR / filename
         unique_folder = f"{uuid.uuid4()}_{filename}"
         output_dir = settings.CHARTS_DIR / unique_folder
         os.makedirs(output_dir, exist_ok=True)
 
+        # Initialize
         rag = SmartRAG(output_dir=output_dir, vision_model_name=vision_model)
 
-        job_status[cid] = {"status": "processing", "step": "Parsing & Vision Analysis...", "progress": 30}
+        # 2. VISION & OCR
+        # We hook into index_document, but for simplicity here we update before calling it
+        # ideally SmartRAG would callback, but we'll simulate the transition
+        job_status[cid]["stage"] = "vision"
+        job_status[cid]["step"] = "Generating image descriptions..."
+        job_status[cid]["progress"] = 70
+        
         markdown_text = rag.index_document(str(file_path))
 
-        job_status[cid] = {"status": "processing", "step": "Saving Embeddings...", "progress": 80}
+        # 3. VECTOR INDEXING
+        job_status[cid] = {
+            "status": "processing", 
+            "stage": "indexing", 
+            "step": "Generating Embeddings & Vector Index...", 
+            "progress": 80
+        }
         
         doc_id = db.add_document_record(
             filename=filename,
@@ -79,9 +101,17 @@ def run_pipeline_task(collection_id: int, filename: str, vision_model: str):
             chart_descriptions=rag.chart_descriptions,
             collection_id=collection_id,
         )
+
+        time.sleep(2)
         
+        # 4. KNOWLEDGE GRAPH
         try:
-            job_status[cid] = {"status": "processing", "step": "Updating Knowledge Graph...", "progress": 90}
+            job_status[cid] = {
+                "status": "processing", 
+                "stage": "graph", 
+                "step": "Extracting Entities & Relationships...", 
+                "progress": 90
+            }
             requests.post(
                 f"{KG_SERVICE_URL}/ingest",
                 json={
@@ -91,18 +121,19 @@ def run_pipeline_task(collection_id: int, filename: str, vision_model: str):
                 },
                 timeout=5
             )
+            time.sleep(2)
         except Exception as e:
             logger.error(f"Failed to trigger KG ingest: {e}")
 
+        # Finalize
         faiss_path, chunks_path = rag.save_state(doc_id)
         db.update_document_paths(doc_id, faiss_path, chunks_path)
 
-        job_status[cid] = {"status": "completed", "step": "Ready!", "progress": 100}
+        job_status[cid] = {"status": "completed", "stage": "done", "step": "Ready!", "progress": 100}
 
     except Exception as e:
         logger.error(f"Pipeline failed for collection {cid}: {e}", exc_info=True)
-        job_status[cid] = {"status": "error", "step": str(e), "progress": 0}
-
+        job_status[cid] = {"status": "error", "stage": "error", "step": str(e), "progress": 0}
 
 # --- Routes ---
 
@@ -191,12 +222,27 @@ def get_status(cid: str, user: Dict = Depends(auth_handler.require_user)):
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...), user: Dict = Depends(auth_handler.require_user)):
     try:
-        file_location = settings.UPLOAD_DIR / file.filename
+        # 1. Sanitize Filename (Remove directories)
+        filename = os.path.basename(file.filename)
+        
+        # 2. Ensure Directory Exists (Fixes volume mount race conditions)
+        os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+        
+        file_location = settings.UPLOAD_DIR / filename
+        
+        logger.info(f"Saving upload to: {file_location}")
+
+        # 3. Write File
         with open(file_location, "wb+") as file_object:
             shutil.copyfileobj(file.file, file_object)
+            
         return {"info": "File saved", "path": str(file_location)}
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # 4. Log the full crash
+        logger.error("UPLOAD CRASHED")
+        traceback.print_exc() 
+        raise HTTPException(status_code=500, detail=f"Server Error: {str(e)}")
 
 @app.post("/process")
 def process_document(req: ProcessRequest, background_tasks: BackgroundTasks, user: Dict = Depends(auth_handler.require_user)):
@@ -212,8 +258,48 @@ def process_document(req: ProcessRequest, background_tasks: BackgroundTasks, use
 def get_documents(cid: int, user: Dict = Depends(auth_handler.require_user)):
     return db.get_collection_documents(cid)
 
+
 @app.delete("/documents/{doc_id}")
 def delete_document(doc_id: int, user: Dict = Depends(auth_handler.require_user)):
+    # 1. Get File Paths
+    doc = db.get_document_by_id(doc_id)
+    if doc:
+        # Remove FAISS Index
+        if doc['faiss_index_path'] and os.path.exists(doc['faiss_index_path']):
+            try:
+                os.remove(doc['faiss_index_path'])
+            except OSError: 
+                pass # Ignore if already gone
+
+        # Remove Chunks
+        if doc['chunks_path'] and os.path.exists(doc['chunks_path']):
+            try:
+                os.remove(doc['chunks_path'])
+            except OSError:
+                pass
+                
+        # Remove Parent Chunks Map (if exists)
+        parent_path = doc['chunks_path'].replace("chunks_", "parents_") if doc['chunks_path'] else ""
+        if parent_path and os.path.exists(parent_path):
+            try:
+                os.remove(parent_path)
+            except OSError:
+                pass
+
+        # Remove Chart Directory (Images)
+        if doc['chart_dir'] and os.path.exists(doc['chart_dir']):
+            try:
+                shutil.rmtree(doc['chart_dir'])
+            except OSError:
+                pass
+
+    # 2. Delete from Knowledge Graph
+    try:
+        requests.delete(f"{KG_SERVICE_URL}/documents/{doc_id}", timeout=3)
+    except Exception as e:
+        logger.error(f"Failed to delete graph nodes for doc {doc_id}: {e}")
+
+    # 3. Delete from SQL DB
     db.delete_document(doc_id)
     return {"status": "deleted"}
 
@@ -227,7 +313,102 @@ def get_history(cid: int, user: Dict = Depends(auth_handler.require_user)):
     return db.get_queries_for_collection(cid)
 
 @app.post("/query")
-def query_collection(req: QueryRequest, user: Dict = Depends(auth_handler.require_user)):
+async def query_collection(req: QueryRequest, user: Dict = Depends(auth_handler.require_user)):
+    """
+    Streams status updates and finally the result using NDJSON.
+    Format:
+    {"step": "Scanning..."}
+    {"step": "Thinking..."}
+    {"result": { ...final_response... }}
+    """
+    
+    def generate():
+        # 1. Validation
+        docs = db.get_collection_documents(req.collection_id)
+        if not docs:
+            yield json.dumps({"result": {"response": "This collection has no documents.", "results": []}}) + "\n"
+            return
+
+        # 2. Vector Setup
+        yield json.dumps({"step": "Loading Vector Index..."}) + "\n"
+        pipelines = []
+        for doc in docs:
+            if doc['faiss_index_path'] and os.path.exists(doc['faiss_index_path']):
+                try:
+                    p = SmartRAG(output_dir=doc['chart_dir'])
+                    p.load_state(doc['faiss_index_path'], doc['chunks_path'])
+                    pipelines.append(p)
+                except Exception as e:
+                    logger.error(f"Failed to load doc {doc['id']}: {e}")
+
+        if not pipelines:
+            yield json.dumps({"result": {"response": "Error loading document indexes.", "results": []}}) + "\n"
+            return
+
+        # 3. Vector Search
+        yield json.dumps({"step": "Scanning Semantic Vectors..."}) + "\n"
+        all_results = []
+        for p in pipelines:
+            all_results.extend(p.search(req.question, top_k=3))
+        
+        all_results.sort(key=lambda x: x[1])
+        top_results = all_results[:5]
+
+        # 4. Knowledge Graph
+        yield json.dumps({"step": "Traversing Knowledge Graph..."}) + "\n"
+        graph_context = ""
+        graph_results_raw = []
+        try:
+            kg_resp = requests.post(
+                f"{KG_SERVICE_URL}/search",
+                json={"query": req.question, "collection_id": req.collection_id},
+                timeout=3
+            )
+            if kg_resp.status_code == 200:
+                data = kg_resp.json()
+                graph_context = data.get("context", "")
+                graph_results_raw = data.get("raw", [])
+        except Exception as e:
+            logger.error(f"KG Search failed: {e}")
+
+        # 5. LLM Generation
+        yield json.dumps({"step": "Synthesizing Answer with LLM..."}) + "\n"
+        try:
+            llm_resp = pipelines[0].generate_answer(
+                req.question, 
+                top_results, 
+                graph_context=graph_context
+            )
+            response_text = llm_resp.content or f"Error: {llm_resp.error}"
+
+            results_formatted = [
+                {"type": "text", "text": c.text, "source": c.source, "page": c.page, "score": s} 
+                for c, s in top_results
+            ]
+            
+            for g in graph_results_raw:
+                results_formatted.append({
+                    "type": "graph",
+                    "text": f"{g['source']} --[{g['rel']}]--> {g['target']}",
+                    "source": "Knowledge Graph",
+                    "score": 1.0
+                })
+            
+            # Save to DB
+            db.add_query_record(req.collection_id, req.question, response_text, results_formatted)
+            
+            # Final Yield
+            yield json.dumps({"result": {
+                "response": response_text,
+                "results": results_formatted
+            }}) + "\n"
+
+        except Exception as e:
+            logger.error(f"Query error: {e}", exc_info=True)
+            yield json.dumps({"result": {"response": "An unexpected error occurred.", "results": [], "error": str(e)}}) + "\n"
+
+    # X-Accel-Buffering: no is crucial for Nginx to stream chunks immediately
+    return StreamingResponse(generate(), media_type="application/x-ndjson", headers={"X-Accel-Buffering": "no"})
     docs = db.get_collection_documents(req.collection_id)
     if not docs:
         return {"response": "This collection has no documents.", "results": []}
