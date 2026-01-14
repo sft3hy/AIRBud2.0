@@ -126,7 +126,7 @@ export const MainContent = ({ sessionId }: { sessionId: string | null }) => {
                                 <span className="text-muted-foreground ml-3 text-base">| {queryCount} queries</span>
                             </>
                         ) : (
-                            "Active Session"
+                            "Select a session or uploading a document"
                         )}
                     </span>
                 </div>

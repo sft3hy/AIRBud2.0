@@ -1,6 +1,5 @@
 services:
-
-# --- NEW: Nginx Gateway ---
+  # --- NEW: Nginx Gateway ---
   nginx:
     image: nginx:alpine
     container_name: smart_rag_nginx
@@ -14,9 +13,9 @@ services:
       - frontend
       - rag_core
       - kg_service
-# 1. Frontend (React)
+  # 1. Frontend (React)
   frontend:
-    build: 
+    build:
       context: ./services/frontend
       dockerfile: Dockerfile
     container_name: smart_rag_frontend
@@ -35,7 +34,7 @@ services:
     depends_on:
       - rag_core
 
-   # 2. RAG Core
+    # 2. RAG Core
   rag_core:
     build: ./services/rag_core
     container_name: smart_rag_core
@@ -46,8 +45,8 @@ services:
       # We removed "LLM_PROVIDER=groq" so config.py can decide based on TEST env var
       - GROQ_API_KEY=${GROQ_API_KEY}
       - SANCTUARY_API_KEY=${SANCTUARY_API_KEY}
-      - TEST=False                # Enforce Real CAC Auth (via Nginx headers)
-      - LLM_PROVIDER=groq         # Force Groq LLM (Ignore default Prod setting)
+      - TEST=False # Enforce Real CAC Auth (via Nginx headers)
+      - LLM_PROVIDER=groq # Force Groq LLM (Ignore default Prod setting)
       # ---------------------------------------
       - PARSER_API_URL=http://parser:8001
       - VISION_API_URL=http://vision:8002
@@ -133,7 +132,8 @@ services:
     volumes:
       - pgadmin_data:/var/lib/pgadmin
       - /dev/null:/var/log/pgadmin
-
+    logging:
+      driver: none
 
   # 7. --- NEW: Knowledge Graph Service ---
   kg_service:
@@ -168,7 +168,11 @@ services:
     volumes:
       - neo4j_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider localhost:7474 || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider localhost:7474 || exit 1",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5

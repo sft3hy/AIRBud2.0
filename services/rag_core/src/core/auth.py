@@ -9,24 +9,44 @@ class AuthHandler:
     def __init__(self):
         self.db = DatabaseManager()
 
+    def _format_friendly_name(self, raw_cn: str) -> str:
+        """
+        Converts CAC format 'LAST.FIRST.MIDDLE.12345' -> 'First Last'.
+        """
+        if not raw_cn:
+            return "Unknown User"
+
+        # 1. Split by '.'
+        parts = raw_cn.split('.')
+        
+        # 2. Filter out the EDIPI (pure digits usually at the end)
+        name_parts = [p for p in parts if not p.isdigit()]
+        
+        # 3. Reformat
+        # Standard DoD is LAST.FIRST.MIDDLE
+        if len(name_parts) >= 2:
+            last = name_parts[0].lower().capitalize()
+            first = name_parts[1].lower().capitalize()
+            return f"{first} {last}"
+        
+        # Fallback: Title case whatever is there
+        return raw_cn.replace('.', ' ').title()
+
     def get_current_user(self, request: Request) -> Dict:
         """
         Parses headers and returns a standardized User object.
-        Keys: id, piv_id, display_name, organization
         """
         
-        # 1. TEST MODE (Mock Data)
+        # 1. TEST MODE
         if settings.TEST_MODE:
             return self._upsert_mock_user()
 
-        # 2. PROD MODE (Real CAC)
+        # 2. PROD MODE
         subject_dn = request.headers.get("X-Subject-DN")
         verify_result = request.headers.get("X-Client-Verify")
 
-        # Log for debugging
         if verify_result != "SUCCESS":
             logger.warning(f"Auth Failed | Result: {verify_result} | DN: {subject_dn}")
-            # Return Guest ID 0 to trigger Login Page
             return {
                 "id": 0, 
                 "piv_id": "0", 
@@ -34,35 +54,27 @@ class AuthHandler:
                 "org": "Unauthenticated"
             }
 
-        logger.info(f"Auth Success | Raw DN: {subject_dn}")
-
-        # Parse the messy DN string
+        # Parse the DN to get raw attributes
         user_info = self._parse_dn(subject_dn)
         
-        # Fallback if parsing failed
-        if user_info['cn'] == "Unknown User":
-             user_info['cn'] = subject_dn[:50] # Use raw string if regex fails
+        # FORMATTING STEP: Clean the CN for display
+        friendly_name = self._format_friendly_name(user_info['cn'])
 
-        # Upsert into DB
+        # Upsert into DB (Stores the Clean Name)
         user_id = self.db.upsert_user(
             user_info['piv_id'], 
-            user_info['cn'], 
+            friendly_name, 
             user_info['org']
         )
         
-        # STANDARDIZED RETURN
-        # Map 'cn' -> 'display_name' and 'org' -> 'organization' to match Mock/Frontend
         return {
             "id": user_id,
             "piv_id": user_info['piv_id'],
-            "cn": user_info['cn'],       # <--- Mapped here
-            "org": user_info['org']       # <--- Mapped here
+            "cn": friendly_name,       # Frontend receives "First Last"
+            "org": user_info['org']
         }
 
     def require_user(self, request: Request) -> Dict:
-        """
-        Dependency for protected routes. Raises 403 if user is Guest.
-        """
         user = self.get_current_user(request)
         if user["id"] == 0:
             logger.warning(f"Unauthorized access attempt to {request.url.path}")
@@ -70,64 +82,51 @@ class AuthHandler:
         return user
 
     def _upsert_mock_user(self):
-        """
-        Creates a mock user that mimics the structure of a real CAC card.
-        """
+        # Mock Data (Format matches raw CAC for testing the cleaner)
         piv_id = "1000000001"
-        # Standard format: LAST.FIRST.MIDDLE.ID
-        display_name = "DOE.JOHN.TEST.1000000001" 
+        raw_cn = "DOE.JOHN.TEST.1000000001" 
         organization = "U.S. GOVERNMENT"
         
-        user_id = self.db.upsert_user(piv_id, display_name, organization)
+        # Clean it
+        friendly_name = self._format_friendly_name(raw_cn)
+        
+        user_id = self.db.upsert_user(piv_id, friendly_name, organization)
         
         return {
             "id": user_id, 
             "piv_id": piv_id, 
-            "cn": display_name, 
+            "cn": friendly_name, 
             "org": organization
         }
 
     def _parse_dn(self, dn: str) -> Dict:
         """
-        Robustly parses X.509 DN strings.
-        Handles: "CN=Name, O=Org" AND "/C=US/cn=Name" (Mixed case, slashes, commas)
+        Extracts raw attributes from DN string.
         """
         data = {}
         if not dn: return {"piv_id": "0", "cn": "Unknown User", "org": "Unknown"}
 
-        # Regex explanation:
-        # ([a-zA-Z\.]+)  -> Capture Key (letters/dots), e.g., "CN" or "emailAddress"
-        # \s*=\s*        -> Match equals sign with optional spaces
-        # ([^,/]+)       -> Capture Value until comma or slash
+        # Regex to handle comma separators inside values vs delimiters
         pattern = r'([a-zA-Z\.]+)\s*=\s*([^,/]+)'
-        
         matches = re.findall(pattern, dn)
         
         for key, val in matches:
-            # Normalize key to uppercase for lookup
             data[key.upper()] = val.strip()
             
         cn = data.get('CN', 'Unknown User')
         org = data.get('O', 'Unknown Org')
         
-        # Extract EDIPI/PivID (digits at end of CN)
+        # Extract EDIPI/PivID from raw CN (digits at end)
         # Ex: "LAST.FIRST.12345" -> "12345"
-        # Fallback: Use the whole CN if no numbers found
         piv_id = cn
         if '.' in cn:
             parts = cn.split('.')
             if parts[-1].isdigit():
                 piv_id = parts[-1]
 
-        print({
-            "piv_id": piv_id,
-            "cn": cn,
-            "org": org
-        })
-        
         return {
             "piv_id": piv_id,
-            "cn": cn,
+            "cn": cn, # Return RAW CN here, clean it later
             "org": org
         }
 

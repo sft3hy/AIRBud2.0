@@ -9,7 +9,7 @@ import doggieSrc from '../assets/doggie.svg';
 export const LoginPage = () => {
     const [debugInfo, setDebugInfo] = useState<any>(null);
 
-    // Fetch debug info on mount to see WHY we are here
+    // Fetch debug info on mount
     useEffect(() => {
         api.get('/auth/debug')
             .then(res => setDebugInfo(res.data))
@@ -17,8 +17,10 @@ export const LoginPage = () => {
     }, []);
 
     const handleLogin = () => {
-        // Force a hard navigation to trigger browser cert prompt
-        window.location.href = "/";
+        // --- FIX 2: Navigation Cache Buster ---
+        // By changing the URL query param, we force the browser to treat this 
+        // as a fresh navigation event, creating a new SSL connection.
+        window.location.href = "/?login_attempt=" + new Date().getTime();
     };
 
     return (
