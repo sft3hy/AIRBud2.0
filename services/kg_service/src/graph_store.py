@@ -17,7 +17,17 @@ class Neo4jStore:
         """
         if not triples: return
 
-        # FIX: Removed comments (#) inside FOREACH which cause syntax errors in some Neo4j versions
+        # --- FIX: Filter out malformed triples (None/Empty values) ---
+        valid_triples = [
+            t for t in triples 
+            if t.get("subject") and t.get("object") and t.get("predicate")
+        ]
+        
+        if not valid_triples:
+            print(f"Skipping doc {doc_id}: No valid triples found after filtering.")
+            return
+        # -------------------------------------------------------------
+
         query = """
         MERGE (d:Document {id: $doc_id})
         SET d.collection_id = $collection_id
@@ -37,7 +47,8 @@ class Neo4jStore:
         """
         try:
             with self.driver.session() as session:
-                session.run(query, triples=triples, doc_id=doc_id, collection_id=collection_id)
+                # Use valid_triples instead of raw triples
+                session.run(query, triples=valid_triples, doc_id=doc_id, collection_id=collection_id)
         except Exception as e:
             print(f"Neo4j Write Error: {e}")
 

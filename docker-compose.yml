@@ -187,47 +187,47 @@ services:
       timeout: 5s
       retries: 5
 
-  # 9. Monitoring: Prometheus (The Database)
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: smart_rag_prometheus
+  # 9. Monitoring: InfluxDB
+  influxdb:
+    image: influxdb:2.7
+    container_name: smart_rag_influxdb
     ports:
-      - "9090:9090"
+      - "8086:8086"
     volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-    depends_on:
-      - cadvisor
+      - influxdb_data:/var/lib/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=smartrag_password
+      - DOCKER_INFLUXDB_INIT_ORG=smartrag_org
+      - DOCKER_INFLUXDB_INIT_BUCKET=glances
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=smartrag-admin-token
+    # --- FIX 1: Add Healthcheck ---
+    healthcheck:
+      test: "curl -f http://localhost:8086/health || exit 1"
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
 
-  # 10. Monitoring: cAdvisor
-  cadvisor:
-    # Use zcube image which has better compatibility with Docker Desktop/ARM64 (Mac M1/M2/M3)
-    image: zcube/cadvisor:latest
-    container_name: smart_rag_cadvisor
-    platform: linux/aarch64
-    ports:
-      - "8080:8080"
+  # 10. Monitoring: Glances
+  glances:
+    image: nicolargo/glances:latest-full
+    container_name: smart_rag_monitor
     volumes:
-      # Mount rootfs so it can see container file systems
-      - /:/rootfs:ro
-      # Docker Socket (Critical)
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Kernel stats
-      - /sys:/sys:ro
-      # Docker storage directory (Standard Linux path)
-      - /var/lib/docker/:/var/lib/docker:ro
-      # Device mapping
-      - /dev/disk/:/dev/disk:ro
+      - ./monitoring/glances/glances.conf:/glances/conf/glances.conf:ro # Standard path
+    environment:
+      - DOCKER_HOST=unix://var/run/docker.sock
+      - PYTHONUNBUFFERED=1 # Force logs to appear immediately
+    # --- FIX: Explicit Command (Debug mode, specific config, export) ---
+    command: /bin/sh -c "glances -C /glances/conf/glances.conf -q --export influxdb2 --debug"
+    # -------------------------------------------------------------------
     privileged: true
-    devices:
-      - /dev/kmsg
-    command:
-      - "-docker_only=true" # <--- FIX: Ignore host system errors
-      - "-housekeeping_interval=10s" # Reduce CPU load
-      - "-disable_metrics=disk,tcp,udp,percpu,sched,process" # Focus on RAM/CPU only
-      - "-store_container_labels=false" # Reduce noise in Prometheus
+    pid: host
+    depends_on:
+      influxdb:
+        condition: service_healthy
 
   # 11. Monitoring: Grafana (The Dashboard)
   grafana:
@@ -241,7 +241,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
     depends_on:
-      - prometheus
+      - influxdb
 
 volumes:
   pgadmin_data:
@@ -249,5 +249,5 @@ volumes:
   huggingface_cache:
   postgres_data:
   neo4j_data:
-  prometheus_data:
+  influxdb_data:
   grafana_data:
