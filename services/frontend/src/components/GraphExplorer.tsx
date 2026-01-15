@@ -329,7 +329,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({ collectionId }) =>
                         onNodeHover={(node) => setHoveredNode(node)}
                         onLinkHover={(link) => setHoveredLink(link)}
                         onNodeClick={(node) => {
-                            console.log('Node clicked:', node);
+                            // console.log('Node clicked:', node);
                         }}
                         
                         enableNodeDrag={true}

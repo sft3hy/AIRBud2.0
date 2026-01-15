@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
-import { Send, FolderOpen, Loader2 } from 'lucide-react';
+import { Send, FolderOpen, Loader2, UserCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-import { fetchCollectionDocuments, sendQueryStream, getCollectionHistory, getCollections, getCollectionStatus } from './lib/api';import { ChatMessage, SessionHistoryItem } from './types';
+import { fetchCollectionDocuments, sendQueryStream, getCollectionHistory, getCollections, getCollectionStatus, fetchSystemStatus } from './lib/api';
+import { ChatMessage, SessionHistoryItem } from './types';
 import { logger } from './lib/logger';
 import { SourceViewer } from './components/SourceViewer';
 import { ProcessingView } from './components/ProcessingView'; // Ensure this exists
@@ -18,24 +19,51 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import doggieSrc from './assets/doggie.svg';
 import userSrc from './assets/user.svg';
 
-const WelcomeScreen = () => (
-    <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-muted/10 rounded-xl m-4">
-        <div className="mb-6 h-24 w-24 bg-primary/10 rounded-full flex items-center justify-center">
-            <img src={doggieSrc} alt="Smart RAG" className="h-16 w-16" />
+const WelcomeScreen = ({ systemStatus }: { systemStatus?: { user?: { cn: string; org: string } } }) => (
+    <div className="flex h-full w-full flex-col bg-background">
+        {/* Header with User Info */}
+        <div className="z-10 flex items-center justify-between border-b bg-card px-6 py-4 shadow-sm">
+            <div className="flex items-center gap-2">
+                <h1 className="text-lg font-semibold">Smart RAG</h1>
+            </div>
+
+            {/* User info */}
+            {systemStatus?.user && (
+                <div className="flex items-center gap-2 text-right">
+                    <div className="flex flex-col leading-tight">
+                        <span className="max-w-[160px] truncate text-sm font-medium">
+                            {systemStatus.user.cn}
+                        </span>
+                        <span className="max-w-[11rem] truncate text-xs text-muted-foreground">
+                            {systemStatus.user.org}
+                        </span>
+                    </div>
+
+                    <span title="Logged in via CAC/PIV" className="cursor-help inline-block">
+                        <UserCircle className="h-7 w-7 text-muted-foreground" />
+                    </span>
+                </div>
+            )}
         </div>
-        <h2 className="text-3xl font-bold mb-4">👋 Welcome to Smart RAG</h2>
-        <p className="text-lg text-muted-foreground mb-4 max-w-md">
-            Create or select a collection from the sidebar to begin.
-        </p>
-        <Link to="/how-it-works">
-            <Button variant="link" className="text-primary gap-1 text-base">
-                How it works <span aria-hidden="true">&rarr;</span>
-            </Button>
-        </Link>
+
+        {/* Welcome Content */}
+        <div className="flex flex-col items-center justify-center flex-1 p-8 text-center bg-muted/10 rounded-xl m-4">
+            <div className="mb-6 h-24 w-24 bg-primary/10 rounded-full flex items-center justify-center">
+                <img src={doggieSrc} alt="Smart RAG" className="h-16 w-16" />
+            </div>
+            <h2 className="text-3xl font-bold mb-4">👋 Welcome to Smart RAG</h2>
+            <p className="text-lg text-muted-foreground mb-4 max-w-md">
+                Create or select a collection from the sidebar to begin.
+            </p>
+            <Link to="/how-it-works">
+                <Button variant="link" className="text-primary gap-1 text-base">
+                    How it works <span aria-hidden="true">&rarr;</span>
+                </Button>
+            </Link>
+        </div>
     </div>
 );
 
-// --- FIX: Add activeJobId to props destructuring ---
 export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | null, activeJobId: string | null }) => {
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
@@ -57,6 +85,11 @@ export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | nu
         queryFn: getCollections,
         staleTime: 1000 * 60 * 5, 
     });
+
+    const { data: systemStatus } = useQuery({
+            queryKey: ['session'],
+            queryFn: fetchSystemStatus,
+        });
 
     const activeCollection = collections.find(c => String(c.id) === sessionId);
 
@@ -140,26 +173,52 @@ export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | nu
         return <ProcessingView status={jobStatus} />;
     }
 
-    if (!sessionId) return <WelcomeScreen />;
+    if (!sessionId) return <WelcomeScreen systemStatus={systemStatus} />;
 
     const queryCount = chatHistory.filter(x => x.role === 'user').length;
 
     return (
-        <div className="flex flex-col h-full w-full bg-background">
-            <div className="px-6 py-4 border-b flex items-center justify-between bg-card shadow-sm z-10">
+        <div className="flex h-full w-full flex-col bg-background">
+            {/* Header */}
+            <div className="z-10 flex items-center justify-between border-b bg-card px-6 py-4 shadow-sm">
+                {/* Left: Collection info */}
                 <div className="flex items-center gap-2">
-                    <FolderOpen className="h-6 w-6 text-primary"/>
-                    <p className="font-semibold text-lg flex items-center">
+                    <FolderOpen className="h-6 w-6 text-primary" />
+
+                    <p className="flex items-center text-lg font-semibold">
                         <span>
-                            Collection: {activeCollection ? activeCollection.name : "Active Session"}
+                            Collection:{" "}
+                            {activeCollection ? activeCollection.name : "Active Session"}
                         </span>
 
-                        <span className="text-muted-foreground ml-3 text-base">{queryCount} queries
+                        <span className="ml-3 text-base text-muted-foreground">
+                            {queryCount} {queryCount === 1 ? "query" : "queries"}
                         </span>
-                        </p>
 
+                    </p>
                 </div>
+
+                {/* Right: User info */}
+                {systemStatus?.user && (
+                    <div className="flex items-center gap-2 text-right">
+                        <div className="flex flex-col leading-tight">
+                            <span className="max-w-[160px] truncate text-sm font-medium">
+                                {systemStatus.user.cn}
+                            </span>
+                            <span className="max-w-[11rem] truncate text-xs text-muted-foreground">
+                                {systemStatus.user.org}
+                            </span>
+                        </div>
+
+                        <span title="Logged in via CAC/PIV" className="cursor-help inline-block">
+                            <UserCircle className="h-7 w-7 text-muted-foreground" />
+                        </span>
+                    </div>
+                )}
+
             </div>
+
+            
 
             <div className="flex-1 overflow-hidden relative bg-muted/20">
                 <ScrollArea className="h-full px-4 md:px-20 py-4" ref={scrollRef}>

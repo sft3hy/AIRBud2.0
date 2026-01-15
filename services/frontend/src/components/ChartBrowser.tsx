@@ -50,19 +50,31 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
             </div>
 
             {/* Image Area */}
-            <Card className="overflow-hidden bg-muted/20 flex items-center justify-center min-h-[200px] max-h-[300px] mb-4 relative group border">
-                {currentChart.url ? (
-                    <a href={currentChart.url} target="_blank" rel="noopener noreferrer" title="Click to view full size">
-                        <img
-                            src={currentChart.url}
-                            alt="Chart"
-                            className="w-full h-full object-contain hover:scale-105 transition-transform"
-                        />
-                    </a>
-                ) : (
-                    <ImageIcon className="h-10 w-10 text-muted-foreground/30" />
-                )}
-            </Card>
+<Card className="overflow-hidden bg-muted/20 flex items-center justify-center min-h-[200px] max-h-[300px] mb-4 relative group border">
+    {currentChart.url ? (
+        <a
+            href={currentChart.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Click to view full size"
+            className="flex items-center justify-center"
+        >
+            <img
+                src={currentChart.url}
+                alt="Chart"
+                className="
+                    max-w-[80%]
+                    max-h-[220px]
+                    object-contain
+                    transition-transform
+                    hover:scale-105
+                "
+            />
+        </a>
+    ) : (
+        <ImageIcon className="h-10 w-10 text-muted-foreground/30" />
+    )}
+</Card>
 
             {/* Metadata */}
             <ScrollArea className="flex-1">

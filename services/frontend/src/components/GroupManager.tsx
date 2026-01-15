@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getMyGroups, getPublicGroups, deleteGroup, joinPublicGroup } from '../lib/api';
-import { Globe, Copy, Trash2, LogIn, Lock, Check, Users, Search, XCircle } from 'lucide-react';
+import { getMyGroups, getPublicGroups, deleteGroup, joinPublicGroup, renameGroup, fetchSystemStatus } from '../lib/api';
+import { Globe, Copy, Trash2, LogIn, Lock, Check, Users, Search, XCircle, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input'; // Ensure Input is imported
+import { Input } from '@/components/ui/input';
 import { useToast } from "@/components/ui/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { 
     AlertDialog, 
     AlertDialogAction, 
@@ -20,7 +21,7 @@ import {
     AlertDialogTrigger 
 } from "@/components/ui/alert-dialog";
 import { ScrollArea } from './ui/scroll-area';
-import { useNavigate, useParams } from 'react-router-dom'; // Ensure routing hooks are here
+import { useNavigate, useParams } from 'react-router-dom';
 import { joinGroup } from '../lib/api';
 
 export const GroupManager = () => {
@@ -30,8 +31,15 @@ export const GroupManager = () => {
     // Search State
     const [searchQuery, setSearchQuery] = useState("");
 
+    // Rename State
+    const [renameId, setRenameId] = useState<number | null>(null);
+    const [renameName, setRenameName] = useState("");
+
+    const { data: systemStatus } = useQuery({ queryKey: ['session'], queryFn: fetchSystemStatus });
     const { data: myGroups = [] } = useQuery({ queryKey: ['my_groups'], queryFn: getMyGroups });
     const { data: publicGroups = [] } = useQuery({ queryKey: ['public_groups'], queryFn: getPublicGroups });
+
+    const currentUserId = systemStatus?.user?.id;
 
     // Filter Logic
     const filteredPublicGroups = publicGroups.filter((group: any) => {
@@ -41,6 +49,19 @@ export const GroupManager = () => {
             group.owner_name.toLowerCase().includes(query)
         );
     });
+
+    const handleRename = async () => {
+        if (!renameId || !renameName.trim()) return;
+        try {
+            await renameGroup(renameId, renameName);
+            await queryClient.invalidateQueries({ queryKey: ['my_groups'] });
+            await queryClient.invalidateQueries({ queryKey: ['public_groups'] });
+            setRenameId(null);
+            toast({ title: "Renamed", description: "Group name updated." });
+        } catch (e) {
+            toast({ variant: "destructive", title: "Error", description: "Could not rename group." });
+        }
+    };
 
     const deleteMutation = useMutation({
         mutationFn: deleteGroup,
@@ -95,53 +116,74 @@ export const GroupManager = () => {
                                 </div>
                             )}
                             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                {myGroups.map((group: any) => (
-                                    <Card key={group.id}>
-                                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                            <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                                {group.name}
-                                                {group.is_public ? <Globe className="h-3 w-3 text-blue-500" /> : <Lock className="h-3 w-3 text-amber-500" />}
-                                            </CardTitle>
-                                            <Badge variant="outline" className="text-xs">{group.member_count} members</Badge>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <CardDescription className="mb-4 line-clamp-2 min-h-[40px]">{group.description || "No description provided."}</CardDescription>
-                                            <div className="text-xs text-muted-foreground mb-4">
-                                                Owner: <span className="font-medium text-foreground">{group.owner_name}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center border-t pt-4">
-                                                <Button variant="outline" size="sm" onClick={() => copyInvite(group.invite_token)}>
-                                                    <Copy className="h-3 w-3 mr-2" /> Invite Link
-                                                </Button>
-                                                
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10">
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>Delete Group?</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                Permanently delete <b>{group.name}</b> and all its collections?
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                            <AlertDialogAction 
-                                                                className="bg-destructive hover:bg-destructive/90"
-                                                                onClick={() => deleteMutation.mutate(group.id)}
+                                {myGroups.map((group: any) => {
+                                    const isOwner = currentUserId === group.owner_id;
+                                    return (
+                                        <Card key={group.id}>
+                                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                                <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                                    {group.name}
+                                                    {group.is_public ? <Globe className="h-3 w-3 text-blue-500" /> : <Lock className="h-3 w-3 text-amber-500" />}
+                                                </CardTitle>
+                                                    <Badge variant="outline" className="text-xs">
+                                                    {group.member_count} {group.member_count === 1 ? "member" : "members"}
+                                                    </Badge>
+                                            </CardHeader>
+                                            <CardContent>
+                                                <CardDescription className="mb-4 line-clamp-2 min-h-[40px]">{group.description || "No description provided."}</CardDescription>
+                                                <div className="text-xs text-muted-foreground mb-4">
+                                                    Owner: <span className="font-medium text-foreground">{group.owner_name}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center border-t pt-4">
+                                                    <Button variant="outline" size="sm" onClick={() => copyInvite(group.invite_token)}>
+                                                        <Copy className="h-3 w-3 mr-2" /> Invite Link
+                                                    </Button>
+                                                    
+                                                    <div className="flex gap-2">
+                                                        {isOwner && (
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="sm" 
+                                                                className="text-muted-foreground hover:text-primary"
+                                                                onClick={() => {
+                                                                    setRenameId(group.id);
+                                                                    setRenameName(group.name);
+                                                                }}
                                                             >
-                                                                Delete
-                                                            </AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
+                                                                <Pencil className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+
+                                                        <AlertDialog>
+                                                            <AlertDialogTrigger asChild>
+                                                                <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10">
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </AlertDialogTrigger>
+                                                            <AlertDialogContent>
+                                                                <AlertDialogHeader>
+                                                                    <AlertDialogTitle>Delete Group?</AlertDialogTitle>
+                                                                    <AlertDialogDescription>
+                                                                        Permanently delete <b>{group.name}</b> and all its collections?
+                                                                    </AlertDialogDescription>
+                                                                </AlertDialogHeader>
+                                                                <AlertDialogFooter>
+                                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                    <AlertDialogAction 
+                                                                        className="bg-destructive hover:bg-destructive/90"
+                                                                        onClick={() => deleteMutation.mutate(group.id)}
+                                                                    >
+                                                                        Delete
+                                                                    </AlertDialogAction>
+                                                                </AlertDialogFooter>
+                                                            </AlertDialogContent>
+                                                        </AlertDialog>
+                                                    </div>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
                             </div>
                         </TabsContent>
 
@@ -175,7 +217,10 @@ export const GroupManager = () => {
                                         </CardHeader>
                                         <CardContent>
                                             <div className="flex justify-between items-center">
-                                                <span className="text-xs text-muted-foreground">{group.member_count} members &bull; Owner: {group.owner_name}</span>
+                                                <span className="text-xs text-muted-foreground">
+                                                    {/* {console.log(group.member_count===1)} */}
+                                                {group.member_count} {group.member_count === 1 ? "member" : "members"} &bull; Owner: {group.owner_name}
+                                                </span>
                                                 
                                                 {group.is_member ? (
                                                     <Button size="sm" variant="secondary" disabled className="opacity-70">
@@ -201,6 +246,26 @@ export const GroupManager = () => {
                     </ScrollArea>
                 </Tabs>
             </div>
+
+            {/* --- GROUP RENAME DIALOG --- */}
+            <Dialog open={!!renameId} onOpenChange={(open) => !open && setRenameId(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Rename Group</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Input 
+                            value={renameName} 
+                            onChange={(e) => setRenameName(e.target.value)} 
+                            placeholder="New Group Name" 
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setRenameId(null)}>Cancel</Button>
+                        <Button onClick={handleRename} disabled={!renameName.trim()}>Save</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

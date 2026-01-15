@@ -187,9 +187,67 @@ services:
       timeout: 5s
       retries: 5
 
+  # 9. Monitoring: Prometheus (The Database)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: smart_rag_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    depends_on:
+      - cadvisor
+
+  # 10. Monitoring: cAdvisor
+  cadvisor:
+    # Use zcube image which has better compatibility with Docker Desktop/ARM64 (Mac M1/M2/M3)
+    image: zcube/cadvisor:latest
+    container_name: smart_rag_cadvisor
+    platform: linux/aarch64
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount rootfs so it can see container file systems
+      - /:/rootfs:ro
+      # Docker Socket (Critical)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Kernel stats
+      - /sys:/sys:ro
+      # Docker storage directory (Standard Linux path)
+      - /var/lib/docker/:/var/lib/docker:ro
+      # Device mapping
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg
+    command:
+      - "-docker_only=true" # <--- FIX: Ignore host system errors
+      - "-housekeeping_interval=10s" # Reduce CPU load
+      - "-disable_metrics=disk,tcp,udp,percpu,sched,process" # Focus on RAM/CPU only
+      - "-store_container_labels=false" # Reduce noise in Prometheus
+
+  # 11. Monitoring: Grafana (The Dashboard)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: smart_rag_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=smartrag
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
 volumes:
   pgadmin_data:
   shared_data:
   huggingface_cache:
   postgres_data:
   neo4j_data:
+  prometheus_data:
+  grafana_data:

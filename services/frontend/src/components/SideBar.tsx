@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { 
     Loader2, Upload, LayoutGrid, FileText, X, FolderPlus, ArrowLeft, 
-    FolderOpen, UserCircle, Users, Network, Trash2, Globe, Lock 
+    FolderOpen, UserCircle, Users, Network, Trash2, Globe, Lock, Pencil, 
+    Check, Copy 
 } from 'lucide-react';
 import {
     getCollections,
@@ -14,7 +15,10 @@ import {
     fetchCollectionDocuments,
     deleteDocument,
     getMyGroups,
-    createGroup
+    createGroup,
+    renameCollection,
+    renameGroup, 
+    deleteGroup 
 } from '../lib/api';
 import { VisionModel } from '../types';
 import { cn } from '@/lib/utils';
@@ -36,6 +40,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/components/ui/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { 
     AlertDialog, 
     AlertDialogAction, 
@@ -59,11 +64,11 @@ interface SidebarProps {
 }
 
 const VISION_MODELS: { value: VisionModel; label: string; desc: string }[] = [
+    { value: "Ollama-Granite3.2-Vision", label: "Granite 3.2 (2B)", desc: "Enterprise Vision" },
     { value: "Moondream2", label: "Moondream2 (1.6B)", desc: "Fast - Recommended (Local)" },
     { value: "Qwen3-VL-2B", label: "Qwen3-VL (2B)", desc: "Balanced - High Accuracy" },
     { value: "InternVL3.5-1B", label: "InternVL 3.5 (1B)", desc: "Precise - Doc Optimized" },
     { value: "Ollama-Gemma3", label: "Gemma 3 (4B)", desc: "Strong Reasoning - Requires Ollama" },
-    { value: "Ollama-Granite3.2-Vision", label: "Granite 3.2 (2B)", desc: "Enterprise Vision" },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
@@ -75,10 +80,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const { toast } = useToast();
 
     // --- Local State ---
-    const [selectedModel, setSelectedModel] = useState<VisionModel>("Moondream2");
+    const [selectedModel, setSelectedModel] = useState<VisionModel>("Ollama-Granite3.2-Vision");
     const [stagedFiles, setStagedFiles] = useState<File[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     
+    // Collection Rename State
+    const [renameCid, setRenameCid] = useState<number | null>(null);
+    const [renameName, setRenameName] = useState("");
+    
+    // Group Rename State
+    const [renameGid, setRenameGid] = useState<number | null>(null);
+    const [renameGroupName, setRenameGroupName] = useState("");
+
     // Creation Forms
     const [newCollectionName, setNewCollectionName] = useState("");
     const [selectedGroupId, setSelectedGroupId] = useState<string>("personal");
@@ -91,6 +104,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         queryKey: ['session'],
         queryFn: fetchSystemStatus,
     });
+    
+    const currentUserId = systemStatus?.user?.id;
 
     const { data: collections = [] } = useQuery({
         queryKey: ['collections'],
@@ -117,18 +132,96 @@ export const Sidebar: React.FC<SidebarProps> = ({
         refetchInterval: 1000,
     });
 
-    // --- Effects: Job Completion ---
+    // --- Collection Handlers ---
+
+    const handleRenameCollection = async () => {
+        if (!renameCid || !renameName.trim()) return;
+        try {
+            await renameCollection(renameCid, renameName);
+            await queryClient.invalidateQueries({ queryKey: ['collections'] });
+            setRenameCid(null);
+            toast({ title: "Renamed", description: "Collection name updated." });
+        } catch (e) {
+            toast({ variant: "destructive", title: "Error", description: "Could not rename collection." });
+        }
+    };
+
+    const handleCreateCollection = async () => {
+        if (!newCollectionName.trim()) return;
+        const groupId = selectedGroupId === "personal" ? undefined : parseInt(selectedGroupId);
+        try {
+            const id = await createCollection(newCollectionName, groupId);
+            await queryClient.invalidateQueries({ queryKey: ['collections'] });
+            onSessionChange(id);
+            setNewCollectionName("");
+            toast({ title: "Collection Created" });
+        } catch (e) {
+            toast({ variant: "destructive", title: "Error", description: "Failed to create." });
+        }
+    };
+
+    const handleDeleteCollection = async (cid: number) => {
+        try {
+            await deleteCollection(cid);
+            if (String(cid) === currentSessionId) onSessionChange(null);
+            await queryClient.invalidateQueries({ queryKey: ['collections'] });
+            toast({ title: "Collection Deleted" });
+        } catch (err) {
+            toast({ variant: "destructive", title: "Error", description: "Failed to delete." });
+        }
+    };
+
+    // --- Group Handlers ---
+
+    const handleCreateGroup = async () => {
+        if (!newGroupName.trim()) return;
+        try {
+            await createGroup(newGroupName, newGroupDesc, newGroupPublic);
+            await queryClient.invalidateQueries({ queryKey: ['my_groups'] });
+            await queryClient.invalidateQueries({ queryKey: ['public_groups'] });
+            setNewGroupName("");
+            setNewGroupDesc("");
+            toast({ title: "Group Created" });
+        } catch (e) {
+            toast({ variant: "destructive", title: "Error", description: "Failed to create group." });
+        }
+    };
+
+    const handleRenameGroup = async () => {
+        if (!renameGid || !renameGroupName.trim()) return;
+        try {
+            await renameGroup(renameGid, renameGroupName);
+            await queryClient.invalidateQueries({ queryKey: ['my_groups'] });
+            await queryClient.invalidateQueries({ queryKey: ['public_groups'] });
+            setRenameGid(null);
+            toast({ title: "Renamed", description: "Group name updated." });
+        } catch (e) {
+            toast({ variant: "destructive", title: "Error", description: "Could not rename group." });
+        }
+    };
+
+    const handleDeleteGroup = async (gid: number) => {
+        try {
+            await deleteGroup(gid);
+            await queryClient.invalidateQueries({ queryKey: ['my_groups'] });
+            await queryClient.invalidateQueries({ queryKey: ['public_groups'] });
+            toast({ title: "Group Deleted" });
+        } catch (e) {
+            toast({ variant: "destructive", title: "Error", description: "Could not delete group." });
+        }
+    };
+
+    // --- File/Job Handlers ---
+
     useEffect(() => {
         if (!jobStatus) return;
 
         if (jobStatus.status === 'completed') {
             const refreshData = async () => {
-                // --- FIX: Broad Invalidation ensures all UI parts update ---
                 await queryClient.invalidateQueries({ queryKey: ['collections'] });
-                await queryClient.invalidateQueries({ queryKey: ['documents'] }); // Matches any 'documents' query
+                await queryClient.invalidateQueries({ queryKey: ['documents'] }); 
                 await queryClient.invalidateQueries({ queryKey: ['charts'] });
                 await queryClient.invalidateQueries({ queryKey: ['graph'] });
-                // -----------------------------------------------------------
                 
                 if (activeJobId) {
                     toast({ title: "Processing Complete", description: "Documents indexed." });
@@ -146,47 +239,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }
     }, [jobStatus, queryClient, activeJobId, setActiveJobId, toast]);
 
-    // --- Handlers ---
-
-    const handleCreateCollection = async () => {
-        if (!newCollectionName.trim()) return;
-        const groupId = selectedGroupId === "personal" ? undefined : parseInt(selectedGroupId);
-        try {
-            const id = await createCollection(newCollectionName, groupId);
-            await queryClient.invalidateQueries({ queryKey: ['collections'] });
-            onSessionChange(id);
-            setNewCollectionName("");
-            toast({ title: "Collection Created" });
-        } catch (e) {
-            toast({ variant: "destructive", title: "Error", description: "Failed to create." });
-        }
-    };
-
-    const handleCreateGroup = async () => {
-        if (!newGroupName.trim()) return;
-        try {
-            await createGroup(newGroupName, newGroupDesc, newGroupPublic);
-            await queryClient.invalidateQueries({ queryKey: ['my_groups'] });
-            await queryClient.invalidateQueries({ queryKey: ['public_groups'] });
-            setNewGroupName("");
-            setNewGroupDesc("");
-            toast({ title: "Group Created" });
-        } catch (e) {
-            toast({ variant: "destructive", title: "Error", description: "Failed to create group." });
-        }
-    };
-
-    const handleDeleteCollection = async (cid: number) => {
-        try {
-            await deleteCollection(cid);
-            if (String(cid) === currentSessionId) onSessionChange(null);
-            await queryClient.invalidateQueries({ queryKey: ['collections'] });
-            toast({ title: "Collection Deleted" });
-        } catch (err) {
-            toast({ variant: "destructive", title: "Error", description: "Failed to delete." });
-        }
-    };
-
     const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files.length > 0) {
             const newFiles = Array.from(event.target.files);
@@ -201,47 +253,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const handleAddFiles = async () => {
         if (!currentSessionId || stagedFiles.length === 0) return;
         
-        setIsUploading(true); // Show spinner on button
+        setIsUploading(true); 
         
         try {
-            // 1. FORCE CLEAR CACHE
-            // Remove any stale 'completed' status from React Query so we don't trigger early finish
             queryClient.removeQueries({ queryKey: ['status', currentSessionId] });
 
-            // 2. Perform Upload & Init Processing
-            // The backend sets status to 'queued' during this call
             for (const file of stagedFiles) {
                 await uploadAndProcessDocument(currentSessionId, file, selectedModel);
             }
             
-            // 3. ACTIVATE ANIMATION
-            // Only now, after backend is definitely in 'queued' state, do we show the view.
             setActiveJobId(currentSessionId); 
             
         } catch (error) {
             console.error(error);
-            setIsUploading(false); // Only reset if we failed to start
+            setIsUploading(false);
             setActiveJobId(null);
             toast({ variant: "destructive", title: "Upload Failed", description: "Could not start processing." });
         }
     };
 
-    // --- FIX: Robust Delete Handler ---
     const handleDeleteDoc = async (docId: number) => {
         try {
             await deleteDocument(docId);
-            
-            // Invalidate aggressively to force UI update
             await queryClient.invalidateQueries({ queryKey: ['documents'] });
             await queryClient.invalidateQueries({ queryKey: ['collections'] });
             await queryClient.invalidateQueries({ queryKey: ['graph'] });
-            
             toast({ title: "Document Removed" });
         } catch (err) {
             toast({ variant: "destructive", title: "Error", description: "Could not delete document." });
         }
     };
-    // ----------------------------------
 
     const activeCollectionName = collections.find(c => String(c.id) === currentSessionId)?.name;
 
@@ -332,16 +373,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                     </div>
                                                     <div className="min-w-0">
                                                         <div className="font-medium text-sm truncate">{c.name}</div>
-                                                        <div className="text-[10px] text-muted-foreground truncate">
-                                                            {c.docs} docs {c.group_name && <span>• {c.group_name}</span>}
+                                                        <div className="text-[0.8rem] text-muted-foreground truncate">
+                                                            {c.docs} {c.docs === 1 ? "doc" : "docs"}
+                                                            {c.group_name && <span> • {c.group_name}</span>}
                                                         </div>
+
                                                     </div>
                                                 </div>
                                                 
-                                                <div onClick={(e) => e.stopPropagation()}>
+                                                {/* Actions */}
+                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                                                    {/* Rename (Owner only) */}
+                                                    {currentUserId === c.owner_id && (
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setRenameCid(c.id);
+                                                                setRenameName(c.name);
+                                                            }}
+                                                        >
+                                                            <Pencil className="h-3 w-3" />
+                                                        </Button>
+                                                    )}
+
+                                                    {/* Delete */}
                                                     <AlertDialog>
                                                         <AlertDialogTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-600">
                                                                 <Trash2 className="h-3 w-3" />
                                                             </Button>
                                                         </AlertDialogTrigger>
@@ -421,7 +482,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                     <div className="flex justify-between items-center">
                                                         <label className="text-xs font-bold uppercase text-muted-foreground">Upload</label>
                                                         <Select value={selectedModel} onValueChange={(v) => setSelectedModel(v as VisionModel)}>
-                                                            <SelectTrigger className="h-6 text-[10px] w-[110px]"><SelectValue /></SelectTrigger>
+                                                            <SelectTrigger className="h-6 text-[0.8rem] w-[10rem]"><SelectValue /></SelectTrigger>
                                                             <SelectContent>
                                                                 {VISION_MODELS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
                                                             </SelectContent>
@@ -488,29 +549,101 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                         <div className="space-y-2">
                             <h3 className="text-xs font-bold uppercase text-muted-foreground tracking-wider mb-2">My Groups</h3>
-                            {userGroups.map((g: any) => (
-                                <div key={g.id} className="p-2 border rounded-md bg-card flex items-center gap-2">
-                                    {g.is_public ? <Globe className="h-3 w-3 text-blue-500" /> : <Lock className="h-3 w-3 text-amber-500" />}
-                                    <div className="text-sm font-medium truncate flex-1">{g.name}</div>
-                                </div>
-                            ))}
+                            {userGroups.map((g: any) => {
+                                const isOwner = currentUserId === g.owner_id;
+                                return (
+                                    <div key={g.id} className="p-2 border rounded-md bg-card flex items-center gap-2 group hover:bg-muted/20 transition-colors">
+                                        {g.is_public ? <Globe className="h-3 w-3 text-blue-500 shrink-0" /> : <Lock className="h-3 w-3 text-amber-500 shrink-0" />}
+                                        <div className="text-sm font-medium truncate flex-1">{g.name}</div>
+                                        
+                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {/* RENAME (Owner Only) */}
+                                            {isOwner && (
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-6 w-6" 
+                                                    onClick={() => {
+                                                        setRenameGid(g.id);
+                                                        setRenameGroupName(g.name);
+                                                    }}
+                                                >
+                                                    <Pencil className="h-3 w-3" />
+                                                </Button>
+                                            )}
+
+                                            {/* DELETE (Owner Only) */}
+                                            {isOwner && (
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-600">
+                                                            <Trash2 className="h-3 w-3" />
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Delete Group?</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                This will delete <b>{g.name}</b> and all associated collections.
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => handleDeleteGroup(g.id)} className="bg-destructive">Delete</AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </ScrollArea>
                 )}
             </div>
 
-            {/* Footer */}
-            <div className="p-6 border-t bg-muted/20 shrink-0 min-h-[100px] flex items-center">
-                 {systemStatus?.user && (
-                    <div className="flex items-center gap-3 w-full">
-                        <UserCircle className="h-10 w-10 text-primary/80" />
-                        <div className="min-w-0 flex-1">
-                            <p className="text-sm font-bold truncate">{systemStatus.user.cn}</p>
-                            <p className="text-xs text-muted-foreground truncate">{systemStatus.user.org}</p>
-                        </div>
+            
+
+            {/* --- COLLECTION RENAME DIALOG --- */}
+            <Dialog open={!!renameCid} onOpenChange={(open) => !open && setRenameCid(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Rename Collection</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Input 
+                            value={renameName} 
+                            onChange={(e) => setRenameName(e.target.value)} 
+                            placeholder="New Collection Name" 
+                        />
                     </div>
-                )}
-            </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setRenameCid(null)}>Cancel</Button>
+                        <Button onClick={handleRenameCollection} disabled={!renameName.trim()}>Save</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* --- GROUP RENAME DIALOG --- */}
+            <Dialog open={!!renameGid} onOpenChange={(open) => !open && setRenameGid(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Rename Group</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Input 
+                            value={renameGroupName} 
+                            onChange={(e) => setRenameGroupName(e.target.value)} 
+                            placeholder="New Group Name" 
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setRenameGid(null)}>Cancel</Button>
+                        <Button onClick={handleRenameGroup} disabled={!renameGroupName.trim()}>Save</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

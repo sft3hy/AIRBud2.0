@@ -82,11 +82,11 @@ export interface SessionHistoryItem {
 }
 
 export type VisionModel =
+    | 'Ollama-Granite3.2-Vision'
     | 'Moondream2'
     | 'Qwen3-VL-2B'
     | 'InternVL3.5-1B'
-    | 'Ollama-Gemma3'
-    | 'Ollama-Granite3.2-Vision';
+    | 'Ollama-Gemma3';
 
 export interface Group {
     id: number;

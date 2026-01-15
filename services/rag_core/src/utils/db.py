@@ -339,3 +339,21 @@ class DatabaseManager:
         with self.get_cursor() as cur:
             cur.execute("SELECT * FROM documents WHERE id = %s", (doc_id,))
             return cur.fetchone()
+        
+    def rename_collection(self, collection_id, new_name, owner_id):
+        """Renames a collection only if the user owns it."""
+        with self.get_cursor(commit=True) as cur:
+            cur.execute(
+                "UPDATE collections SET name=%s WHERE id=%s AND owner_id=%s RETURNING id",
+                (new_name, collection_id, owner_id)
+            )
+            return cur.fetchone() is not None
+
+    def rename_group(self, group_id, new_name, owner_id):
+        """Renames a group only if the user owns it."""
+        with self.get_cursor(commit=True) as cur:
+            cur.execute(
+                "UPDATE groups SET name=%s WHERE id=%s AND owner_id=%s RETURNING id",
+                (new_name, group_id, owner_id)
+            )
+            return cur.fetchone() is not None

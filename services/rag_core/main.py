@@ -55,6 +55,9 @@ class QueryRequest(BaseModel):
     collection_id: int
     question: str
 
+class RenameRequest(BaseModel):
+    name: str
+
 # --- Pipeline Task (Identical to before) ---
 def run_pipeline_task(collection_id: int, filename: str, vision_model: str):
     cid = str(collection_id)
@@ -409,72 +412,17 @@ async def query_collection(req: QueryRequest, user: Dict = Depends(auth_handler.
 
     # X-Accel-Buffering: no is crucial for Nginx to stream chunks immediately
     return StreamingResponse(generate(), media_type="application/x-ndjson", headers={"X-Accel-Buffering": "no"})
-    docs = db.get_collection_documents(req.collection_id)
-    if not docs:
-        return {"response": "This collection has no documents.", "results": []}
-
-    pipelines = []
-    for doc in docs:
-        if doc['faiss_index_path'] and os.path.exists(doc['faiss_index_path']):
-            try:
-                p = SmartRAG(output_dir=doc['chart_dir'])
-                p.load_state(doc['faiss_index_path'], doc['chunks_path'])
-                pipelines.append(p)
-            except Exception as e:
-                logger.error(f"Failed to load doc {doc['id']}: {e}")
-
-    if not pipelines:
-        return {"response": "Error loading document indexes.", "results": []}
-
-    all_results = []
-    for p in pipelines:
-        all_results.extend(p.search(req.question, top_k=3))
     
-    all_results.sort(key=lambda x: x[1])
-    top_results = all_results[:5]
+@app.put("/collections/{cid}")
+def rename_collection_endpoint(cid: int, req: RenameRequest, user: Dict = Depends(auth_handler.require_user)):
+    success = db.rename_collection(cid, req.name, user['id'])
+    if not success:
+        raise HTTPException(status_code=403, detail="Not authorized or collection not found")
+    return {"status": "updated", "name": req.name}
 
-    graph_context = ""
-    graph_results_raw = []
-    try:
-        kg_resp = requests.post(
-            f"{KG_SERVICE_URL}/search",
-            json={"query": req.question, "collection_id": req.collection_id},
-            timeout=3
-        )
-        if kg_resp.status_code == 200:
-            data = kg_resp.json()
-            graph_context = data.get("context", "")
-            graph_results_raw = data.get("raw", [])
-    except Exception as e:
-        logger.error(f"KG Search failed: {e}")
-
-    try:
-        llm_resp = pipelines[0].generate_answer(
-            req.question, 
-            top_results, 
-            graph_context=graph_context
-        )
-        response_text = llm_resp.content or f"Error: {llm_resp.error}"
-
-        results_formatted = [
-            {"type": "text", "text": c.text, "source": c.source, "page": c.page, "score": s} 
-            for c, s in top_results
-        ]
-        
-        for g in graph_results_raw:
-            results_formatted.append({
-                "type": "graph",
-                "text": f"{g['source']} --[{g['rel']}]--> {g['target']}",
-                "source": "Knowledge Graph",
-                "score": 1.0
-            })
-        
-        db.add_query_record(req.collection_id, req.question, response_text, results_formatted)
-        
-        return {
-            "response": response_text,
-            "results": results_formatted
-        }
-    except Exception as e:
-        logger.error(f"Query error: {e}", exc_info=True)
-        return {"response": "An unexpected error occurred.", "results": [], "error": str(e)}
+@app.put("/groups/{gid}")
+def rename_group_endpoint(gid: int, req: RenameRequest, user: Dict = Depends(auth_handler.require_user)):
+    success = db.rename_group(gid, req.name, user['id'])
+    if not success:
+        raise HTTPException(status_code=403, detail="Not authorized or group not found")
+    return {"status": "updated", "name": req.name}
