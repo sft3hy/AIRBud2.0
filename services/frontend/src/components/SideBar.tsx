@@ -132,7 +132,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navigate = useNavigate(); // Hook for navigation
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // const { toast } = useToast();
 
   // --- Local State ---
   const [selectedModel, setSelectedModel] = useState<VisionModel>(
