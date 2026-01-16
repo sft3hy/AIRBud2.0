@@ -34,33 +34,38 @@ class SmartRAG:
         self.chart_descriptions: Dict[str, str] = {}
 
     def index_document(self, file_path: str) -> str:
-        """
-        Processes document: Parsing -> Vision -> Chunking -> Embedding.
-        Returns the full processed markdown text (for KG ingestion).
-        """
         file_path_str = str(file_path)
         logger.info(f"Indexing document: {file_path_str}")
         
-        # 1. Parse Layout
+        # 1. Parse Layout (Now returns audio_path too)
         data = ExternalServices.parse_document(file_path_str, self.output_dir)
         markdown_text = data.get("text", "")
         image_paths = data.get("images", [])
+        audio_path = data.get("audio_path") # NEW
 
-        # 2. Vision Analysis
+        # 2. Vision Analysis (Screenshots)
         for img_path in image_paths:
             fname = os.path.basename(img_path)
+            # Update job status logic in main.py usually handles progress, 
+            # but here we just block.
             desc = ExternalServices.analyze_image(img_path, self.vision_model_name)
             self.chart_descriptions[fname] = desc
             
-            # Inject into text
             placeholder = f"[CHART_PLACEHOLDER:{fname}]"
-            replacement = f"\n> **Visual Analysis ({fname}):**\n> {desc}\n"
+            # Visual context injection
+            replacement = f"\n> **Visual Scene Analysis ({fname}):**\n> {desc}\n"
             markdown_text = markdown_text.replace(placeholder, replacement)
 
-        # 3. Chunking
+        # 3. Audio Transcription (NEW)
+        if audio_path:
+            logger.info("Processing audio track...")
+            transcript = ExternalServices.transcribe_audio(audio_path)
+            markdown_text += f"\n\n# FULL AUDIO TRANSCRIPT\n\n{transcript}"
+
+        # 4. Chunking
         self.child_chunks, self.parent_map = self.chunker.process(markdown_text, file_path_str)
 
-        # 4. Embeddings
+        # 5. Embeddings
         if self.child_chunks:
             texts = [c.text for c in self.child_chunks]
             embeddings = self.embedding_model.encode(texts)
