@@ -42,6 +42,22 @@ class ExternalServices:
         except Exception as e:
             logger.warning(f"Vision Service failed for {image_path}: {e}")
             return "Image analysis failed."
+        
+    @staticmethod
+    def transcribe_audio(audio_path: str) -> str:
+        try:
+            logger.info(f"Sending audio to Vision Service: {audio_path}")
+            resp = requests.post(
+                f"{settings.VISION_API_URL}/transcribe",
+                json={"audio_path": str(audio_path)},
+                # Whisper takes time, allow long timeout
+                timeout=600 
+            )
+            resp.raise_for_status()
+            return resp.json().get("text", "")
+        except Exception as e:
+            logger.error(f"Transcription Service failed: {e}")
+            return "Audio transcription failed."
 
 class ChartService:
     @staticmethod
