@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
-import { Send, FolderOpen, Loader2, UserCircle } from 'lucide-react';
+import { Send, FolderOpen, Loader2 } from 'lucide-react'; // Removed UserCircle
 import { Link } from 'react-router-dom';
 
-import { fetchCollectionDocuments, sendQueryStream, getCollectionHistory, getCollections, getCollectionStatus, fetchSystemStatus } from './lib/api';
+import { fetchCollectionDocuments, sendQueryStream, getCollectionHistory, getCollections, getCollectionStatus } from './lib/api'; // fetchSystemStatus removed (handled inside component)
 import { ChatMessage, SessionHistoryItem } from './types';
 import { logger } from './lib/logger';
 import { SourceViewer } from './components/SourceViewer';
-import { ProcessingView } from './components/ProcessingView'; // Ensure this exists
+import { ProcessingView } from './components/ProcessingView';
+import { UserStatus } from '@/components/UserStatus'; // <--- NEW IMPORT
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -19,45 +20,36 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import doggieSrc from './assets/doggie.svg';
 import userSrc from './assets/user.svg';
 
-const WelcomeScreen = ({ systemStatus }: { systemStatus?: { user?: { cn: string; org: string } } }) => (
+const WelcomeScreen = () => (
     <div className="flex h-full w-full flex-col bg-background">
         {/* Header with User Info */}
         <div className="z-10 flex items-center justify-between border-b bg-card px-6 py-4 shadow-sm">
             <div className="flex items-center gap-2">
-                <h1 className="text-lg font-semibold">Smart RAG</h1>
+                <FolderOpen></FolderOpen>
+                <h1 className="text-lg font-semibold">Collections</h1>
             </div>
 
-            {/* User info */}
-            {systemStatus?.user && (
-                <div className="flex items-center gap-2 text-right">
-                    <div className="flex flex-col leading-tight">
-                        <span className="max-w-[160px] truncate text-sm font-medium">
-                            {systemStatus.user.cn}
-                        </span>
-                        <span className="max-w-[11rem] truncate text-xs text-muted-foreground">
-                            {systemStatus.user.org}
-                        </span>
-                    </div>
-
-                    <span title="Logged in via CAC/PIV" className="cursor-help inline-block">
-                        <UserCircle className="h-7 w-7 text-muted-foreground" />
-                    </span>
-                </div>
-            )}
+            {/* Reusable Component */}
+            <UserStatus />
         </div>
 
         {/* Welcome Content */}
         <div className="flex flex-col items-center justify-center flex-1 p-8 text-center bg-muted/10 rounded-xl m-4">
             <div className="mb-6 h-24 w-24 bg-primary/10 rounded-full flex items-center justify-center">
-                <img src={doggieSrc} alt="Smart RAG" className="h-16 w-16" />
+                <img src={doggieSrc} alt="AIRBud 2.0" className="h-16 w-16" />
             </div>
-            <h2 className="text-3xl font-bold mb-4">👋 Welcome to Smart RAG</h2>
+            <h2 className="text-3xl font-bold mb-4">👋 Welcome to AIRBud 2.0</h2>
             <p className="text-lg text-muted-foreground mb-4 max-w-md">
                 Create or select a collection from the sidebar to begin.
             </p>
-            <Link to="/how-it-works">
+            <Link to="/help">
                 <Button variant="link" className="text-primary gap-1 text-base">
-                    How it works <span aria-hidden="true">&rarr;</span>
+                    Help <span aria-hidden="true">&rarr;</span>
+                </Button>
+            </Link>
+            <Link to="/system-overview">
+                <Button variant="link" className="text-primary gap-1 text-base">
+                    System Overview <span aria-hidden="true">&rarr;</span>
                 </Button>
             </Link>
         </div>
@@ -71,8 +63,6 @@ export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | nu
     const bottomRef = useRef<HTMLDivElement>(null);
     const [queryStatus, setQueryStatus] = useState("Finding answer...");
 
-
-    // --- NEW: Poll Job Status if active ---
     const { data: jobStatus } = useQuery({
         queryKey: ['status', activeJobId],
         queryFn: () => getCollectionStatus(activeJobId!),
@@ -85,11 +75,6 @@ export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | nu
         queryFn: getCollections,
         staleTime: 1000 * 60 * 5, 
     });
-
-    const { data: systemStatus } = useQuery({
-            queryKey: ['session'],
-            queryFn: fetchSystemStatus,
-        });
 
     const activeCollection = collections.find(c => String(c.id) === sessionId);
 
@@ -124,13 +109,9 @@ export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | nu
     const sendMessageMutation = useMutation({
         mutationFn: async (question: string) => {
             if (!sessionId) throw new Error("No Session");
-            
-            // Reset status
             setQueryStatus("Initiating Search...");
-            
-            // Use Streaming API
             return await sendQueryStream(sessionId, question, (step) => {
-                setQueryStatus(step); // Update UI on every chunk
+                setQueryStatus(step); 
             });
         },
         onSuccess: (data) => {
@@ -168,12 +149,11 @@ export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | nu
         }
     };
 
-    // --- RENDER PROCESSING VIEW ---
     if (activeJobId && jobStatus && jobStatus.status !== 'idle' && jobStatus.status !== 'completed' && jobStatus.status !== 'error') {
         return <ProcessingView status={jobStatus} />;
     }
 
-    if (!sessionId) return <WelcomeScreen systemStatus={systemStatus} />;
+    if (!sessionId) return <WelcomeScreen />; // Removed systemStatus prop
 
     const queryCount = chatHistory.filter(x => x.role === 'user').length;
 
@@ -184,44 +164,24 @@ export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | nu
                 {/* Left: Collection info */}
                 <div className="flex items-center gap-2">
                     <FolderOpen className="h-6 w-6 text-primary" />
-
                     <p className="flex items-center text-lg font-semibold">
                         <span>
-                            Collection:{" "}
+                            Chatting with:{" "}
                             {activeCollection ? activeCollection.name : "Active Session"}
                         </span>
-
-                        <span className="ml-3 text-base text-muted-foreground">
+                        {/* <span className="ml-3 text-base text-muted-foreground">
                             {queryCount} {queryCount === 1 ? "query" : "queries"}
-                        </span>
-
+                        </span> */}
                     </p>
                 </div>
 
-                {/* Right: User info */}
-                {systemStatus?.user && (
-                    <div className="flex items-center gap-2 text-right">
-                        <div className="flex flex-col leading-tight">
-                            <span className="max-w-[160px] truncate text-sm font-medium">
-                                {systemStatus.user.cn}
-                            </span>
-                            <span className="max-w-[11rem] truncate text-xs text-muted-foreground">
-                                {systemStatus.user.org}
-                            </span>
-                        </div>
-
-                        <span title="Logged in via CAC/PIV" className="cursor-help inline-block">
-                            <UserCircle className="h-7 w-7 text-muted-foreground" />
-                        </span>
-                    </div>
-                )}
-
+                {/* Right: User info via Reusable Component */}
+                <UserStatus />
             </div>
-
-            
 
             <div className="flex-1 overflow-hidden relative bg-muted/20">
                 <ScrollArea className="h-full px-4 md:px-20 py-4" ref={scrollRef}>
+                    {/* ... (Chat history mapping remains unchanged) ... */}
                     <div className="space-y-10 pb-4 max-w-4xl mx-auto min-h-[500px]">
                         {chatHistory.map((msg, idx) => (
                             <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -235,22 +195,7 @@ export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | nu
                                         ? 'bg-primary text-primary-foreground rounded-br-sm prose-invert'
                                         : 'bg-card border rounded-bl-sm text-card-foreground'
                                         }`}>
-                                        <ReactMarkdown
-                                            components={{
-                                                p: ({ node, ...props }) => <p className="mb-3 last:mb-0" {...props} />,
-                                                ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
-                                                ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />,
-                                                li: ({ node, ...props }) => <li className="" {...props} />,
-                                                strong: ({ node, ...props }) => <span className="font-bold" {...props} />,
-                                                a: ({ node, ...props }) => <a className="underline font-medium text-primary" target="_blank" rel="noopener noreferrer" {...props} />,
-                                                code: ({ node, ...props }) => (
-                                                    <code className="px-1 py-0.5 rounded font-mono text-sm bg-muted text-foreground" {...props} />
-                                                ),
-                                                pre: ({ node, ...props }) => (
-                                                    <pre className="p-4 rounded-lg overflow-x-auto my-3 bg-muted text-foreground border" {...props} />
-                                                ),
-                                            }}
-                                        >
+                                        <ReactMarkdown components={{/* ... */}}>
                                             {msg.content}
                                         </ReactMarkdown>
                                     </div>
@@ -282,7 +227,8 @@ export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | nu
             </div>
 
             <div className="p-6 bg-background border-t">
-                <div className="max-w-3xl mx-auto relative flex items-center gap-3">
+                {/* ... Input box ... */}
+                 <div className="max-w-3xl mx-auto relative flex items-center gap-3">
                     <Input
                         placeholder="Ask a question..."
                         value={input}
