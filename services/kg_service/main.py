@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware  # <--- Import this
 from pydantic import BaseModel
 from typing import List, Dict
@@ -35,7 +35,14 @@ def shutdown():
 
 @app.get("/health")
 def health():
-    return {"status": "online", "neo4j": "connected"}
+    try:
+        # Simple connectivity check
+        with graph_store.driver.session() as session:
+            session.run("RETURN 1")
+        return {"status": "online", "neo4j": "connected"}
+    except Exception as e:
+        # Return 503 if DB is down so RAG Core knows
+        raise HTTPException(status_code=503, detail=f"Neo4j Disconnected: {str(e)}")
 
 def process_ingest(text: str, doc_id: int, collection_id: int):
     # Extract entities
