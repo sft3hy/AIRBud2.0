@@ -5,6 +5,7 @@ from src.core.models import (
     Qwen3VLModel,
     InternVL3Model,
     OllamaVisionModel,
+    WhisperAudioModel,
 )
 from src.utils.logger import logger
 
@@ -17,6 +18,7 @@ class ModelManager:
             cls._instance = super(ModelManager, cls).__new__(cls)
             cls._instance.active_model = None
             cls._instance.active_model_name = ""
+            cls._instance.whisper_model = None
         return cls._instance
 
     def get_model(self, model_name: str) -> Optional[VisionModel]:
@@ -41,6 +43,22 @@ class ModelManager:
 
         logger.error(f"Failed to initialize {model_name}")
         return None
+    
+    def get_whisper(self):
+        if self.whisper_model:
+            return self.whisper_model
+        
+        logger.info("Initializing Whisper (Audio)...")
+        # Offload vision model to free VRAM for Whisper if needed
+        if self.active_model:
+            logger.info("Offloading Vision model to make room for Whisper...")
+            self.active_model.offload()
+            self.active_model = None
+            self.active_model_name = ""
+
+        self.whisper_model = WhisperAudioModel()
+        self.whisper_model.load()
+        return self.whisper_model
 
     def _factory(self, name: str) -> Optional[VisionModel]:
         if name == "Moondream2":
