@@ -12,3 +12,5 @@ einops
 qwen_vl_utils
 # Ollama Client
 ollama
+# Transcribe Video's Audio
+openai-whisper
