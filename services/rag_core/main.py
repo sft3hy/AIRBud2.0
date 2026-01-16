@@ -344,10 +344,6 @@ def get_history(cid: int, user: Dict = Depends(auth_handler.require_user)):
 async def query_collection(req: QueryRequest, user: Dict = Depends(auth_handler.require_user)):
     """
     Streams status updates and finally the result using NDJSON.
-    Format:
-    {"step": "Scanning..."}
-    {"step": "Thinking..."}
-    {"result": { ...final_response... }}
     """
     
     def generate():
@@ -373,23 +369,36 @@ async def query_collection(req: QueryRequest, user: Dict = Depends(auth_handler.
             yield json.dumps({"result": {"response": "Error loading document indexes.", "results": []}}) + "\n"
             return
 
-        # 3. Vector Search
+        # --- 3. QUERY OPTIMIZATION (NEW) ---
+        yield json.dumps({"step": "Optimizing Query..."}) + "\n"
+        
+        # We use the first pipeline instance to access the LLM (any would work)
+        # Reword the query for better search hits
+        search_query = pipelines[0].optimize_query(req.question)
+        
+        # Optional: Log the change for debugging
+        if search_query != req.question:
+            logger.info(f"Using optimized query: {search_query}")
+
+        # 4. Vector Search (Using Optimized Query)
         yield json.dumps({"step": "Scanning Semantic Vectors..."}) + "\n"
         all_results = []
         for p in pipelines:
-            all_results.extend(p.search(req.question, top_k=3))
+            # Pass the reworded query to FAISS
+            all_results.extend(p.search(search_query, top_k=3))
         
         all_results.sort(key=lambda x: x[1])
         top_results = all_results[:5]
 
-        # 4. Knowledge Graph
+        # 5. Knowledge Graph (Using Optimized Query)
         yield json.dumps({"step": "Traversing Knowledge Graph..."}) + "\n"
         graph_context = ""
         graph_results_raw = []
         try:
             kg_resp = requests.post(
                 f"{KG_SERVICE_URL}/search",
-                json={"query": req.question, "collection_id": req.collection_id},
+                # Pass the reworded query to Neo4j
+                json={"query": search_query, "collection_id": req.collection_id},
                 timeout=3
             )
             if kg_resp.status_code == 200:
@@ -399,9 +408,12 @@ async def query_collection(req: QueryRequest, user: Dict = Depends(auth_handler.
         except Exception as e:
             logger.error(f"KG Search failed: {e}")
 
-        # 5. LLM Generation
+        # 6. LLM Generation
         yield json.dumps({"step": "Synthesizing Answer with LLM..."}) + "\n"
         try:
+            # We pass the ORIGINAL question to the final generation so the answer 
+            # matches the user's conversational tone, but we provide the context 
+            # found using the OPTIMIZED query.
             llm_resp = pipelines[0].generate_answer(
                 req.question, 
                 top_results, 
@@ -422,15 +434,14 @@ async def query_collection(req: QueryRequest, user: Dict = Depends(auth_handler.
                     "score": 1.0
                 })
             
-            # Save to DB
             db.add_query_record(
                 req.collection_id, 
-                user['id'],  # <--- NEW
+                user['id'],
                 req.question, 
                 response_text, 
                 results_formatted
             )            
-            # Final Yield
+            
             yield json.dumps({"result": {
                 "response": response_text,
                 "results": results_formatted
@@ -440,9 +451,8 @@ async def query_collection(req: QueryRequest, user: Dict = Depends(auth_handler.
             logger.error(f"Query error: {e}", exc_info=True)
             yield json.dumps({"result": {"response": "An unexpected error occurred.", "results": [], "error": str(e)}}) + "\n"
 
-    # X-Accel-Buffering: no is crucial for Nginx to stream chunks immediately
     return StreamingResponse(generate(), media_type="application/x-ndjson", headers={"X-Accel-Buffering": "no"})
-    
+ 
 @app.put("/collections/{cid}")
 def rename_collection_endpoint(cid: int, req: RenameRequest, user: Dict = Depends(auth_handler.require_user)):
     success = db.rename_collection(cid, req.name, user['id'])
