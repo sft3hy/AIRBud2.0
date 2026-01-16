@@ -20,7 +20,7 @@ from src.core.pipeline import SmartRAG
 from src.core.services import ChartService
 from src.core.auth import auth_handler
 
-app = FastAPI(title="Smart RAG API", version=settings.VERSION)
+app = FastAPI(title="AIRBud 2.0 API", version=settings.VERSION)
 db = DatabaseManager()
 
 app.add_middleware(
@@ -197,6 +197,14 @@ def delete_group(gid: int, user: Dict = Depends(auth_handler.require_user)):
         raise HTTPException(status_code=403, detail="Not authorized or group not found")
     return {"status": "deleted"}
 
+@app.post("/groups/{gid}/leave")
+def leave_group(gid: int, user: Dict = Depends(auth_handler.require_user)):
+    success = db.leave_group(gid, user['id'])
+    if not success:
+        raise HTTPException(status_code=400, detail="Cannot leave group (Owner must delete it, or group not found)")
+    return {"status": "left"}
+
+
 # --- COLLECTIONS API (Updated) ---
 
 @app.get("/collections")
@@ -211,11 +219,19 @@ def create_collection(req: CollectionCreate, user: Dict = Depends(auth_handler.r
 
 @app.delete("/collections/{cid}")
 def delete_collection(cid: int, user: Dict = Depends(auth_handler.require_user)):
+    # 1. Attempt DB Deletion (Enforces Ownership)
+    success = db.delete_collection(cid, user['id'])
+    
+    if not success:
+        # If DB returned False, it means the collection doesn't exist OR user isn't the owner
+        raise HTTPException(status_code=403, detail="Not authorized to delete this collection")
+
+    # 2. If successful, clean up the Knowledge Graph
     try:
         requests.delete(f"{KG_SERVICE_URL}/collections/{cid}", timeout=3)
-    except:
-        pass
-    db.delete_collection(cid)
+    except Exception as e:
+        logger.error(f"Failed to cleanup KG for collection {cid}: {e}")
+
     return {"status": "deleted", "id": cid}
 
 @app.get("/collections/{cid}/status")
@@ -313,7 +329,8 @@ def get_charts(cid: int, user: Dict = Depends(auth_handler.require_user)):
 
 @app.get("/collections/{cid}/history")
 def get_history(cid: int, user: Dict = Depends(auth_handler.require_user)):
-    return db.get_queries_for_collection(cid)
+    # Now filters by user['id']
+    return db.get_queries_for_collection(cid, user['id'])
 
 @app.post("/query")
 async def query_collection(req: QueryRequest, user: Dict = Depends(auth_handler.require_user)):
@@ -329,7 +346,7 @@ async def query_collection(req: QueryRequest, user: Dict = Depends(auth_handler.
         # 1. Validation
         docs = db.get_collection_documents(req.collection_id)
         if not docs:
-            yield json.dumps({"result": {"response": "This collection has no documents.", "results": []}}) + "\n"
+            yield json.dumps({"result": {"response": "This collection has no documents. Please upload a document in the sidebar to begin chatting.", "results": []}}) + "\n"
             return
 
         # 2. Vector Setup
@@ -398,8 +415,13 @@ async def query_collection(req: QueryRequest, user: Dict = Depends(auth_handler.
                 })
             
             # Save to DB
-            db.add_query_record(req.collection_id, req.question, response_text, results_formatted)
-            
+            db.add_query_record(
+                req.collection_id, 
+                user['id'],  # <--- NEW
+                req.question, 
+                response_text, 
+                results_formatted
+            )            
             # Final Yield
             yield json.dumps({"result": {
                 "response": response_text,
