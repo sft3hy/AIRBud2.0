@@ -14,7 +14,31 @@ class BaseLLMClient:
     def generate(self, prompt: str, system_prompt: Optional[str] = None) -> LLMResponse:
         raise NotImplementedError
 
+    # --- NEW METHOD ---
+    def reword_query(self, original_query: str) -> str:
+        """
+        Rewrites a user query to be optimized for Vector Search and Knowledge Graph retrieval.
+        """
+        system_prompt = """You are a Query Optimization Expert for a RAG system. 
+Your goal is to rewrite the user's raw query into a precise, semantically dense search query.
+1. Remove conversational filler (e.g., "I was wondering if you could tell me...").
+2. Resolve ambiguous references if possible.
+3. Focus on entities, specific terminology, and relationships.
+4. Do NOT answer the question. output ONLY the rewritten query text.
+"""
+        # Call the implementation's generate method
+        response = self.generate(original_query, system_prompt)
+        
+        if response.error or not response.content:
+            logger.warning(f"Query rewording failed: {response.error}. Using original.")
+            return original_query
+            
+        cleaned = response.content.strip().replace('"', '')
+        logger.info(f"Query Reworded: '{original_query}' -> '{cleaned}'")
+        return cleaned
+
 class GroqClient(BaseLLMClient):
+    # ... (Keep existing __init__ and generate methods) ...
     def __init__(self):
         self.client = Groq(api_key=settings.GROQ_API_KEY)
         self.model = settings.GEN_MODEL_NAME
@@ -38,6 +62,7 @@ class GroqClient(BaseLLMClient):
             return LLMResponse(content="", error=str(e))
 
 class SanctuaryClient(BaseLLMClient):
+    # ... (Keep existing __init__ and generate methods) ...
     def __init__(self):
         self.api_key = settings.SANCTUARY_API_KEY
         self.base_url = "https://api-sanctuary.i2cv.io/v1"
@@ -73,7 +98,6 @@ class SanctuaryClient(BaseLLMClient):
             return LLMResponse(content="", error=str(e))
 
 def get_llm_client() -> BaseLLMClient:
-    # Factory based on the decoupled provider setting
     if settings.LLM_PROVIDER == "groq":
         return GroqClient()
     return SanctuaryClient()
