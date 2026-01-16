@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Dashboard } from './components/Dashboard';
-import { HowItWorks } from './pages/HowItWorks';
+import { SystemOverview } from './pages/SystemOverview';
+import { Help } from './pages/Help';
 import { LoginPage } from './pages/LoginPage';
 import { InviteHandler } from './components/GroupManager';
 import { fetchSystemStatus } from './lib/api';
@@ -11,13 +12,12 @@ import { Toaster } from "@/components/ui/toaster";
 const queryClient = new QueryClient();
 
 const AppContent = () => {
-  // 1. Polling Query
   const { data: status, isLoading, isError } = useQuery({
-    queryKey: ['session'], // Unified Key
+    queryKey: ['session'],
     queryFn: fetchSystemStatus,
     retry: false,
     staleTime: 0,
-    refetchInterval: 5000, // Poll every 5s to check if Card is still valid
+    refetchInterval: 5000,
   });
 
   if (isLoading) {
@@ -29,8 +29,6 @@ const AppContent = () => {
     );
   }
 
-  // 2. Strict Authentication Logic
-  // If API errors (Card removed) OR returns Guest (ID 0) -> Logged Out
   const isOnline = status?.online && !isError;
   const isAuthenticated = isOnline && status?.user && status.user.id > 0;
 
@@ -43,16 +41,36 @@ const AppContent = () => {
         } />
 
         {/* Protected Routes */}
-        <Route path="/" element={
-          isAuthenticated ? <Dashboard /> : <Navigate to="/login" replace />
+        <Route path="/system-overview" element={
+          isAuthenticated ? <SystemOverview /> : <Navigate to="/login" replace />
         } />
 
-        <Route path="/how-it-works" element={
-          isAuthenticated ? <HowItWorks /> : <Navigate to="/login" replace />
+        <Route path="/help" element={
+          isAuthenticated ? <Help /> : <Navigate to="/help" replace />
         } />
         
         <Route path="/groups/join/:token" element={
           isAuthenticated ? <InviteHandler /> : <Navigate to="/login" replace />
+        } />
+
+        {/* --- NEW ROUTING STRUCTURE --- */}
+        
+        {/* Default Redirect */}
+        <Route path="/" element={
+          isAuthenticated ? <Navigate to="/collections" replace /> : <Navigate to="/login" replace />
+        } />
+
+        {/* Collections (List & Detail) */}
+        <Route path="/collections" element={
+          isAuthenticated ? <Dashboard /> : <Navigate to="/login" replace />
+        } />
+        <Route path="/collections/:id" element={
+          isAuthenticated ? <Dashboard /> : <Navigate to="/login" replace />
+        } />
+
+        {/* Groups */}
+        <Route path="/groups" element={
+          isAuthenticated ? <Dashboard /> : <Navigate to="/login" replace />
         } />
 
         {/* Catch-all */}
