@@ -148,13 +148,48 @@ def run_pipeline_task(collection_id: int, filename: str, vision_model: str):
 
 # --- Routes ---
 
+def check_service(name: str, url: str) -> str:
+    try:
+        # 2 second timeout to prevent UI hanging
+        resp = requests.get(url, timeout=2) 
+        if resp.status_code == 200:
+            return "online"
+        return "degraded"
+    except:
+        return "offline"
+
 @app.get("/")
 def health_check(request: Request):
+    # 1. Check Auth (Does not fail health check, just returns guest)
     user = auth_handler.get_current_user(request)
+    
+    # 2. Check Postgres (Local)
+    postgres_status = "online"
+    try:
+        with db.get_cursor() as cur:
+            cur.execute("SELECT 1")
+    except:
+        postgres_status = "offline"
+
+    # 3. Check Microservices
+    services = {
+        "Rag Core (API)": "online", # Self
+        "PostgreSQL": postgres_status,
+        "Knowledge Graph": check_service("KG", f"{KG_SERVICE_URL}/health"),
+        "Parser (Layout)": check_service("Parser", f"{settings.PARSER_API_URL}/health"),
+        "Vision (AI)": check_service("Vision", f"{settings.VISION_API_URL}/health"),
+    }
+
+    # 4. Determine Global Health
+    # If any essential service is offline, flag system as unhealthy
+    # (We consider all of them essential for full functionality)
+    system_healthy = all(s == "online" for s in services.values())
+
     return {
-        "status": "online", 
+        "status": "online" if system_healthy else "outage",
         "service": settings.SERVICE_NAME,
-        "user": user
+        "user": user,
+        "dependencies": services
     }
 
 @app.get("/auth/debug")
