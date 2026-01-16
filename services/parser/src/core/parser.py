@@ -1,13 +1,15 @@
 import os
 import io
 import fitz  # PyMuPDF
+import cv2
 from PIL import Image
 from docx import Document
 from pptx import Presentation
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 import subprocess
 import tempfile
 import shutil
+from moviepy.editor import VideoFileClip
 
 from src.utils.logger import logger
 from src.core.detector import ChartDetector
@@ -18,10 +20,13 @@ class DocumentParser:
         self.output_dir = output_dir
         self.detector = detector
 
-    def parse(self, file_path: str) -> Tuple[str, List[str]]:
+    def parse(self, file_path: str) -> Dict[str, Any]:
         """
-        Main entry point for parsing.
-        Returns (markdown_text, list_of_image_paths)
+        Returns {
+            "text": str, 
+            "images": List[str], 
+            "audio_path": Optional[str]
+        }
         """
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -35,15 +40,30 @@ class DocumentParser:
 
         logger.info(f"Parsing {file_ext} document: {file_name}")
 
+        text = ""
+        images = []
+        audio_path = None
+
         try:
             if file_ext == ".pdf":
-                return self._extract_from_pdf(file_path)
+                text, images = self._extract_from_pdf(file_path)
             elif file_ext == ".docx":
-                return self._extract_from_docx(file_path)
+                text, images = self._extract_from_docx(file_path)
             elif file_ext == ".pptx":
-                return self._extract_from_pptx(file_path)
+                text, images = self._extract_from_pptx(file_path)
+            elif file_ext == ".txt":
+                text = self._extract_from_txt(file_path)
+            elif file_ext == ".mp4":
+                text, images, audio_path = self._extract_from_mp4(file_path, file_name)
             else:
                 raise ValueError(f"Unsupported format: {file_ext}")
+            
+            return {
+                "text": text,
+                "images": images,
+                "audio_path": audio_path
+            }
+
         except Exception as e:
             logger.error(f"Error parsing {file_path}: {e}", exc_info=True)
             raise
@@ -176,6 +196,68 @@ class DocumentParser:
             logger.error(f"PPTX conversion failed: {e}")
 
         return images
+    
+    def _extract_from_txt(self, path: str) -> str:
+        with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+            return f.read()
+
+    def _extract_from_mp4(self, path: str, filename_base: str) -> Tuple[str, List[str], str]:
+        images = []
+        full_text = [f"# Video Analysis: {filename_base}\n"]
+        
+        # 1. Extract Audio
+        audio_path = os.path.join(self.file_output_dir, f"{filename_base}.mp3")
+        try:
+            logger.info("Extracting audio track...")
+            clip = VideoFileClip(path)
+            if clip.audio:
+                clip.audio.write_audiofile(audio_path, logger=None)
+                logger.info(f"Audio extracted to {audio_path}")
+            else:
+                logger.warning("No audio track found in video.")
+                audio_path = None
+            clip.close()
+        except Exception as e:
+            logger.error(f"Audio extraction failed: {e}")
+            audio_path = None
+
+        # 2. Extract Screenshots (1 frame every 5 seconds, max 20 frames)
+        cap = cv2.VideoCapture(path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps == 0: fps = 24 # Fallback
+        
+        frame_interval = int(fps * 5) # Every 5 seconds
+        max_frames = 20
+        count = 0
+        saved_count = 0
+
+        logger.info(f"Extracting frames (Interval: {frame_interval}, Max: {max_frames})...")
+
+        while cap.isOpened() and saved_count < max_frames:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            if count % frame_interval == 0:
+                # Convert BGR (OpenCV) to RGB (PIL)
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                img = Image.fromarray(rgb_frame)
+                
+                # Save Image
+                timestamp = count / fps
+                fname = f"frame_{int(timestamp)}s.png"
+                save_path = os.path.join(self.file_output_dir, fname)
+                img.save(save_path)
+                
+                images.append(save_path)
+                full_text.append(f"\n## Timestamp: {int(timestamp)}s\n[CHART_PLACEHOLDER:{fname}]\n")
+                saved_count += 1
+
+            count += 1
+
+        cap.release()
+        
+        return "\n".join(full_text), images, audio_path
 
     def _process_visuals(self, page_image: Image.Image, prefix: str) -> List[str]:
         bboxes = self.detector.detect(page_image)
