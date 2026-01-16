@@ -32,6 +32,11 @@ class SmartRAG:
         self.child_chunks: List[Chunk] = []
         self.parent_map: Dict[str, Chunk] = {}
         self.chart_descriptions: Dict[str, str] = {}
+        
+    def optimize_query(self, query: str) -> str:
+        """Wraps the LLM's rewording capability."""
+        return self.llm.reword_query(query)
+
 
     def index_document(self, file_path: str) -> str:
         file_path_str = str(file_path)
