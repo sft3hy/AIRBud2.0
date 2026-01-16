@@ -9,7 +9,7 @@ from typing import List, Tuple, Dict, Any
 import subprocess
 import tempfile
 import shutil
-from moviepy.editor import VideoFileClip
+from moviepy import VideoFileClip
 
 from src.utils.logger import logger
 from src.core.detector import ChartDetector
