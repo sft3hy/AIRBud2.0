@@ -47,12 +47,13 @@ def parse_document(req: ParseRequest):
     parser = DocumentParser(detector=detector, output_dir=req.output_dir)
 
     try:
-        markdown, images = parser.parse(req.file_path)
+        result = parser.parse(req.file_path)
         return {
             "status": "success",
-            "text": markdown,
-            "images": images,
-            "metrics": {"images_found": len(images)},
+            "text": result["text"],
+            "images": result["images"],
+            "audio_path": result.get("audio_path"), # Pass this through
+            "metrics": {"images_found": len(result["images"])},
         }
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found")
