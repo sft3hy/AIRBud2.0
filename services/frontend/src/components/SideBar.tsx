@@ -9,8 +9,6 @@ import {
   FolderOpen,
   Users,
   Trash2,
-  Globe,
-  Lock,
   Pencil,
   X,
   ChevronsLeft,
@@ -229,10 +227,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     await renameGroup(renameGid, renameGroupName);
     queryClient.invalidateQueries({ queryKey: ["my_groups"] });
     setRenameGid(null);
-  };
-  const handleDeleteGroup = async (gid: number) => {
-    await deleteGroup(gid);
-    queryClient.invalidateQueries({ queryKey: ["my_groups"] });
   };
   const handleFileSelect = (e: any) => {
     if (e.target.files) setStagedFiles(Array.from(e.target.files));
@@ -827,32 +821,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                 </Card>
 
-                <div className="space-y-2">
-                  {/* <h3 className="text-xs font-bold uppercase text-muted-foreground tracking-wider mb-2">My Groups</h3>
-                                {userGroups.map((g: any) => {
-                                    const isOwner = currentUserId === g.owner_id;
-                                    return (
-                                        <div key={g.id} className="p-2 border rounded-md bg-card flex items-center gap-2 group hover:bg-muted/20 transition-colors">
-                                            {g.is_public ? <Globe className="h-3 w-3 text-blue-500 shrink-0" /> : <Lock className="h-3 w-3 text-amber-500 shrink-0" />}
-                                            <div className="text-sm font-medium truncate flex-1">{g.name}</div>
-                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                {isOwner && (
-                                                    <>
-                                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setRenameGid(g.id); setRenameGroupName(g.name); }}><Pencil className="h-3 w-3" /></Button>
-                                                    <AlertDialog>
-                                                        <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-600"><Trash2 className="h-3 w-3" /></Button></AlertDialogTrigger>
-                                                        <AlertDialogContent>
-                                                            <AlertDialogHeader><AlertDialogTitle>Delete Group?</AlertDialogTitle><AlertDialogDescription>Delete <b>{g.name}</b>?</AlertDialogDescription></AlertDialogHeader>
-                                                            <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteGroup(g.id)} className="bg-destructive">Delete</AlertDialogAction></AlertDialogFooter>
-                                                        </AlertDialogContent>
-                                                    </AlertDialog>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })} */}
-                </div>
+                <div className="space-y-2"></div>
               </ScrollArea>
             )}
           </>
