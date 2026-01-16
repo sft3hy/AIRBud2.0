@@ -1,5 +1,5 @@
 # STAGE 1: Builder (Compilers & Heavy Lifting)
-FROM python:3.10-slim-bookworm as builder
+FROM python:3.10-slim-bookworm AS builder
 
 WORKDIR /app
 
