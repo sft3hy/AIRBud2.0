@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'; // Import useNavigate
 import {
 Loader2, Upload, FolderPlus, ArrowLeft,
 FolderOpen, Users, Trash2, Globe, Lock, Pencil,
-X, ChevronsLeft, ChevronsRight, Search
+X, ChevronsLeft, ChevronsRight, Search, FolderLock
 } from 'lucide-react';
 import {
 getCollections,
@@ -319,7 +319,8 @@ return (
                                                                 "h-8 w-8 rounded-full flex items-center justify-center shrink-0",
                                                                 c.group_id ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
                                                             )}>
-                                                                {c.group_id ? <Users className="h-4 w-4" /> : <FolderOpen className="h-4 w-4" />}
+                                                                {c.group_id ? <Users className="h-4 w-4" /> : <FolderLock/>
+                                                                }
                                                             </div>
                                                             <div className="min-w-0">
                                                                 <div className="font-medium text-sm truncate">{c.name}</div>
@@ -463,7 +464,7 @@ return (
                             </Card>
 
                             <div className="space-y-2">
-                                <h3 className="text-xs font-bold uppercase text-muted-foreground tracking-wider mb-2">My Groups</h3>
+                                {/* <h3 className="text-xs font-bold uppercase text-muted-foreground tracking-wider mb-2">My Groups</h3>
                                 {userGroups.map((g: any) => {
                                     const isOwner = currentUserId === g.owner_id;
                                     return (
@@ -486,7 +487,7 @@ return (
                                             </div>
                                         </div>
                                     );
-                                })}
+                                })} */}
                             </div>
                         </ScrollArea>
                     )}
