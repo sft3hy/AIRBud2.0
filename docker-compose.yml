@@ -32,10 +32,11 @@ services:
       - VITE_API_URL=http://localhost:8000
       - VITE_TEST_MODE=${TEST:-False}
       - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true # Better for Docker file watching
     volumes:
       - ./services/frontend:/app
       - /app/node_modules
-    command: npm run dev -- --host
+    command: sh -c "npm install && npm run dev -- --host" # Run install on startup
     depends_on:
       - rag_core
 
@@ -46,7 +47,7 @@ services:
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - SANCTUARY_API_KEY=${SANCTUARY_API_KEY}
-      - TEST=False
+      - TEST=True
       - LLM_PROVIDER=groq
       - PARSER_API_URL=http://parser:8001
       - VISION_API_URL=http://vision:8002
