@@ -16,6 +16,9 @@ class DescriptionRequest(BaseModel):
     prompt: str
     model_name: str
 
+class TranscribeRequest(BaseModel):
+    audio_path: str
+
 
 @app.get("/health")
 def health():
@@ -25,6 +28,26 @@ def health():
         "ollama_host": config.OLLAMA_BASE_URL,
         "active_model": manager.active_model_name or "None",
     }
+
+@app.post("/transcribe")
+def transcribe_audio(req: TranscribeRequest):
+    logger.info(f"Request: Transcribe audio")
+    
+    if not os.path.exists(req.audio_path):
+        raise HTTPException(status_code=404, detail="Audio file not found")
+
+    try:
+        model = manager.get_whisper()
+        text = model.transcribe(req.audio_path)
+        
+        # Cleanup to allow vision models back in memory later
+        model.offload()
+        manager.whisper_model = None 
+        
+        return {"text": text}
+    except Exception as e:
+        logger.error(f"Transcription failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/describe")
