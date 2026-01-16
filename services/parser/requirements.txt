@@ -11,3 +11,5 @@ pdf2image
 python-docx
 python-pptx
 pymupdf
+# Video Processing
+moviepy
