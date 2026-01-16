@@ -134,15 +134,21 @@ class DatabaseManager:
                 )
             """)
             
+            # 1. UPDATE QUERIES TABLE (Add user_id)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS queries (
                     id SERIAL PRIMARY KEY,
                     collection_id INTEGER REFERENCES collections(id) ON DELETE CASCADE,
+                    user_id INTEGER REFERENCES users(id),  -- NEW COLUMN
                     question TEXT,
                     response TEXT,
                     sources_json TEXT,
                     timestamp TIMESTAMP
                 )
+            """)
+            cur.execute("""
+                ALTER TABLE queries 
+                ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)
             """)
 
     # --- User Operations ---
@@ -210,6 +216,7 @@ class DatabaseManager:
                 ORDER BY g.created_at DESC
             """, (user_id,))
             return cur.fetchall()
+    
     def join_group_by_token(self, user_id, token):
         with self.get_cursor(commit=True) as cur:
             cur.execute("SELECT id FROM groups WHERE invite_token = %s", (token,))
@@ -234,6 +241,38 @@ class DatabaseManager:
                 return False
             cur.execute("DELETE FROM groups WHERE id = %s", (group_id,))
             return True
+
+    def leave_group(self, group_id, user_id):
+        """
+        Allows a user to leave a group.
+        Prevents leaving if the user is the owner (Owner must delete the group).
+        """
+        with self.get_cursor(commit=True) as cur:
+            # 1. Check if owner
+            cur.execute("SELECT owner_id FROM groups WHERE id = %s", (group_id,))
+            res = cur.fetchone()
+            if not res:
+                return False # Group doesn't exist
+            
+            if res['owner_id'] == user_id:
+                return False # Owner cannot leave, must delete
+            
+            # 2. Delete membership
+            cur.execute("DELETE FROM group_members WHERE group_id = %s AND user_id = %s", (group_id, user_id))
+            return True
+
+
+    # --- UPDATED: QUERY RECORDING ---
+    def add_query_record(self, collection_id, user_id, question, response, sources):
+        with self.get_cursor(commit=True) as cur:
+            cur.execute(
+                """
+                INSERT INTO queries 
+                (collection_id, user_id, question, response, sources_json, timestamp) 
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (collection_id, user_id, question, response, json.dumps(sources), datetime.now())
+            )
 
     # --- Collection Operations ---
     def create_collection(self, name, owner_id, group_id=None):
@@ -269,11 +308,21 @@ class DatabaseManager:
             """, (user_id, user_id))
             return cur.fetchall()
 
-    def delete_collection(self, collection_id):
+    def delete_collection(self, collection_id, user_id):
+        """
+        Deletes a collection ONLY if the user_id matches the owner_id.
+        """
         with self.get_cursor(commit=True) as cur:
-            cur.execute("DELETE FROM queries WHERE collection_id=%s", (collection_id,))
-            cur.execute("DELETE FROM documents WHERE collection_id=%s", (collection_id,))
-            cur.execute("DELETE FROM collections WHERE id=%s", (collection_id,))
+            # 1. Delete from SQL (Cascades to documents/queries)
+            # We add 'AND owner_id = %s' to enforce ownership
+            cur.execute(
+                "DELETE FROM collections WHERE id=%s AND owner_id=%s RETURNING id", 
+                (collection_id, user_id)
+            )
+            deleted_row = cur.fetchone()
+            
+            # Returns True if a row was deleted, False if not found or not owned
+            return deleted_row is not None
 
     # --- Documents & Queries ---
     def add_document_record(self, filename, vision_model, chart_dir, faiss_path, chunks_path, chart_descriptions, collection_id):
@@ -315,18 +364,18 @@ class DatabaseManager:
         with self.get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM documents WHERE id=%s", (doc_id,))
 
-    def add_query_record(self, collection_id, question, response, sources):
-        with self.get_cursor(commit=True) as cur:
-            cur.execute(
-                "INSERT INTO queries (collection_id, question, response, sources_json, timestamp) VALUES (%s, %s, %s, %s, %s)",
-                (collection_id, question, response, json.dumps(sources), datetime.now())
-            )
 
-    def get_queries_for_collection(self, collection_id):
+
+    def get_queries_for_collection(self, collection_id, user_id):
         with self.get_cursor() as cur:
             cur.execute(
-                "SELECT question, response, sources_json FROM queries WHERE collection_id=%s ORDER BY timestamp ASC",
-                (collection_id,)
+                """
+                SELECT question, response, sources_json 
+                FROM queries 
+                WHERE collection_id=%s AND user_id=%s 
+                ORDER BY timestamp ASC
+                """,
+                (collection_id, user_id)
             )
             results = cur.fetchall()
             for r in results:
