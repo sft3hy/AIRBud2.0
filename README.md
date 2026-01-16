@@ -17,7 +17,7 @@ graph TD
 
     subgraph "Ingestion Pipeline"
         Core -->|1. Layout| Parser[Parser - Detectron2]
-        Core -->|2. Vision| Vision[Vision - Moondream/Qwen]
+        Core -->|2. Vision| Vision[Vision - Moondream/Gemma3/Granite3.2]
         Core -->|3. Entities| KG[KG Service - LLM Extractor]
     end
 
@@ -41,7 +41,7 @@ graph TD
 | **RAG Core**   | FastAPI, LangChain, FAISS             | Orchestrator. Handles embedding, hybrid search logic, and DB management.             |
 | **KG Service** | FastAPI, [Neo4j](https://neo4j.com)   | **GraphRAG**. Extracts entities/relationships and performs 2-hop neighbor retrieval. |
 | **Parser**     | Detectron2, PyMuPDF                   | Layout Analysis. Detects and crops tables/figures from PDFs.                         |
-| **Vision**     | PyTorch, Transformers                 | Runs local VLMs (Moondream2, Qwen-VL) to transcribe charts into text.                |
+| **Vision**     | PyTorch, Transformers                 | Runs local VLMs (Moondream2, Gemma3, Granite3.2) to transcribe charts into text.     |
 | **Database**   | PostgreSQL 15                         | Stores collection metadata, chat history, and raw text chunks.                       |
 
 ---
@@ -61,7 +61,7 @@ We use **Neo4j** to build a semantic graph of your documents.
 The system "looks" at your documents using Computer Vision.
 
 - **Detection:** Detectron2 identifies charts, graphs, and tables.
-- **Analysis:** Vision Models (Moondream/Qwen) generate detailed textual descriptions of data trends.
+- **Analysis:** Vision Models (Moondream/Gemma/Granite) generate detailed textual descriptions of data trends.
 - **Retrieval:** You can search for data points hidden inside images.
 
 ### 3. Collections Management

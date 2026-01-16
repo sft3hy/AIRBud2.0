@@ -2,8 +2,6 @@ from typing import Optional
 from src.core.models import (
     VisionModel,
     Moondream2Model,
-    Qwen3VLModel,
-    InternVL3Model,
     OllamaVisionModel,
     WhisperAudioModel,
 )
@@ -63,10 +61,6 @@ class ModelManager:
     def _factory(self, name: str) -> Optional[VisionModel]:
         if name == "Moondream2":
             return Moondream2Model()
-        if name == "Qwen3-VL-2B":
-            return Qwen3VLModel()
-        if name == "InternVL3.5-1B":
-            return InternVL3Model()
         if name == "Ollama-Gemma3":
             return OllamaVisionModel("gemma3")
         if name == "Ollama-Granite3.2-Vision":
