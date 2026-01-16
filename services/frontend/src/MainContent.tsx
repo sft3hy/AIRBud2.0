@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
-import { Send, FolderOpen, Loader2 } from 'lucide-react'; // Removed UserCircle
+import { Send, FolderOpen, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-import { fetchCollectionDocuments, sendQueryStream, getCollectionHistory, getCollections, getCollectionStatus } from './lib/api'; // fetchSystemStatus removed (handled inside component)
+import { fetchCollectionDocuments, sendQueryStream, getCollectionHistory, getCollections, getCollectionStatus } from './lib/api';
 import { ChatMessage, SessionHistoryItem } from './types';
 import { logger } from './lib/logger';
 import { SourceViewer } from './components/SourceViewer';
 import { ProcessingView } from './components/ProcessingView';
-import { UserStatus } from '@/components/UserStatus'; // <--- NEW IMPORT
+import { UserStatus } from './components/UserStatus';
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -25,11 +25,8 @@ const WelcomeScreen = () => (
         {/* Header with User Info */}
         <div className="z-10 flex items-center justify-between border-b bg-card px-6 py-4 shadow-sm">
             <div className="flex items-center gap-2">
-                <FolderOpen></FolderOpen>
-                <h1 className="text-lg font-semibold">Collections</h1>
+                <h1 className="text-lg font-semibold">AIRBud 2.0</h1>
             </div>
-
-            {/* Reusable Component */}
             <UserStatus />
         </div>
 
@@ -44,7 +41,7 @@ const WelcomeScreen = () => (
             </p>
             <Link to="/help">
                 <Button variant="link" className="text-primary gap-1 text-base">
-                    Help <span aria-hidden="true">&rarr;</span>
+                    User Guide <span aria-hidden="true">&rarr;</span>
                 </Button>
             </Link>
             <Link to="/system-overview">
@@ -83,6 +80,9 @@ export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | nu
         queryFn: () => fetchCollectionDocuments(sessionId!),
         enabled: !!sessionId,
     });
+
+    // --- NEW: Check for docs ---
+    const hasDocuments = documents.length > 0;
 
     const { data: serverHistory } = useQuery({
         queryKey: ['history', sessionId],
@@ -136,7 +136,7 @@ export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | nu
     }, [chatHistory, sendMessageMutation.isPending]);
 
     const handleSend = () => {
-        if (!input.trim() || !sessionId) return;
+        if (!input.trim() || !sessionId || !hasDocuments) return;
         setChatHistory(prev => [...prev, { role: 'user', content: input }]);
         sendMessageMutation.mutate(input);
         setInput("");
@@ -153,7 +153,7 @@ export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | nu
         return <ProcessingView status={jobStatus} />;
     }
 
-    if (!sessionId) return <WelcomeScreen />; // Removed systemStatus prop
+    if (!sessionId) return <WelcomeScreen />;
 
     const queryCount = chatHistory.filter(x => x.role === 'user').length;
 
@@ -161,27 +161,23 @@ export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | nu
         <div className="flex h-full w-full flex-col bg-background">
             {/* Header */}
             <div className="z-10 flex items-center justify-between border-b bg-card px-6 py-4 shadow-sm">
-                {/* Left: Collection info */}
                 <div className="flex items-center gap-2">
                     <FolderOpen className="h-6 w-6 text-primary" />
                     <p className="flex items-center text-lg font-semibold">
                         <span>
-                            Chatting with:{" "}
+                            Collection:{" "}
                             {activeCollection ? activeCollection.name : "Active Session"}
                         </span>
-                        {/* <span className="ml-3 text-base text-muted-foreground">
+                        <span className="ml-3 text-base text-muted-foreground">
                             {queryCount} {queryCount === 1 ? "query" : "queries"}
-                        </span> */}
+                        </span>
                     </p>
                 </div>
-
-                {/* Right: User info via Reusable Component */}
                 <UserStatus />
             </div>
 
             <div className="flex-1 overflow-hidden relative bg-muted/20">
                 <ScrollArea className="h-full px-4 md:px-20 py-4" ref={scrollRef}>
-                    {/* ... (Chat history mapping remains unchanged) ... */}
                     <div className="space-y-10 pb-4 max-w-4xl mx-auto min-h-[500px]">
                         {chatHistory.map((msg, idx) => (
                             <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -195,7 +191,22 @@ export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | nu
                                         ? 'bg-primary text-primary-foreground rounded-br-sm prose-invert'
                                         : 'bg-card border rounded-bl-sm text-card-foreground'
                                         }`}>
-                                        <ReactMarkdown components={{/* ... */}}>
+                                        <ReactMarkdown
+                                            components={{
+                                                p: ({ node, ...props }) => <p className="mb-3 last:mb-0" {...props} />,
+                                                ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
+                                                ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />,
+                                                li: ({ node, ...props }) => <li className="" {...props} />,
+                                                strong: ({ node, ...props }) => <span className="font-bold" {...props} />,
+                                                a: ({ node, ...props }) => <a className="underline font-medium text-primary" target="_blank" rel="noopener noreferrer" {...props} />,
+                                                code: ({ node, ...props }) => (
+                                                    <code className="px-1 py-0.5 rounded font-mono text-sm bg-muted text-foreground" {...props} />
+                                                ),
+                                                pre: ({ node, ...props }) => (
+                                                    <pre className="p-4 rounded-lg overflow-x-auto my-3 bg-muted text-foreground border" {...props} />
+                                                ),
+                                            }}
+                                        >
                                             {msg.content}
                                         </ReactMarkdown>
                                     </div>
@@ -227,21 +238,22 @@ export const MainContent = ({ sessionId, activeJobId }: { sessionId: string | nu
             </div>
 
             <div className="p-6 bg-background border-t">
-                {/* ... Input box ... */}
-                 <div className="max-w-3xl mx-auto relative flex items-center gap-3">
+                <div className="max-w-3xl mx-auto relative flex items-center gap-3">
                     <Input
-                        placeholder="Ask a question..."
+                        // --- MODIFIED PLACEHOLDER & DISABLED STATE ---
+                        placeholder={hasDocuments ? "Ask a question..." : "Upload a document to start chatting..."}
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        className="pr-14 py-7 rounded-full shadow-sm text-lg bg-card text-card-foreground"
-                        disabled={sendMessageMutation.isPending}
+                        className={`pr-14 py-7 rounded-full shadow-sm text-lg bg-card text-card-foreground ${!hasDocuments ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        disabled={sendMessageMutation.isPending || !hasDocuments}
                     />
                     <Button
                         size="icon"
                         className="absolute right-2 rounded-full h-12 w-12 shadow-sm"
                         onClick={handleSend}
-                        disabled={!input.trim() || sendMessageMutation.isPending}
+                        // --- MODIFIED DISABLED STATE ---
+                        disabled={!input.trim() || sendMessageMutation.isPending || !hasDocuments}
                     >
                         <Send className="h-5 w-5" />
                     </Button>
