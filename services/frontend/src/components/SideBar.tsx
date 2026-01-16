@@ -601,7 +601,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <div className="px-4 py-2 bg-muted/20 border-b">
                         <TabsList className="grid w-full grid-cols-3 h-8">
                           <TabsTrigger value="docs" className="text-xs">
-                            Docs
+                            Files
                           </TabsTrigger>
                           <TabsTrigger value="charts" className="text-xs">
                             Charts
@@ -672,7 +672,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             ))}
                             {currentDocs.length === 0 && (
                               <p className="text-xs text-muted-foreground text-center py-4">
-                                No documents.
+                                No files.
                               </p>
                             )}
                           </div>
@@ -680,7 +680,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           {(!activeJobId ||
                             activeJobId === currentSessionId) && (
                             <div className="space-y-3 pt-4 border-t">
-                              <div className="flex justify-between items-center">
+                              <div className="space-y-1">
                                 <label className="text-xs font-bold uppercase text-muted-foreground">
                                   Upload
                                 </label>
@@ -720,7 +720,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 />
                                 <Upload className="h-4 w-4 text-muted-foreground" />
                                 <span className="text-xs text-muted-foreground">
-                                  Select Files
+                                  Select Files (.pdf, .docx, .mp4, .pptx, .txt)
                                 </span>
                               </Card>
                               {stagedFiles.length > 0 && (
@@ -728,11 +728,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                   {stagedFiles.map((f, i) => (
                                     <div
                                       key={i}
-                                      className="flex justify-between text-xs px-1"
+                                      className="flex items-center justify-between text-xs px-1 min-w-0"
                                     >
-                                      <span className="truncate">{f.name}</span>
+                                      <span
+                                        className="truncate flex-1 min-w-0"
+                                        title={f.name}
+                                      >
+                                        {f.name}
+                                      </span>
                                       <X
-                                        className="h-3 w-3 cursor-pointer"
+                                        className="h-3 w-3 cursor-pointer flex-shrink-0 ml-2"
                                         onClick={() =>
                                           setStagedFiles((p) =>
                                             p.filter((x) => x !== f)
