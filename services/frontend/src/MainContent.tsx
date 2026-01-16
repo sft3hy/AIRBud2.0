@@ -20,6 +20,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import doggieSrc from './assets/doggie.svg';
 import userSrc from './assets/user.svg';
 
+
 const WelcomeScreen = () => (
     <div className="flex h-full w-full flex-col bg-background">
         {/* Header with User Info */}
