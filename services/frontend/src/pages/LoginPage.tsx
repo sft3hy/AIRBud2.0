@@ -28,10 +28,10 @@ export const LoginPage = () => {
             <Card className="max-w-md w-full p-8 flex flex-col items-center text-center shadow-xl border-t-4 border-t-primary">
 
                 <div className="mb-6 h-24 w-24 bg-primary/10 rounded-full flex items-center justify-center">
-                    <img src={doggieSrc} alt="Smart RAG" className="h-16 w-16" />
+                    <img src={doggieSrc} alt="AIRBud 2.0" className="h-16 w-16" />
                 </div>
 
-                <h1 className="text-3xl font-extrabold tracking-tight mb-2">Smart RAG</h1>
+                <h1 className="text-3xl font-extrabold tracking-tight mb-2">AIRBud 2.0</h1>
                 <p className="text-muted-foreground mb-8">
                     Secure Enterprise Document Intelligence
                 </p>
