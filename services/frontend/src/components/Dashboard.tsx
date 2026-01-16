@@ -1,51 +1,84 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useLocation, useParams } from 'react-router-dom'; // Import Router hooks
 import { MainContent } from '../MainContent';
 import { Sidebar } from './SideBar';
 import { GroupManager } from './GroupManager'; 
-import { SidebarMode } from '../types'; 
 import {
     ResizableHandle,
     ResizablePanel,
-    ResizablePanelGroup
+    ResizablePanelGroup,
+    ImperativePanelHandle
 } from "@/components/ui/resizable";
 
 export const Dashboard = () => {
-    const [sessionId, setSessionId] = useState<string | null>(null);
-    const [sidebarMode, setSidebarMode] = useState<SidebarMode>('collections');
+    // --- ROUTER STATE ---
+    const location = useLocation();
+    const params = useParams();
     
-    // --- NEW: Global Job State ---
-    // If activeJobId is set, MainContent will show the ProcessingView
+    // Determine mode based on URL start
+    const isGroupMode = location.pathname.startsWith('/groups');
+    
+    // Determine ID based on URL param (if active)
+    const sessionId = params.id || null;
+
+    // --- JOB STATE (Still local/global) ---
     const [activeJobId, setActiveJobId] = useState<string | null>(null);
+
+    // --- LAYOUT LOGIC ---
+    const sidebarRef = useRef<ImperativePanelHandle>(null);
+    const [isCollapsed, setIsCollapsed] = useState(false);
+
+    const toggleSidebar = () => {
+        const panel = sidebarRef.current;
+        if (panel) {
+            if (isCollapsed) {
+                panel.resize(25);
+                setIsCollapsed(false);
+            } else {
+                panel.resize(4);
+                setIsCollapsed(true);
+            }
+        }
+    };
 
     return (
         <div className="h-screen w-full overflow-hidden bg-background">
             <ResizablePanelGroup direction="horizontal">
                 <ResizablePanel
+                    ref={sidebarRef}
                     defaultSize={25}
-                    minSize={20}
+                    minSize={4}
                     maxSize={40}
-                    className="bg-muted/10 min-w-[300px]"
+                    className="bg-muted/10" 
+                    onResize={(size) => {
+                        const collapsed = size < 10;
+                        if (collapsed !== isCollapsed) setIsCollapsed(collapsed);
+                    }}
                 >
                     <Sidebar
-                        mode={sidebarMode}
-                        setMode={setSidebarMode}
+                        // Pass derived state instead of raw state setters
+                        mode={isGroupMode ? 'groups' : 'collections'}
                         currentSessionId={sessionId}
-                        onSessionChange={setSessionId}
-                        // Pass job props down
+                        
+                        // Pass job props
                         activeJobId={activeJobId}
                         setActiveJobId={setActiveJobId}
+                        
+                        // Pass layout props
+                        isCollapsed={isCollapsed}
+                        toggleSidebar={toggleSidebar}
                     />
                 </ResizablePanel>
 
                 <ResizableHandle withHandle />
 
                 <ResizablePanel defaultSize={75}>
-                    {sidebarMode === 'groups' ? (
+                    {isGroupMode ? (
                         <GroupManager />
                     ) : (
                         <MainContent 
                             sessionId={sessionId} 
-                            activeJobId={activeJobId} // Pass to MainContent
+                            activeJobId={activeJobId} 
                         />
                     )}
                 </ResizablePanel>
