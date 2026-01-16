@@ -5,9 +5,39 @@ from abc import ABC, abstractmethod
 from PIL import Image
 from src.config import config
 from src.utils.logger import logger
+import whisper
 
 warnings.filterwarnings("ignore")
 
+class WhisperAudioModel:
+    def __init__(self):
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = None
+
+    def load(self):
+        try:
+            logger.info(f"Loading Whisper 'medium' on {self.device}...")
+            self.model = whisper.load_model("medium", device=self.device)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to load Whisper: {e}")
+            return False
+
+    def transcribe(self, audio_path: str) -> str:
+        if not self.model:
+            self.load()
+        
+        try:
+            logger.info(f"Transcribing {audio_path}...")
+            result = self.model.transcribe(audio_path)
+            return result["text"]
+        except Exception as e:
+            return f"[Transcription Error: {e}]"
+
+    def offload(self):
+        self.model = None
+        gc.collect()
+        torch.cuda.empty_cache()
 
 class VisionModel(ABC):
     def __init__(self):
