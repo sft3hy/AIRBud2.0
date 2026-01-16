@@ -61,7 +61,15 @@ class RenameRequest(BaseModel):
 # --- Pipeline Task (Identical to before) ---
 def run_pipeline_task(collection_id: int, filename: str, vision_model: str):
     cid = str(collection_id)
+    is_video = filename.lower().endswith('.mp4')
+
     try:
+        # 1. PARSING / EXTRACTION
+        # Customize message based on file type
+        if is_video:
+            step_msg = f"Extracting Frames & Audio Track ({filename})..."
+        else:
+            step_msg = f"Analyzing Layout & Structure ({filename})..."
         # 1. PARSING
         job_status[cid] = {
             "status": "processing", 
