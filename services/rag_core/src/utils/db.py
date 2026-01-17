@@ -406,3 +406,14 @@ class DatabaseManager:
                 (new_name, group_id, owner_id)
             )
             return cur.fetchone() is not None
+        
+    def get_document_ownership(self, doc_id: int):
+        """Returns the owner_id of the collection this document belongs to."""
+        with self.get_cursor() as cur:
+            cur.execute("""
+                SELECT c.owner_id, c.id as collection_id
+                FROM documents d
+                JOIN collections c ON d.collection_id = c.id
+                WHERE d.id = %s
+            """, (doc_id,))
+            return cur.fetchone()

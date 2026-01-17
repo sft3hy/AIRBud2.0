@@ -323,7 +323,15 @@ def get_documents(cid: int, user: Dict = Depends(auth_handler.require_user)):
 
 @app.delete("/documents/{doc_id}")
 def delete_document(doc_id: int, user: Dict = Depends(auth_handler.require_user)):
-    # 1. Get File Paths
+    # 1. SECURITY CHECK: Ensure user owns the collection this doc is in
+    doc_info = db.get_document_ownership(doc_id)
+    if not doc_info:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    if doc_info['owner_id'] != user['id']:
+        raise HTTPException(status_code=403, detail="Only the collection owner can delete documents.")
+
+    # 2. Get File Paths (Existing logic...)
     doc = db.get_document_by_id(doc_id)
     if doc:
         # Remove FAISS Index
@@ -331,7 +339,7 @@ def delete_document(doc_id: int, user: Dict = Depends(auth_handler.require_user)
             try:
                 os.remove(doc['faiss_index_path'])
             except OSError: 
-                pass # Ignore if already gone
+                pass 
 
         # Remove Chunks
         if doc['chunks_path'] and os.path.exists(doc['chunks_path']):
@@ -355,16 +363,15 @@ def delete_document(doc_id: int, user: Dict = Depends(auth_handler.require_user)
             except OSError:
                 pass
 
-    # 2. Delete from Knowledge Graph
+    # 3. Delete from Knowledge Graph (Existing logic...)
     try:
         requests.delete(f"{KG_SERVICE_URL}/documents/{doc_id}", timeout=3)
     except Exception as e:
         logger.error(f"Failed to delete graph nodes for doc {doc_id}: {e}")
 
-    # 3. Delete from SQL DB
+    # 4. Delete from SQL DB (Existing logic...)
     db.delete_document(doc_id)
     return {"status": "deleted"}
-
 @app.get("/collections/{cid}/charts")
 def get_charts(cid: int, user: Dict = Depends(auth_handler.require_user)):
     docs = db.get_collection_documents(cid)

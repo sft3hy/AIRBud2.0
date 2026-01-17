@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Trash2, Upload, Loader2, X } from "lucide-react";
 import { uploadAndProcessDocument, deleteDocument } from "../../lib/api";
-import { VisionModel } from "../../types";
+import { VisionModel, SessionDocument } from "../../types";
 import { ChartBrowser } from "../ChartBrowser";
 import { GraphExplorer } from "../GraphExplorer";
 
@@ -22,6 +22,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -55,9 +61,10 @@ const VISION_MODELS: { value: VisionModel; label: string; desc: string }[] = [
 interface ActiveCollectionViewProps {
   currentSessionId: string;
   activeCollectionName: string | undefined;
-  currentDocs: any[];
+  currentDocs: SessionDocument[];
   activeJobId: string | null;
   setActiveJobId: (id: string | null) => void;
+  isOwner: boolean;
 }
 
 export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
@@ -66,6 +73,7 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
   currentDocs,
   activeJobId,
   setActiveJobId,
+  isOwner,
 }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -95,11 +103,12 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
   const handleDeleteDoc = async (id: number) => {
     await deleteDocument(id);
     queryClient.invalidateQueries({ queryKey: ["documents"] });
+    queryClient.invalidateQueries({ queryKey: ["collections"] });
   };
 
   return (
-    <div className="flex flex-col h-full bg-background">
-      <div className="p-3 border-b flex items-center gap-2 bg-muted/20">
+    <div className="flex flex-col h-full bg-background overflow-hidden">
+      <div className="p-3 border-b flex items-center gap-2 bg-muted/20 shrink-0">
         <Button
           variant="ghost"
           size="icon"
@@ -108,13 +117,13 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="font-semibold text-sm truncate flex-1">
+        <div className="font-semibold text-sm truncate flex-1 min-w-0">
           {activeCollectionName}
         </div>
       </div>
 
-      <Tabs defaultValue="docs" className="flex-1 flex flex-col min-h-0">
-        <div className="px-4 py-2 bg-muted/20 border-b">
+      <Tabs defaultValue="docs" className="flex-1 flex flex-col min-h-0 w-full">
+        <div className="px-4 py-2 bg-muted/20 border-b shrink-0">
           <TabsList className="grid w-full grid-cols-3 h-8">
             <TabsTrigger value="docs" className="text-xs">
               Files
@@ -128,49 +137,79 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
           </TabsList>
         </div>
 
-        <TabsContent value="docs" className="flex-1 flex flex-col min-h-0 mt-0">
-          <ScrollArea className="flex-1 px-4 py-4">
-            <div className="space-y-2 mb-6">
+        <TabsContent
+          value="docs"
+          className="flex-1 flex flex-col min-h-0 mt-0 w-full"
+        >
+          <ScrollArea className="flex-1 w-full">
+            <div className="px-4 py-4 space-y-2 mb-6">
               {currentDocs.map((doc) => (
                 <div
                   key={doc.id}
-                  className="flex items-center justify-between p-2 bg-card border rounded-md text-xs group"
+                  className="flex items-center justify-between p-2 bg-card border rounded-md text-xs group w-full max-w-full"
                 >
-                  <span className="truncate flex-1 pr-2">
-                    {doc.original_filename}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-[10px] h-5">
-                      {doc.vision_model_used}
-                    </Badge>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100"
+                  {/* FIX: 'w-0' combined with 'flex-1' forces this container to shrink regardless of text length */}
+                  <div className="flex-1 w-0 mr-3">
+                    <TooltipProvider>
+                      <Tooltip delayDuration={300}>
+                        <TooltipTrigger asChild>
+                          <span className="truncate block font-medium cursor-default">
+                            {doc.original_filename}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="bottom"
+                          className="max-w-[300px] break-all z-50"
                         >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Document?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Remove <b>{doc.original_filename}</b>?
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleDeleteDoc(doc.id)}
-                            className="bg-destructive"
+                          {doc.original_filename}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+
+                  {/* FIX: 'shrink-0' ensures these elements never collapse */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] h-5 px-1.5 max-w-[80px] truncate block text-center"
+                    >
+                      {doc.vision_model_used
+                        .replace("Ollama-", "")
+                        .replace("-Vision", "")}
+                    </Badge>
+
+                    {isOwner && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                           >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              Delete Document?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Remove <b>{doc.original_filename}</b>?
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteDoc(doc.id)}
+                              className="bg-destructive"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
                   </div>
                 </div>
               ))}
@@ -182,7 +221,7 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
             </div>
 
             {(!activeJobId || activeJobId === currentSessionId) && (
-              <div className="space-y-3 pt-4 border-t">
+              <div className="space-y-3 pt-4 border-t px-4 pb-4">
                 <div className="space-y-1">
                   <label className="text-xs font-bold uppercase text-muted-foreground">
                     Upload
@@ -191,7 +230,7 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
                     value={selectedModel}
                     onValueChange={(v) => setSelectedModel(v as VisionModel)}
                   >
-                    <SelectTrigger className="h-6 text-[0.8rem] w-[10rem]">
+                    <SelectTrigger className="h-6 text-[0.8rem] w-full">
                       <SelectValue placeholder="Select a Vision Model" />
                     </SelectTrigger>
                     <SelectContent>
@@ -206,7 +245,7 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
                     </SelectContent>
                   </Select>
                 </div>
-                <Card className="p-3 border-dashed border-2 flex flex-col items-center gap-1 text-center hover:bg-muted/50 cursor-pointer relative">
+                <Card className="p-3 border-dashed border-2 flex flex-col items-center gap-1 text-center hover:bg-muted/50 cursor-pointer relative w-full">
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -218,7 +257,7 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
                   />
                   <Upload className="h-4 w-4 text-muted-foreground" />
                   <span className="text-xs text-muted-foreground">
-                    Select Files (.pdf, .docx, .mp4, .pptx, .txt)
+                    Select Files
                   </span>
                 </Card>
                 {stagedFiles.length > 0 && (
@@ -260,17 +299,23 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
             )}
           </ScrollArea>
         </TabsContent>
-        <TabsContent value="charts" className="flex-1 mt-0 overflow-hidden">
-          <div className="h-full p-2">
+        <TabsContent
+          value="charts"
+          className="flex-1 mt-0 overflow-hidden w-full"
+        >
+          <div className="h-full p-2 w-full">
             <ChartBrowser collectionId={currentSessionId} />
           </div>
         </TabsContent>
         <TabsContent
           value="graph"
-          className="flex-1 mt-0 overflow-hidden bg-white"
+          className="flex-1 mt-0 overflow-hidden bg-white w-full"
         >
           <div className="h-full w-full">
-            <GraphExplorer collectionId={currentSessionId} />
+            <GraphExplorer
+              collectionId={currentSessionId}
+              documents={currentDocs}
+            />
           </div>
         </TabsContent>
       </Tabs>

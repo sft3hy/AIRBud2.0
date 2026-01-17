@@ -77,6 +77,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     (c) => String(c.id) === currentSessionId
   )?.name;
 
+  const activeCollection = collections.find(
+    (c) => String(c.id) === currentSessionId
+  );
+
+  const isCollectionOwner = activeCollection?.owner_id === currentUserId;
+
   // --- RENDER ---
   return (
     <div
@@ -117,6 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     currentDocs={currentDocs}
                     activeJobId={activeJobId}
                     setActiveJobId={setActiveJobId}
+                    isOwner={isCollectionOwner} // <--- PASS THIS PROP
                   />
                 )}
               </>

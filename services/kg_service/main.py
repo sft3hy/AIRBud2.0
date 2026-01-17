@@ -66,11 +66,24 @@ def search_graph(req: SearchRequest):
 
 @app.get("/collections/{cid}/graph")
 def get_full_graph(cid: int):
+    # CHANGED: We now collect 'id' instead of 'original_filename'
+    # This works for ALL docs (old and new) because 'id' is always present on Document nodes.
     cypher = """
     MATCH (s:Entity)-[r:RELATED]->(t:Entity)
     WHERE (s)-[:MENTIONED_IN]->(:Document {collection_id: $cid})
-    RETURN s.name as source, r.type as rel, t.name as target, s.type as source_type, t.type as target_type
-    LIMIT 500
+    
+    OPTIONAL MATCH (s)-[:MENTIONED_IN]->(ds:Document {collection_id: $cid})
+    OPTIONAL MATCH (t)-[:MENTIONED_IN]->(dt:Document {collection_id: $cid})
+    
+    RETURN 
+        s.name as source, 
+        s.type as source_type, 
+        collect(distinct ds.id) as source_doc_ids,
+        r.type as rel, 
+        t.name as target, 
+        t.type as target_type,
+        collect(distinct dt.id) as target_doc_ids
+    LIMIT 750
     """
     try:
         with graph_store.driver.session() as session:
@@ -81,10 +94,25 @@ def get_full_graph(cid: int):
         links = []
         
         for row in data:
+            # Process Source Node
             if row['source'] not in nodes:
-                nodes[row['source']] = {"id": row['source'], "group": "Entity", "type": row.get('source_type', 'Unknown')}
+                nodes[row['source']] = {
+                    "id": row['source'], 
+                    "group": "Entity", 
+                    "type": row.get('source_type', 'Unknown'),
+                    # Store IDs, frontend will map to names
+                    "doc_ids": row.get('source_doc_ids', []) 
+                }
+            
+            # Process Target Node
             if row['target'] not in nodes:
-                nodes[row['target']] = {"id": row['target'], "group": "Entity", "type": row.get('target_type', 'Unknown')}
+                nodes[row['target']] = {
+                    "id": row['target'], 
+                    "group": "Entity", 
+                    "type": row.get('target_type', 'Unknown'),
+                    # Store IDs, frontend will map to names
+                    "doc_ids": row.get('target_doc_ids', [])
+                }
                 
             links.append({
                 "source": row['source'],
@@ -96,7 +124,7 @@ def get_full_graph(cid: int):
     except Exception as e:
         print(f"Graph Fetch Error: {e}")
         return {"nodes": [], "links": []}
-
+      
 @app.delete("/collections/{cid}")
 def delete_collection(cid: int):
     graph_store.delete_collection(cid)
