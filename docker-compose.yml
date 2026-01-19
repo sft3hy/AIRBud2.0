@@ -1,4 +1,12 @@
 services:
+  init_fs:
+    image: alpine:latest
+    container_name: smart_rag_init_fs
+    # Create directories and force permissions to 777 so all containers (root or appuser) can RWX
+    command: sh -c "mkdir -p /data/uploads /data/charts /data/faiss_indexes /data/chunks /data/huggingface && chmod -R 777 /data"
+    volumes:
+      - shared_data:/data
+
   # --- Gateway ---
   nginx:
     image: nginx:alpine
@@ -17,7 +25,7 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "10m"
+        max-size: "500m"
         max-file: "3"
 
   # 1. Frontend
@@ -47,7 +55,7 @@ services:
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - SANCTUARY_API_KEY=${SANCTUARY_API_KEY}
-      - TEST=True
+      - TEST=False
       - LLM_PROVIDER=groq
       - PARSER_API_URL=http://parser:8001
       - VISION_API_URL=http://vision:8002
@@ -68,7 +76,7 @@ services:
       postgres:
         condition: service_healthy
     # --- FIX: Add ( ... || true) to ignore permission errors on existing files ---
-    command: /bin/sh -c "mkdir -p /data/uploads /data/charts /data/faiss_indexes /data/chunks /data/huggingface && (chmod -R 777 /data/uploads /data/charts /data/faiss_indexes /data/chunks /data/huggingface || true) && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload --proxy-headers
     # ----------------------------------------------------------------------------
 
   # 3. Parser
@@ -83,7 +91,7 @@ services:
       - shared_data:/data
       - ./services/parser:/app
     # --- FIX: Add || true ---
-    command: /bin/sh -c "mkdir -p /data/charts && (chmod -R 777 /data/charts || true) && uvicorn main:app --host 0.0.0.0 --port 8001 --reload"
+    command: /bin/sh -c "mkdir -p /data/charts && uvicorn main:app --host 0.0.0.0 --port 8001 --reload"
 
   # 4. Vision
   vision:
@@ -156,7 +164,7 @@ services:
       - NEO4J_PASSWORD=smartrag_password
       - GROQ_API_KEY=${GROQ_API_KEY}
       - SANCTUARY_API_KEY=${SANCTUARY_API_KEY}
-      - TEST=${TEST}
+      - TEST=False
       - PYTHONUNBUFFERED=1
     volumes:
       - ./services/kg_service:/app
