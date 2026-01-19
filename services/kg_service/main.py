@@ -1,5 +1,5 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException
-from fastapi.middleware.cors import CORSMiddleware  # <--- Import this
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict
 from src.extractor import GraphExtractor
@@ -7,15 +7,13 @@ from src.graph_store import Neo4jStore
 
 app = FastAPI(title="Knowledge Graph Service")
 
-# --- FIX: Enable CORS ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins (Frontend is on 5173)
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# ------------------------
 
 extractor = GraphExtractor()
 graph_store = Neo4jStore()
@@ -36,13 +34,33 @@ def shutdown():
 @app.get("/health")
 def health():
     try:
-        # Simple connectivity check
         with graph_store.driver.session() as session:
             session.run("RETURN 1")
         return {"status": "online", "neo4j": "connected"}
     except Exception as e:
-        # Return 503 if DB is down so RAG Core knows
         raise HTTPException(status_code=503, detail=f"Neo4j Disconnected: {str(e)}")
+
+# --- DEBUG ENDPOINT (NEW) ---
+@app.get("/debug/stats/{cid}")
+def debug_collection_stats(cid: int):
+    """Returns raw node counts for a collection to verify ingestion."""
+    cypher = """
+    MATCH (d:Document {collection_id: $cid})
+    OPTIONAL MATCH (e:Entity)-[:MENTIONED_IN]->(d)
+    RETURN count(DISTINCT d) as docs, count(DISTINCT e) as entities
+    """
+    try:
+        with graph_store.driver.session() as session:
+            result = session.run(cypher, cid=cid)
+            record = result.single()
+            return {
+                "collection_id": cid,
+                "documents_in_graph": record["docs"],
+                "entities_in_graph": record["entities"]
+            }
+    except Exception as e:
+        return {"error": str(e)}
+# ----------------------------
 
 def process_ingest(text: str, doc_id: int, collection_id: int):
     # Extract entities
@@ -66,8 +84,6 @@ def search_graph(req: SearchRequest):
 
 @app.get("/collections/{cid}/graph")
 def get_full_graph(cid: int):
-    # CHANGED: We now collect 'id' instead of 'original_filename'
-    # This works for ALL docs (old and new) because 'id' is always present on Document nodes.
     cypher = """
     MATCH (s:Entity)-[r:RELATED]->(t:Entity)
     WHERE (s)-[:MENTIONED_IN]->(:Document {collection_id: $cid})
@@ -94,23 +110,19 @@ def get_full_graph(cid: int):
         links = []
         
         for row in data:
-            # Process Source Node
             if row['source'] not in nodes:
                 nodes[row['source']] = {
                     "id": row['source'], 
                     "group": "Entity", 
                     "type": row.get('source_type', 'Unknown'),
-                    # Store IDs, frontend will map to names
                     "doc_ids": row.get('source_doc_ids', []) 
                 }
             
-            # Process Target Node
             if row['target'] not in nodes:
                 nodes[row['target']] = {
                     "id": row['target'], 
                     "group": "Entity", 
                     "type": row.get('target_type', 'Unknown'),
-                    # Store IDs, frontend will map to names
                     "doc_ids": row.get('target_doc_ids', [])
                 }
                 
