@@ -11,17 +11,14 @@ import { getCollectionGraph } from "../lib/api";
 import {
   Loader2,
   RefreshCw,
-  ZoomIn,
-  ZoomOut,
-  Network,
   Maximize2,
   X,
   FileText,
+  Network,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { cn } from "@/lib/utils";
-import { SessionDocument } from "../types"; // Import this
+import { SessionDocument } from "../types";
 
 // Helper: Consistent Color Generator
 const stringToColor = (str: string) => {
@@ -35,7 +32,7 @@ const stringToColor = (str: string) => {
 
 interface GraphExplorerProps {
   collectionId: string | null;
-  documents: SessionDocument[]; // ADDED THIS
+  documents: SessionDocument[];
 }
 
 export const GraphExplorer: React.FC<GraphExplorerProps> = ({
@@ -61,15 +58,14 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
     enabled: !!collectionId,
   });
 
-  // --- NEW: Map IDs to Filenames ---
   const docLookup = useMemo(() => {
     const map = new Map<number, string>();
     documents.forEach((d) => map.set(d.id, d.original_filename));
     return map;
   }, [documents]);
 
-  // --- NEW: Compute Legend based on resolved filenames ---
   const docLegend = useMemo(() => {
+    // Safe check
     if (!graphData?.nodes) return [];
     const activeFiles = new Set<string>();
 
@@ -83,8 +79,6 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
     });
     return Array.from(activeFiles).sort();
   }, [graphData, docLookup]);
-
-  // ... (Resize Observer effect remains same) ...
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -105,7 +99,6 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
     return () => ro.disconnect();
   }, [isFullScreen]);
 
-  // ... (Zoom effect remains same) ...
   useEffect(() => {
     if (graphData?.nodes?.length > 0 && graphRef.current) {
       setTimeout(() => {
@@ -114,7 +107,6 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
     }
   }, [graphData, dimensions, isFullScreen]);
 
-  // --- UPDATED NODE RENDERER ---
   const nodeCanvasObject = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
@@ -125,22 +117,18 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
       const baseRadius = 6;
       const radius = isHovered ? baseRadius * 1.2 : baseRadius;
 
-      // --- COLOR LOGIC ---
-      let primaryColor = "#a855f7"; // Default purple
+      let primaryColor = "#a855f7";
       let secondaryColor = "#9333ea";
 
-      // Resolve Filenames from IDs
       const ids = node.doc_ids || [];
       const filenames = ids
         .map((id: number) => docLookup.get(id))
         .filter(Boolean) as string[];
 
       if (filenames.length > 1) {
-        // SHARED / BRIDGE -> White
         primaryColor = "#f8fafc";
         secondaryColor = "#cbd5e1";
       } else if (filenames.length === 1) {
-        // SINGLE SOURCE -> Colored
         const docColor = stringToColor(filenames[0]);
         primaryColor = docColor;
         secondaryColor = docColor;
@@ -152,7 +140,6 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
       const bubbleWidth = textWidth + padding * 2;
       const bubbleHeight = fontSize + padding * 1.3;
 
-      // Hover Glow
       if (isHovered) {
         const gradient = ctx.createRadialGradient(
           node.x,
@@ -160,7 +147,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
           0,
           node.x,
           node.y,
-          radius * 3
+          radius * 3,
         );
         gradient.addColorStop(0, "rgba(255, 255, 255, 0.6)");
         gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
@@ -170,24 +157,21 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
         ctx.fill();
       }
 
-      // Bubble Gradient
       const gradientBg = ctx.createLinearGradient(
         node.x - bubbleWidth / 2,
         node.y - bubbleHeight / 2,
         node.x + bubbleWidth / 2,
-        node.y + bubbleHeight / 2
+        node.y + bubbleHeight / 2,
       );
       gradientBg.addColorStop(0, primaryColor);
       gradientBg.addColorStop(1, secondaryColor);
 
-      // Shadow
       if (isHovered) {
         ctx.shadowColor = "rgba(0, 0, 0, 0.2)";
         ctx.shadowBlur = 10 / globalScale;
         ctx.shadowOffsetY = 3 / globalScale;
       }
 
-      // Draw Bubble
       const cornerRadius = 5 / globalScale;
       ctx.beginPath();
       ctx.roundRect(
@@ -195,12 +179,11 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
         node.y - bubbleHeight / 2,
         bubbleWidth,
         bubbleHeight,
-        cornerRadius
+        cornerRadius,
       );
       ctx.fillStyle = gradientBg;
       ctx.fill();
 
-      // Border
       ctx.strokeStyle = isHovered
         ? "rgba(255, 255, 255, 0.8)"
         : "rgba(255, 255, 255, 0.4)";
@@ -211,10 +194,8 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
       ctx.shadowBlur = 0;
       ctx.shadowOffsetY = 0;
 
-      // Text Color
       ctx.fillStyle = filenames.length > 1 ? "#0f172a" : "#ffffff";
 
-      // Text Shadow for contrast
       if (filenames.length === 1) {
         ctx.shadowColor = "rgba(0,0,0,0.5)";
         ctx.shadowBlur = 2;
@@ -223,12 +204,11 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(label, node.x, node.y);
-      ctx.shadowColor = "transparent"; // Reset
+      ctx.shadowColor = "transparent";
     },
-    [hoveredNode, docLookup]
+    [hoveredNode, docLookup],
   );
 
-  // ... (linkCanvasObject remains exactly the same as previous step) ...
   const linkCanvasObject = useCallback(
     (link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       if (!link.source.x || !link.target.x) return;
@@ -272,7 +252,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
         -bckgWidth / 2,
         -bckgHeight / 2,
         bckgWidth / 2,
-        bckgHeight / 2
+        bckgHeight / 2,
       );
       gradient.addColorStop(0, isHovered ? "#f8fafc" : "#ffffff");
       gradient.addColorStop(1, isHovered ? "#e2e8f0" : "#f8fafc");
@@ -283,7 +263,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
         -bckgHeight / 2,
         bckgWidth,
         bckgHeight,
-        4 / globalScale
+        4 / globalScale,
       );
       ctx.fillStyle = gradient;
       ctx.fill();
@@ -303,7 +283,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
 
       ctx.restore();
     },
-    [hoveredLink]
+    [hoveredLink],
   );
 
   if (!collectionId)
@@ -323,20 +303,22 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
       </div>
     );
 
-  const hasData = graphData && graphData.nodes.length > 0;
+  const hasData = graphData?.nodes?.length > 0;
+
   const containerClasses = isFullScreen
     ? "fixed inset-0 z-[100] bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 flex flex-col"
     : "relative h-full w-full bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 flex flex-col";
 
   return (
     <div className={containerClasses} ref={containerRef}>
-      {/* Toolbar */}
+      {/* Toolbar - FIXED STYLES */}
       <div className="absolute top-4 right-4 z-10 flex gap-2">
         <Button
           variant="secondary"
           size="icon"
           onClick={() => refetch()}
-          className="bg-white/90 shadow-sm"
+          // Using theme variables ensures high visibility in dark mode
+          className="bg-background/80 backdrop-blur-md border shadow-sm hover:bg-accent text-foreground"
         >
           <RefreshCw className="h-4 w-4" />
         </Button>
@@ -344,8 +326,11 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
           variant={isFullScreen ? "destructive" : "secondary"}
           size="icon"
           onClick={() => setIsFullScreen(!isFullScreen)}
-          // When Full Screen (red X), remove bg-white so it stays solid red
-          className={isFullScreen ? "shadow-sm" : "bg-white/90 shadow-sm"}
+          className={
+            isFullScreen
+              ? "shadow-sm"
+              : "bg-background/80 backdrop-blur-md border shadow-sm hover:bg-accent text-foreground"
+          }
         >
           {isFullScreen ? (
             <X className="h-4 w-4" />
@@ -355,8 +340,8 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
         </Button>
       </div>
 
-      {/* Legend (using resolved filenames) */}
-      <Card className="absolute top-4 left-4 z-10 p-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-slate-200 dark:border-slate-700 shadow-lg max-w-[250px] max-h-[40%] overflow-y-auto">
+      {/* Legend */}
+      <Card className="absolute top-4 left-4 z-10 p-3 bg-background/90 dark:bg-background/80 backdrop-blur-md border shadow-lg max-w-[250px] max-h-[40%] overflow-y-auto">
         <div className="font-semibold mb-2 flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
           <FileText className="h-3 w-3" /> Sources
         </div>
