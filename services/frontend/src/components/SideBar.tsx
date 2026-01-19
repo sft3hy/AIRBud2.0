@@ -19,7 +19,6 @@ import { ActiveCollectionView } from "./sidebar/ActiveCollectionView";
 interface SidebarProps {
   mode: SidebarMode;
   currentSessionId: string | null;
-  // Removing setMode/onSessionChange props as we use navigation now
   activeJobId: string | null;
   setActiveJobId: (id: string | null) => void;
   className?: string;
@@ -59,6 +58,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     queryFn: () => fetchCollectionDocuments(currentSessionId!),
     enabled: !!currentSessionId,
   });
+
+  // Poll for status if a job is active
   const { data: jobStatus } = useQuery({
     queryKey: ["status", activeJobId],
     queryFn: () => getCollectionStatus(activeJobId!),
@@ -67,31 +68,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
   });
 
   useEffect(() => {
-    if (jobStatus?.status === "completed") {
+    // Only stop polling if explicitly completed or error
+    if (jobStatus?.status === "completed" || jobStatus?.status === "error") {
+      // Invalidate docs to show new files
       queryClient.invalidateQueries({ queryKey: ["documents"] });
+      // Reset active job
       setActiveJobId(null);
     }
-  }, [jobStatus]);
+  }, [jobStatus, queryClient, setActiveJobId]);
 
   const activeCollectionName = collections.find(
-    (c) => String(c.id) === currentSessionId
+    (c) => String(c.id) === currentSessionId,
   )?.name;
 
   const activeCollection = collections.find(
-    (c) => String(c.id) === currentSessionId
+    (c) => String(c.id) === currentSessionId,
   );
 
   const isCollectionOwner = activeCollection?.owner_id === currentUserId;
 
-  // --- RENDER ---
   return (
     <div
       className={cn(
         "flex flex-col h-full w-full bg-muted/10 border-r transition-all duration-300",
-        className
+        className,
       )}
     >
-      {/* 1. HEADER (Title + Toggle) */}
       <SidebarHeader
         isCollapsed={isCollapsed}
         toggleSidebar={toggleSidebar}
@@ -99,13 +101,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         mode={mode}
       />
 
-      {/* 2. CONTENT AREA */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {isCollapsed ? (
           <div></div>
         ) : (
           <>
-            {/* === MODE: COLLECTIONS === */}
             {mode === "collections" && (
               <>
                 {!currentSessionId ? (
@@ -116,20 +116,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     currentSessionId={currentSessionId}
                   />
                 ) : (
-                  /* Active Collection View */
                   <ActiveCollectionView
                     currentSessionId={currentSessionId}
                     activeCollectionName={activeCollectionName}
                     currentDocs={currentDocs}
                     activeJobId={activeJobId}
                     setActiveJobId={setActiveJobId}
-                    isOwner={isCollectionOwner} // <--- PASS THIS PROP
+                    isOwner={isCollectionOwner}
                   />
                 )}
               </>
             )}
 
-            {/* === MODE: GROUPS === */}
             {mode === "groups" && <GroupsView userGroups={userGroups} />}
           </>
         )}
