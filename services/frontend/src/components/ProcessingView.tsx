@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ScanLine,
   Database,
+  Music,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
@@ -143,8 +144,8 @@ const PipelineStep = ({ label, active, completed, icon: Icon }: any) => (
         active
           ? "border-primary bg-primary/20 text-primary shadow-[0_0_20px_rgba(59,130,246,0.5)]"
           : completed
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-muted text-muted-foreground"
+            ? "border-primary bg-primary text-primary-foreground"
+            : "border-muted text-muted-foreground"
       }`}
     >
       {completed ? (
@@ -214,14 +215,18 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ status }) => {
             {stage === "parsing"
               ? "Deconstructing File"
               : stage === "vision"
-              ? "Visual Intelligence"
-              : stage === "indexing"
-              ? "Vectorization"
-              : stage === "graph"
-              ? "Knowledge Mapping"
-              : "Processing"}
+                ? "Visual Intelligence"
+                : stage === "indexing"
+                  ? "Vectorization"
+                  : stage === "graph"
+                    ? "Knowledge Mapping"
+                    : "Processing"}
           </h2>
-          <p className="text-muted-foreground font-mono text-sm">{step}</p>
+
+          {/* Enhanced Step Text for Granular Updates */}
+          <p className="text-muted-foreground font-mono text-sm min-h-[1.5rem] transition-all">
+            {step}
+          </p>
         </div>
 
         {/* Pipeline Steps */}
@@ -265,7 +270,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ status }) => {
         <div className="w-full space-y-2">
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>Overall Progress</span>
-            <span>{progress}%</span>
+            <span className="font-mono">{progress}%</span>
           </div>
           <Progress value={progress} className="h-2" />
         </div>
