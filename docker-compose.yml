@@ -252,6 +252,29 @@ services:
     depends_on:
       - influxdb
 
+  # 12. Backup service
+  backups:
+    build: ./services/backup
+    container_name: smart_rag_backups
+    environment:
+      - TZ=America/New_York
+      - BACKUP_SCHEDULE=0 0 * * 3 # Wednesday at Midnight
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_USER=rag_user
+      - POSTGRES_PASSWORD=rag_password
+      - POSTGRES_DB=rag_db
+    volumes:
+      # Use /var/run/docker.sock to allow this container to stop/start Neo4j
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mount shared volumes to backup
+      - shared_data:/shared_data:ro
+      - shared_data:/backups # Write backups here (inside /data/backups)
+      - neo4j_data:/neo4j_data:ro
+      - ./services/rag_core:/source_code:ro
+    depends_on:
+      - postgres
+      - neo4j
+
 volumes:
   pgadmin_data:
   shared_data:
