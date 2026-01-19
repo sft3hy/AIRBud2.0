@@ -37,7 +37,7 @@ export const Help = () => {
               variant="ghost"
               className="gap-2 pl-0 hover:bg-transparent hover:text-primary transition-colors"
             >
-              <ArrowLeft className="h-4 w-4" /> Back to Dashboard
+              <ArrowLeft className="h-4 w-4" /> Back
             </Button>
           </Link>
           <div className="space-y-2">
@@ -60,7 +60,7 @@ export const Help = () => {
             Core Concepts
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
             {/* Collections Card */}
             <Card className="border-l-4 border-l-blue-500 shadow-sm hover:shadow-md transition-shadow">
               <CardHeader>

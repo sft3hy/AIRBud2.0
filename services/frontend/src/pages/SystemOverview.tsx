@@ -47,7 +47,7 @@ export const SystemOverview = () => {
               variant="ghost"
               className="gap-2 pl-0 hover:bg-transparent hover:text-primary"
             >
-              <ArrowLeft className="h-4 w-4" /> Back to Dashboard
+              <ArrowLeft className="h-4 w-4" /> Back
             </Button>
           </Link>
           <div>
