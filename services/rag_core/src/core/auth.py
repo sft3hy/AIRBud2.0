@@ -111,8 +111,8 @@ class AuthHandler:
     def _upsert_mock_user(self):
         # Mock Data matching your format for testing
         piv_id = "1000000001"
-        raw_cn = "TOWNSEND.SAMUEL.F.1000000001" 
-        raw_dn = "CN=TOWNSEND.SAMUEL.F.1000000001,OU=CONTRACTOR,O=U.S. Government"
+        raw_cn = "user.test.F.1000000001" 
+        raw_dn = "CN=user.test.F.1000000001,OU=CONTRACTOR,O=U.S. Government"
         
         friendly_name = self._format_friendly_name(raw_cn)
         friendly_org = self._format_organization(raw_dn, "U.S. Government")
