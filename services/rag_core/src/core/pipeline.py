@@ -2,7 +2,7 @@ import os
 import pickle
 import numpy as np
 import faiss
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Callable
 from sentence_transformers import SentenceTransformer
 
 from src.config import settings
@@ -37,41 +37,80 @@ class SmartRAG:
         """Wraps the LLM's rewording capability."""
         return self.llm.reword_query(query)
 
-
-    def index_document(self, file_path: str) -> str:
+    def index_document(self, file_path: str, status_callback: Optional[Callable[[str, str, int], None]] = None) -> str:
         file_path_str = str(file_path)
         logger.info(f"Indexing document: {file_path_str}")
         
-        # 1. Parse Layout (Now returns audio_path too)
+        # 1. Parse Layout
+        if status_callback:
+            status_callback("parsing", "Extracting text, layout, and assets...", 10)
+            
         data = ExternalServices.parse_document(file_path_str, self.output_dir)
         markdown_text = data.get("text", "")
         image_paths = data.get("images", [])
-        audio_path = data.get("audio_path") # NEW
+        audio_path = data.get("audio_path") 
 
-        # 2. Vision Analysis (Screenshots)
-        for img_path in image_paths:
-            fname = os.path.basename(img_path)
-            # Update job status logic in main.py usually handles progress, 
-            # but here we just block.
-            desc = ExternalServices.analyze_image(img_path, self.vision_model_name)
-            self.chart_descriptions[fname] = desc
+        # Calculate Workload
+        total_images = len(image_paths)
+        has_audio = bool(audio_path)
+        
+        if status_callback:
+            found_msg = f"Found {total_images} visual element{'s' if total_images != 1 else ''}"
+            if has_audio:
+                found_msg += " & 1 audio track"
+            status_callback("parsing", found_msg, 15)
+
+        # 2. Vision Analysis (Screenshots / Charts)
+        # We allocate progress from 20% to 70% for Vision/Audio
+        start_prog = 20
+        end_prog = 70
+        
+        if total_images > 0:
+            # If we have audio, reserve 20% for it at the end
+            vision_end = end_prog - 20 if has_audio else end_prog
+            prog_per_image = (vision_end - start_prog) / total_images
             
-            placeholder = f"[CHART_PLACEHOLDER:{fname}]"
-            # Visual context injection
-            replacement = f"\n> **Visual Scene Analysis ({fname}):**\n> {desc}\n"
-            markdown_text = markdown_text.replace(placeholder, replacement)
+            for i, img_path in enumerate(image_paths):
+                fname = os.path.basename(img_path)
+                
+                if status_callback:
+                    current_prog = int(start_prog + (i * prog_per_image))
+                    status_callback("vision", f"Analyzing Visual {i+1}/{total_images}: {fname}", current_prog)
+                
+                desc = ExternalServices.analyze_image(img_path, self.vision_model_name)
+                self.chart_descriptions[fname] = desc
+                
+                placeholder = f"[CHART_PLACEHOLDER:{fname}]"
+                # Visual context injection
+                replacement = f"\n> **Visual Scene Analysis ({fname}):**\n> {desc}\n"
+                markdown_text = markdown_text.replace(placeholder, replacement)
+        else:
+            if status_callback and not has_audio:
+                status_callback("vision", "No visuals detected, skipping vision step...", 20)
 
-        # 3. Audio Transcription (NEW)
+        # 3. Audio Transcription
         if audio_path:
+            if status_callback:
+                status_callback("vision", "Transcribing Audio Track (Whisper AI)...", 60)
+            
             logger.info("Processing audio track...")
             transcript = ExternalServices.transcribe_audio(audio_path)
             markdown_text += f"\n\n# FULL AUDIO TRANSCRIPT\n\n{transcript}"
+            
+            if status_callback:
+                status_callback("vision", "Audio Transcription Complete", 70)
 
         # 4. Chunking
+        if status_callback:
+            status_callback("indexing", "Splitting text into Parent-Child chunks...", 75)
+            
         self.child_chunks, self.parent_map = self.chunker.process(markdown_text, file_path_str)
 
         # 5. Embeddings
         if self.child_chunks:
+            if status_callback:
+                status_callback("indexing", f"Generating Embeddings for {len(self.child_chunks)} chunks...", 80)
+                
             texts = [c.text for c in self.child_chunks]
             embeddings = self.embedding_model.encode(texts)
             
