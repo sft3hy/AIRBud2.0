@@ -6,6 +6,7 @@ import {
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Dashboard } from "./components/Dashboard";
 import { SystemOverview } from "./pages/SystemOverview";
+import { Help } from "./pages/Help";
 import { LoginPage } from "./pages/LoginPage";
 import { SystemOutage } from "./pages/SystemOutage"; // <--- Import
 import { InviteHandler } from "./components/GroupManager";
@@ -65,13 +66,20 @@ const AppContent = () => {
         />
 
         <Route
-          path="/how-it-works"
+          path="/system-overview"
           element={
             isAuthenticated ? (
               <SystemOverview />
             ) : (
               <Navigate to="/login" replace />
             )
+          }
+        />
+
+        <Route
+          path="/help"
+          element={
+            isAuthenticated ? <Help /> : <Navigate to="/login" replace />
           }
         />
 
