@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import React, { useState, useEffect, useRef, memo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import { Send, FolderOpen, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -16,27 +16,107 @@ import { logger } from "./lib/logger";
 import { SourceViewer } from "./components/SourceViewer";
 import { ProcessingView } from "./components/ProcessingView";
 import { UserStatus } from "./components/UserStatus";
-
-// UI Components
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
-// Assets
 import doggieSrc from "./assets/doggie.svg";
 import userSrc from "./assets/user.svg";
 
+// ... (MemoizedMessage and WelcomeScreen components remain unchanged) ...
+
+const MemoizedMessage = memo(({ msg }: { msg: ChatMessage }) => {
+  return (
+    <div
+      className={`flex gap-4 ${
+        msg.role === "user" ? "justify-end" : "justify-start"
+      }`}
+    >
+      {msg.role === "assistant" && (
+        <div className="h-12 w-12 rounded-full bg-card p-1.5 flex items-center justify-center shrink-0 border shadow-sm mt-1">
+          <img
+            src={doggieSrc}
+            alt="Bot"
+            className="h-full w-full object-contain"
+          />
+        </div>
+      )}
+      <div
+        className={`flex flex-col max-w-[85%] ${
+          msg.role === "user" ? "items-end" : "items-start"
+        }`}
+      >
+        <div
+          className={`px-6 py-5 rounded-3xl text-base leading-relaxed shadow-sm ${
+            msg.role === "user"
+              ? "bg-primary text-primary-foreground rounded-br-sm prose-invert"
+              : "bg-card border rounded-bl-sm text-card-foreground"
+          }`}
+        >
+          <ReactMarkdown
+            components={{
+              p: ({ node, ...props }) => (
+                <p className="mb-3 last:mb-0" {...props} />
+              ),
+              ul: ({ node, ...props }) => (
+                <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />
+              ),
+              ol: ({ node, ...props }) => (
+                <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />
+              ),
+              li: ({ node, ...props }) => <li className="" {...props} />,
+              strong: ({ node, ...props }) => (
+                <span className="font-bold" {...props} />
+              ),
+              a: ({ node, ...props }) => (
+                <a
+                  className="underline font-medium text-primary"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  {...props}
+                />
+              ),
+              code: ({ node, ...props }) => (
+                <code
+                  className="px-1 py-0.5 rounded font-mono text-sm bg-muted text-foreground"
+                  {...props}
+                />
+              ),
+              pre: ({ node, ...props }) => (
+                <pre
+                  className="p-4 rounded-lg overflow-x-auto my-3 bg-muted text-foreground border"
+                  {...props}
+                />
+              ),
+            }}
+          >
+            {msg.content}
+          </ReactMarkdown>
+        </div>
+        {msg.role === "assistant" && msg.sources && (
+          <SourceViewer sources={msg.sources} documents={[]} />
+        )}
+      </div>
+      {msg.role === "user" && (
+        <div className="h-12 w-12 rounded-full bg-muted p-1 flex items-center justify-center shrink-0 border shadow-sm mt-1">
+          <img
+            src={userSrc}
+            alt="User"
+            className="h-full w-full object-cover rounded-full"
+          />
+        </div>
+      )}
+    </div>
+  );
+});
+
 const WelcomeScreen = () => (
   <div className="flex h-full w-full flex-col bg-background">
-    {/* Header with User Info */}
     <div className="z-10 flex items-center justify-between border-b bg-card px-6 py-4 shadow-sm">
       <div className="flex items-center gap-2">
         <h1 className="text-lg font-semibold">AIRBud 2.0</h1>
       </div>
       <UserStatus />
     </div>
-
-    {/* Welcome Content */}
     <div className="flex flex-col items-center justify-center flex-1 p-8 text-center bg-muted/10 rounded-xl m-4">
       <div className="mb-6 h-24 w-24 bg-primary/10 rounded-full flex items-center justify-center">
         <img src={doggieSrc} alt="AIRBud 2.0" className="h-16 w-16" />
@@ -45,16 +125,18 @@ const WelcomeScreen = () => (
       <p className="text-lg text-muted-foreground mb-4 max-w-md">
         Create or select a collection from the sidebar to begin.
       </p>
-      <Link to="/help">
-        <Button variant="link" className="text-primary gap-1 text-base">
-          User Guide <span aria-hidden="true">&rarr;</span>
-        </Button>
-      </Link>
-      <Link to="/system-overview">
-        <Button variant="link" className="text-primary gap-1 text-base">
-          System Overview <span aria-hidden="true">&rarr;</span>
-        </Button>
-      </Link>
+      <div className="flex gap-4">
+        <Link to="/help">
+          <Button variant="link" className="text-primary gap-1 text-base">
+            User Guide <span aria-hidden="true">&rarr;</span>
+          </Button>
+        </Link>
+        <Link to="/system-overview">
+          <Button variant="link" className="text-primary gap-1 text-base">
+            System Overview <span aria-hidden="true">&rarr;</span>
+          </Button>
+        </Link>
+      </div>
     </div>
   </div>
 );
@@ -66,17 +148,26 @@ export const MainContent = ({
   sessionId: string | null;
   activeJobId: string | null;
 }) => {
+  const queryClient = useQueryClient(); // Used for manual invalidation if needed
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [queryStatus, setQueryStatus] = useState("Finding answer...");
 
+  // Local force-clear mechanism for the manual "Continue" button
+  const [forceViewChat, setForceViewChat] = useState(false);
+
+  // Reset force view when job changes
+  useEffect(() => {
+    if (activeJobId) setForceViewChat(false);
+  }, [activeJobId]);
+
   const { data: jobStatus } = useQuery({
     queryKey: ["status", activeJobId],
     queryFn: () => getCollectionStatus(activeJobId!),
     enabled: !!activeJobId,
-    refetchInterval: 500,
+    refetchInterval: 1000,
   });
 
   const { data: collections = [] } = useQuery({
@@ -93,7 +184,6 @@ export const MainContent = ({
     enabled: !!sessionId,
   });
 
-  // --- NEW: Check for docs ---
   const hasDocuments = documents.length > 0;
 
   const { data: serverHistory } = useQuery({
@@ -149,10 +239,12 @@ export const MainContent = ({
   });
 
   useEffect(() => {
-    setTimeout(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
-  }, [chatHistory, sendMessageMutation.isPending]);
+    if (bottomRef.current) {
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      });
+    }
+  }, [chatHistory, sendMessageMutation.isPending, queryStatus]);
 
   const handleSend = () => {
     if (!input.trim() || !sessionId || !hasDocuments) return;
@@ -168,19 +260,31 @@ export const MainContent = ({
     }
   };
 
-  if (
+  // --- PROCESSING VIEW LOGIC ---
+  const showProcessing =
+    !forceViewChat &&
     activeJobId &&
     jobStatus &&
     jobStatus.status !== "idle" &&
     jobStatus.status !== "completed" &&
-    jobStatus.status !== "error"
-  ) {
-    return <ProcessingView status={jobStatus} />;
+    jobStatus.status !== "error" &&
+    jobStatus.stage !== "done"; // --- FIX: Also check stage!
+
+  if (showProcessing) {
+    return (
+      <ProcessingView
+        status={jobStatus!}
+        onComplete={() => {
+          // Manual override if auto-detection fails
+          setForceViewChat(true);
+          // Also trigger a refresh of documents
+          queryClient.invalidateQueries({ queryKey: ["documents"] });
+        }}
+      />
+    );
   }
 
   if (!sessionId) return <WelcomeScreen />;
-
-  const queryCount = chatHistory.filter((x) => x.role === "user").length;
 
   return (
     <div className="flex h-full w-full flex-col bg-background">
@@ -193,9 +297,6 @@ export const MainContent = ({
               Collection:{" "}
               {activeCollection ? activeCollection.name : "Active Session"}
             </span>
-            {/* <span className="ml-3 text-base text-muted-foreground">
-                            {queryCount} {queryCount === 1 ? "query" : "queries"}
-                        </span> */}
           </p>
         </div>
         <UserStatus />
@@ -205,96 +306,9 @@ export const MainContent = ({
         <ScrollArea className="h-full px-4 md:px-20 py-4" ref={scrollRef}>
           <div className="space-y-10 pb-4 max-w-4xl mx-auto min-h-[500px]">
             {chatHistory.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`flex gap-4 ${
-                  msg.role === "user" ? "justify-end" : "justify-start"
-                }`}
-              >
-                {msg.role === "assistant" && (
-                  <div className="h-12 w-12 rounded-full bg-card p-1.5 flex items-center justify-center shrink-0 border shadow-sm mt-1">
-                    <img
-                      src={doggieSrc}
-                      alt="Bot"
-                      className="h-full w-full object-contain"
-                    />
-                  </div>
-                )}
-                <div
-                  className={`flex flex-col max-w-[85%] ${
-                    msg.role === "user" ? "items-end" : "items-start"
-                  }`}
-                >
-                  <div
-                    className={`px-6 py-5 rounded-3xl text-base leading-relaxed shadow-sm ${
-                      msg.role === "user"
-                        ? "bg-primary text-primary-foreground rounded-br-sm prose-invert"
-                        : "bg-card border rounded-bl-sm text-card-foreground"
-                    }`}
-                  >
-                    <ReactMarkdown
-                      components={{
-                        p: ({ node, ...props }) => (
-                          <p className="mb-3 last:mb-0" {...props} />
-                        ),
-                        ul: ({ node, ...props }) => (
-                          <ul
-                            className="list-disc pl-4 mb-2 space-y-1"
-                            {...props}
-                          />
-                        ),
-                        ol: ({ node, ...props }) => (
-                          <ol
-                            className="list-decimal pl-4 mb-2 space-y-1"
-                            {...props}
-                          />
-                        ),
-                        li: ({ node, ...props }) => (
-                          <li className="" {...props} />
-                        ),
-                        strong: ({ node, ...props }) => (
-                          <span className="font-bold" {...props} />
-                        ),
-                        a: ({ node, ...props }) => (
-                          <a
-                            className="underline font-medium text-primary"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            {...props}
-                          />
-                        ),
-                        code: ({ node, ...props }) => (
-                          <code
-                            className="px-1 py-0.5 rounded font-mono text-sm bg-muted text-foreground"
-                            {...props}
-                          />
-                        ),
-                        pre: ({ node, ...props }) => (
-                          <pre
-                            className="p-4 rounded-lg overflow-x-auto my-3 bg-muted text-foreground border"
-                            {...props}
-                          />
-                        ),
-                      }}
-                    >
-                      {msg.content}
-                    </ReactMarkdown>
-                  </div>
-                  {msg.role === "assistant" && msg.sources && (
-                    <SourceViewer sources={msg.sources} documents={documents} />
-                  )}
-                </div>
-                {msg.role === "user" && (
-                  <div className="h-12 w-12 rounded-full bg-muted p-1 flex items-center justify-center shrink-0 border shadow-sm mt-1">
-                    <img
-                      src={userSrc}
-                      alt="User"
-                      className="h-full w-full object-cover rounded-full"
-                    />
-                  </div>
-                )}
-              </div>
+              <MemoizedMessage key={idx} msg={msg} />
             ))}
+
             {sendMessageMutation.isPending && (
               <div className="flex gap-4">
                 <div className="h-12 w-12 rounded-full bg-card p-1.5 flex items-center justify-center shrink-0 border shadow-sm mt-1">
@@ -317,10 +331,10 @@ export const MainContent = ({
         </ScrollArea>
       </div>
 
+      {/* Input Area */}
       <div className="p-6 bg-background border-t">
         <div className="max-w-3xl mx-auto relative flex items-center gap-3">
           <Input
-            // --- MODIFIED PLACEHOLDER & DISABLED STATE ---
             placeholder={
               hasDocuments
                 ? "Ask a question..."
@@ -338,7 +352,6 @@ export const MainContent = ({
             size="icon"
             className="absolute right-2 rounded-full h-12 w-12 shadow-sm"
             onClick={handleSend}
-            // --- MODIFIED DISABLED STATE ---
             disabled={
               !input.trim() || sendMessageMutation.isPending || !hasDocuments
             }

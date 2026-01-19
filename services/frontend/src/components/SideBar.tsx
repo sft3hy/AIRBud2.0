@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchSystemStatus,
@@ -36,6 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   toggleSidebar,
 }) => {
   const queryClient = useQueryClient();
+  const completionHandledRef = useRef<string | null>(null);
 
   // --- Data Fetching ---
   const { data: systemStatus } = useQuery({
@@ -43,16 +44,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
     queryFn: fetchSystemStatus,
   });
   const currentUserId = systemStatus?.user?.id;
+
   const { data: collections = [] } = useQuery({
     queryKey: ["collections"],
     queryFn: getCollections,
     enabled: !!systemStatus?.online,
   });
+
   const { data: userGroups = [] } = useQuery({
     queryKey: ["my_groups"],
     queryFn: getMyGroups,
     enabled: !!systemStatus?.online,
   });
+
   const { data: currentDocs = [] } = useQuery({
     queryKey: ["documents", currentSessionId],
     queryFn: () => fetchCollectionDocuments(currentSessionId!),
@@ -68,14 +72,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
   });
 
   useEffect(() => {
-    // Only stop polling if explicitly completed or error
-    if (jobStatus?.status === "completed" || jobStatus?.status === "error") {
-      // Invalidate docs to show new files
-      queryClient.invalidateQueries({ queryKey: ["documents"] });
-      // Reset active job
-      setActiveJobId(null);
+    // Detect Completion or Error
+    if (
+      activeJobId &&
+      jobStatus &&
+      (jobStatus.status === "completed" || jobStatus.status === "error")
+    ) {
+      // Prevent double-execution for the same Job ID
+      if (completionHandledRef.current === activeJobId) return;
+      completionHandledRef.current = activeJobId;
+
+      console.log(`Job ${activeJobId} finished. Refreshing all views...`);
+
+      // --- 1. Force Refresh All Views ---
+      // This ensures Documents, Charts, and Graph tabs all get new data immediately
+      queryClient.invalidateQueries({ queryKey: ["documents", activeJobId] });
+      queryClient.invalidateQueries({ queryKey: ["charts", activeJobId] });
+      queryClient.invalidateQueries({ queryKey: ["graph", activeJobId] });
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+
+      // --- 2. Clear Processing State ---
+      // Small timeout allows the invalidate queries to fire off before we remove the spinner
+      setTimeout(() => {
+        setActiveJobId(null);
+        completionHandledRef.current = null;
+      }, 500);
     }
-  }, [jobStatus, queryClient, setActiveJobId]);
+  }, [jobStatus, activeJobId, queryClient, setActiveJobId]);
 
   const activeCollectionName = collections.find(
     (c) => String(c.id) === currentSessionId,

@@ -15,6 +15,7 @@ import {
   Video,
   Presentation,
   ChevronDown,
+  FileSpreadsheet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -135,12 +136,20 @@ export const Help = () => {
                             </span>
                           </div>
                           {/* Video */}
-                          <div className="flex items-center gap-3 p-2 rounded-md bg-background border shadow-sm sm:col-span-2">
+                          <div className="flex items-center gap-3 p-2 rounded-md bg-background border shadow-sm">
                             <div className="p-2 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
                               <Video className="h-4 w-4" />
                             </div>
                             <span className="font-medium text-foreground">
                               Video (.mp4)
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 p-2 rounded-md bg-background border shadow-sm">
+                            <div className="p-2 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
+                              <FileSpreadsheet className="h-4 w-4" />
+                            </div>
+                            <span className="font-medium text-foreground">
+                              Excel Spreadsheet (.xlsx)
                             </span>
                           </div>
                         </div>
@@ -173,7 +182,8 @@ export const Help = () => {
                       <strong className="text-foreground">
                         Personal Group:
                       </strong>{" "}
-                      Your default private space. Only you can see these.
+                      Your default private space. Only you can see collections
+                      in this group.
                     </p>
                   </div>
                   <div className="flex items-start gap-3">
@@ -210,7 +220,7 @@ export const Help = () => {
 
             <AccordionItem value="item-1">
               <AccordionTrigger className="hover:bg-muted/50 px-4 rounded-lg">
-                Who can delete a Collection?
+                Who can delete a Collection/Document/Group?
               </AccordionTrigger>
               <AccordionContent className="px-4 text-muted-foreground leading-relaxed pt-2">
                 <div className="flex items-start gap-4 p-4 bg-muted/30 rounded-lg border">
@@ -220,17 +230,22 @@ export const Help = () => {
                       The Golden Rule of Ownership
                     </strong>
                     <p className="mb-2">
-                      You can only delete what you created.
+                      You can only delete what you created. If you are the
+                      creator of a group/collection, you can delete it. For
+                      documents, only collection owners can delete documents.
+                      That means if you are not the collection owner and want a
+                      document deleted, you must reach out to the colleciton
+                      owner for deletion.
                     </p>
                     <ul className="list-disc pl-5 space-y-1 text-sm">
                       <li>
-                        If you created the Collection, you will see the Delete
-                        button.
+                        If you created the Collection/Group, you will see the
+                        Delete button.
                       </li>
                       <li>
-                        If a teammate created the Collection (even in a shared
-                        group), you <strong>cannot</strong> delete it. You can
-                        only view and chat.
+                        If a teammate created the Collection/Group, you{" "}
+                        <strong>cannot</strong> delete it. You can only view and
+                        chat.
                       </li>
                     </ul>
                   </div>

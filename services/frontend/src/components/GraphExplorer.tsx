@@ -52,11 +52,29 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
     data: graphData,
     isLoading,
     refetch,
+    isRefetching,
   } = useQuery({
     queryKey: ["graph", collectionId],
     queryFn: () => getCollectionGraph(collectionId!),
     enabled: !!collectionId,
+    // --- FIX: Ensure fresh data on tab switch ---
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
+
+  // Preserve existing graph data structure to prevent layout reset flicker
+  const [activeData, setActiveData] = useState({ nodes: [], links: [] });
+
+  useEffect(() => {
+    if (graphData) {
+      setActiveData((prev) => {
+        // Basic diff check or just replacement.
+        // Ideally we merge positions if IDs match to prevent jumpiness.
+        return graphData;
+      });
+    }
+  }, [graphData]);
 
   const docLookup = useMemo(() => {
     const map = new Map<number, string>();
@@ -65,11 +83,10 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
   }, [documents]);
 
   const docLegend = useMemo(() => {
-    // Safe check
-    if (!graphData?.nodes) return [];
+    if (!activeData?.nodes) return [];
     const activeFiles = new Set<string>();
 
-    graphData.nodes.forEach((n: any) => {
+    activeData.nodes.forEach((n: any) => {
       if (n.doc_ids && Array.isArray(n.doc_ids)) {
         n.doc_ids.forEach((id: number) => {
           const name = docLookup.get(id);
@@ -78,7 +95,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
       }
     });
     return Array.from(activeFiles).sort();
-  }, [graphData, docLookup]);
+  }, [activeData, docLookup]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -100,12 +117,14 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
   }, [isFullScreen]);
 
   useEffect(() => {
-    if (graphData?.nodes?.length > 0 && graphRef.current) {
+    // Only zoom to fit on INITIAL load
+    if (activeData?.nodes?.length > 0 && graphRef.current) {
+      // Small timeout to allow canvas to render
       setTimeout(() => {
         graphRef.current.zoomToFit(400, 50);
-      }, 200);
+      }, 500);
     }
-  }, [graphData, dimensions, isFullScreen]);
+  }, [activeData?.nodes?.length]); // Dep changed to length to avoid zoom on every tick
 
   const nodeCanvasObject = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
@@ -296,14 +315,15 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
       </div>
     );
 
-  if (isLoading)
+  // Show loader only on initial load, not background refetches
+  if (isLoading && !activeData.nodes.length)
     return (
       <div className="flex items-center justify-center h-full bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
         <Loader2 className="animate-spin h-8 w-8 text-primary" />
       </div>
     );
 
-  const hasData = graphData?.nodes?.length > 0;
+  const hasData = activeData?.nodes?.length > 0;
 
   const containerClasses = isFullScreen
     ? "fixed inset-0 z-[100] bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 flex flex-col"
@@ -311,16 +331,17 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
 
   return (
     <div className={containerClasses} ref={containerRef}>
-      {/* Toolbar - FIXED STYLES */}
+      {/* Toolbar */}
       <div className="absolute top-4 right-4 z-10 flex gap-2">
         <Button
           variant="secondary"
           size="icon"
           onClick={() => refetch()}
-          // Using theme variables ensures high visibility in dark mode
           className="bg-background/80 backdrop-blur-md border shadow-sm hover:bg-accent text-foreground"
         >
-          <RefreshCw className="h-4 w-4" />
+          <RefreshCw
+            className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`}
+          />
         </Button>
         <Button
           variant={isFullScreen ? "destructive" : "secondary"}
@@ -357,13 +378,10 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
               </span>
             </div>
           ))}
-          {docLegend.length > 0 && (
-            <div className="flex items-center gap-2 text-xs mt-2 pt-2 border-t border-dashed">
-              <div className="w-3 h-3 rounded-full shrink-0 bg-slate-100 border border-slate-300" />
-              <span className="text-muted-foreground">
-                Shared / Bridge Nodes
-              </span>
-            </div>
+          {docLegend.length === 0 && (
+            <span className="text-xs text-muted-foreground italic">
+              No nodes yet.
+            </span>
           )}
         </div>
       </Card>
@@ -377,7 +395,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
             ref={graphRef}
             width={dimensions.w}
             height={dimensions.h}
-            graphData={graphData}
+            graphData={activeData}
             backgroundColor="rgba(0,0,0,0)"
             cooldownTicks={100}
             d3AlphaDecay={0.02}
@@ -399,6 +417,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
             <Network className="h-16 w-16 mb-4 opacity-20" />
             <p className="text-base font-medium">No Knowledge Graph Data</p>
+            <p className="text-xs mt-2">Upload a document to generate nodes.</p>
           </div>
         )}
       </div>

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Users } from "lucide-react";
-import { createGroup, renameGroup } from "../../lib/api";
+import { createGroup, updateGroup } from "../../lib/api";
 
 // UI Components
 import { Button } from "@/components/ui/button";
@@ -30,21 +30,23 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ userGroups }) => {
   const [newGroupDesc, setNewGroupDesc] = useState("");
   const [newGroupPublic, setNewGroupPublic] = useState(false);
 
-  // Rename Group State
-  const [renameGid, setRenameGid] = useState<number | null>(null);
-  const [renameGroupName, setRenameGroupName] = useState("");
+  // Edit Group State
+  const [editGid, setEditGid] = useState<number | null>(null);
+  const [editGroupName, setEditGroupName] = useState("");
+  const [editGroupDesc, setEditGroupDesc] = useState("");
 
   const handleCreateGroup = async () => {
     await createGroup(newGroupName, newGroupDesc, newGroupPublic);
     queryClient.invalidateQueries({ queryKey: ["my_groups"] });
     setNewGroupName("");
+    setNewGroupDesc("");
   };
 
-  const handleRenameGroup = async () => {
-    if (!renameGid) return;
-    await renameGroup(renameGid, renameGroupName);
+  const handleUpdateGroup = async () => {
+    if (!editGid) return;
+    await updateGroup(editGid, editGroupName, editGroupDesc);
     queryClient.invalidateQueries({ queryKey: ["my_groups"] });
-    setRenameGid(null);
+    setEditGid(null);
   };
 
   return (
@@ -91,28 +93,34 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ userGroups }) => {
         </div>
       </ScrollArea>
 
-      {/* Rename Dialog */}
+      {/* Edit Dialog */}
       <Dialog
-        open={!!renameGid}
-        onOpenChange={(open) => !open && setRenameGid(null)}
+        open={!!editGid}
+        onOpenChange={(open) => !open && setEditGid(null)}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rename Group</DialogTitle>
+            <DialogTitle>Edit Group</DialogTitle>
           </DialogHeader>
-          <div className="py-4">
+          <div className="space-y-4 py-4">
             <Input
-              value={renameGroupName}
-              onChange={(e) => setRenameGroupName(e.target.value)}
+              value={editGroupName}
+              onChange={(e) => setEditGroupName(e.target.value)}
+              placeholder="Group Name"
+            />
+            <Input
+              value={editGroupDesc}
+              onChange={(e) => setEditGroupDesc(e.target.value)}
+              placeholder="Description"
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameGid(null)}>
+            <Button variant="outline" onClick={() => setEditGid(null)}>
               Cancel
             </Button>
             <Button
-              onClick={handleRenameGroup}
-              disabled={!renameGroupName.trim()}
+              onClick={handleUpdateGroup}
+              disabled={!editGroupName.trim()}
             >
               Save
             </Button>

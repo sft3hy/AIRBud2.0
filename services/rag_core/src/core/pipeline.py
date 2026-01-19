@@ -1,127 +1,151 @@
 import os
 import pickle
+import asyncio
+import logging
 import numpy as np
 import faiss
-from typing import List, Dict, Optional, Callable
+from typing import List, Dict, Tuple, Optional
+from threading import Lock
+
+# Third-party
 from sentence_transformers import SentenceTransformer
 
+# Internal
 from src.config import settings
 from src.core.chunking import DocumentChunker
 from src.core.services import ExternalServices
-from src.core.llm import get_llm_client
+from src.core.llm import get_llm_client, BaseLLMClient
 from src.core.data_models import Chunk
 from src.utils.logger import logger
 
+# --- Singleton Embedding Model ---
+# Loading the model is expensive (RAM & CPU). We must do it once.
+_embedding_model: Optional[SentenceTransformer] = None
+_model_lock = Lock()
+
+def get_embedding_model() -> SentenceTransformer:
+    """
+    Thread-safe singleton provider for the embedding model.
+    """
+    global _embedding_model
+    if _embedding_model is None:
+        with _model_lock:
+            # Double-check locking pattern
+            if _embedding_model is None:
+                logger.info(f"Loading Embedding Model: {settings.EMBEDDING_MODEL} ...")
+                # explicit device config for stability
+                _embedding_model = SentenceTransformer(
+                    settings.EMBEDDING_MODEL,
+                    device="cpu", # Force CPU to avoid CUDA contention in web workers unless explicitly managed
+                    model_kwargs={"low_cpu_mem_usage": True}
+                )
+                logger.info("Embedding Model loaded successfully.")
+    return _embedding_model
+
+
 class SmartRAG:
+    """
+    Asynchronous RAG Pipeline.
+    Handles document indexing, state management, and vector search.
+    """
+
     def __init__(self, output_dir: str = None, vision_model_name: str = "Moondream2"):
         self.output_dir = output_dir
         self.vision_model_name = vision_model_name
-        self.llm = get_llm_client()
-        
-        # CPU-only configuration to prevent Docker/Accelerate issues
-        self.embedding_model = SentenceTransformer(
-            settings.EMBEDDING_MODEL, 
-            device="cpu",
-            model_kwargs={"low_cpu_mem_usage": False} 
-        )
-        
+        self.llm: BaseLLMClient = get_llm_client()
         self.chunker = DocumentChunker()
         
-        # State
-        self.index = None
+        # State containers
+        self.index: Optional[faiss.Index] = None
         self.child_chunks: List[Chunk] = []
-        self.parent_map: Dict[str, Chunk] = {}
+        self.parent_map: Dict[str, Chunk] = []
         self.chart_descriptions: Dict[str, str] = {}
-        
-    def optimize_query(self, query: str) -> str:
-        """Wraps the LLM's rewording capability."""
-        return self.llm.reword_query(query)
 
-    def index_document(self, file_path: str, status_callback: Optional[Callable[[str, str, int], None]] = None) -> str:
+    async def optimize_query(self, query: str) -> str:
+        """
+        Asynchronously rewrites the user query using the LLM.
+        """
+        return await self.llm.reword_query(query)
+
+    async def index_document(self, file_path: str, status_callback=None) -> str:
+        """
+        Full indexing pipeline: Parse -> Analyze Images -> Transcribe Audio -> Chunk -> Embed -> Index.
+        Runs blocking operations in thread pool to maintain async concurrency.
+        """
         file_path_str = str(file_path)
         logger.info(f"Indexing document: {file_path_str}")
+
+        # 1. Parse Layout (Blocking IO)
+        # We assume ExternalServices are synchronous requests, so we offload them.
+        data = await asyncio.to_thread(
+            ExternalServices.parse_document, file_path_str, self.output_dir
+        )
         
-        # 1. Parse Layout
-        if status_callback:
-            status_callback("parsing", "Extracting text, layout, and assets...", 10)
-            
-        data = ExternalServices.parse_document(file_path_str, self.output_dir)
         markdown_text = data.get("text", "")
         image_paths = data.get("images", [])
-        audio_path = data.get("audio_path") 
+        audio_path = data.get("audio_path")
 
-        # Calculate Workload
-        total_images = len(image_paths)
-        has_audio = bool(audio_path)
-        
-        if status_callback:
-            found_msg = f"Found {total_images} visual element{'s' if total_images != 1 else ''}"
-            if has_audio:
-                found_msg += " & 1 audio track"
-            status_callback("parsing", found_msg, 15)
-
-        # 2. Vision Analysis (Screenshots / Charts)
-        # We allocate progress from 20% to 70% for Vision/Audio
-        start_prog = 20
-        end_prog = 70
-        
-        if total_images > 0:
-            # If we have audio, reserve 20% for it at the end
-            vision_end = end_prog - 20 if has_audio else end_prog
-            prog_per_image = (vision_end - start_prog) / total_images
+        # 2. Vision Analysis (Screenshots) - Parallelizable potentially, but kept serial for safety
+        if image_paths:
+            logger.info(f"Analyzing {len(image_paths)} images...")
+            if status_callback: status_callback("vision", "Analyzing Images...", 20)
             
-            for i, img_path in enumerate(image_paths):
+            for img_path in image_paths:
                 fname = os.path.basename(img_path)
                 
-                if status_callback:
-                    current_prog = int(start_prog + (i * prog_per_image))
-                    status_callback("vision", f"Analyzing Visual {i+1}/{total_images}: {fname}", current_prog)
-                
-                desc = ExternalServices.analyze_image(img_path, self.vision_model_name)
+                # Offload vision API call
+                desc = await asyncio.to_thread(
+                    ExternalServices.analyze_image, img_path, self.vision_model_name
+                )
                 self.chart_descriptions[fname] = desc
                 
-                placeholder = f"[CHART_PLACEHOLDER:{fname}]"
                 # Visual context injection
+                placeholder = f"[CHART_PLACEHOLDER:{fname}]"
                 replacement = f"\n> **Visual Scene Analysis ({fname}):**\n> {desc}\n"
                 markdown_text = markdown_text.replace(placeholder, replacement)
-        else:
-            if status_callback and not has_audio:
-                status_callback("vision", "No visuals detected, skipping vision step...", 20)
 
         # 3. Audio Transcription
         if audio_path:
-            if status_callback:
-                status_callback("vision", "Transcribing Audio Track (Whisper AI)...", 60)
-            
             logger.info("Processing audio track...")
-            transcript = ExternalServices.transcribe_audio(audio_path)
+            if status_callback: status_callback("audio", "Transcribing Audio...", 40)
+            
+            transcript = await asyncio.to_thread(
+                ExternalServices.transcribe_audio, audio_path
+            )
             markdown_text += f"\n\n# FULL AUDIO TRANSCRIPT\n\n{transcript}"
-            
-            if status_callback:
-                status_callback("vision", "Audio Transcription Complete", 70)
 
-        # 4. Chunking
-        if status_callback:
-            status_callback("indexing", "Splitting text into Parent-Child chunks...", 75)
-            
-        self.child_chunks, self.parent_map = self.chunker.process(markdown_text, file_path_str)
+        # 4. Chunking (CPU Bound)
+        if status_callback: status_callback("indexing", "Chunking Text...", 60)
+        
+        self.child_chunks, self.parent_map = await asyncio.to_thread(
+            self.chunker.process, markdown_text, file_path_str
+        )
 
-        # 5. Embeddings
+        # 5. Embeddings (Heavy CPU)
         if self.child_chunks:
-            if status_callback:
-                status_callback("indexing", f"Generating Embeddings for {len(self.child_chunks)} chunks...", 80)
-                
-            texts = [c.text for c in self.child_chunks]
-            embeddings = self.embedding_model.encode(texts)
+            if status_callback: status_callback("indexing", "Generating Vectors...", 75)
             
+            # Use singleton model
+            model = get_embedding_model()
+            texts = [c.text for c in self.child_chunks]
+            
+            # Offload inference
+            embeddings = await asyncio.to_thread(model.encode, texts)
+            
+            # Create Index
             self.index = faiss.IndexFlatL2(settings.EMBEDDING_DIM)
-            self.index.add(np.array(embeddings).astype("float32"))
+            await asyncio.to_thread(
+                self.index.add, np.array(embeddings).astype("float32")
+            )
         else:
             logger.warning("No text chunks generated for document.")
 
         return markdown_text
 
-    def save_state(self, doc_id: int):
+    async def save_state(self, doc_id: int) -> Tuple[str, str]:
+        """
+        Persists FAISS index and chunk data to disk.
+        """
         if not self.index: 
             return "", ""
             
@@ -129,61 +153,88 @@ class SmartRAG:
         chunks_path = settings.CHUNKS_DIR / f"chunks_{doc_id}.pkl"
         parents_path = settings.CHUNKS_DIR / f"parents_{doc_id}.pkl"
 
-        faiss.write_index(self.index, str(faiss_path))
+        # Offload file writes
+        await asyncio.to_thread(self._write_state_sync, str(faiss_path), str(chunks_path), str(parents_path))
+            
+        return str(faiss_path), str(chunks_path)
+
+    def _write_state_sync(self, faiss_path: str, chunks_path: str, parents_path: str):
+        """Helper for synchronous file writing."""
+        faiss.write_index(self.index, faiss_path)
         
         with open(chunks_path, "wb") as f:
             pickle.dump(self.child_chunks, f)
             
         with open(parents_path, "wb") as f:
             pickle.dump(self.parent_map, f)
-            
-        return str(faiss_path), str(chunks_path)
 
-    def load_state(self, faiss_path: str, chunks_path: str):
+    async def load_state(self, faiss_path: str, chunks_path: str):
+        """
+        Loads FAISS index and chunk data from disk.
+        """
         if not os.path.exists(faiss_path) or not os.path.exists(chunks_path):
-            raise FileNotFoundError("Index files missing")
+            raise FileNotFoundError(f"Index files missing: {faiss_path} or {chunks_path}")
             
+        await asyncio.to_thread(self._load_state_sync, faiss_path, chunks_path)
+
+    def _load_state_sync(self, faiss_path: str, chunks_path: str):
+        """Helper for synchronous file reading."""
         self.index = faiss.read_index(faiss_path)
+        
         with open(chunks_path, "rb") as f:
             self.child_chunks = pickle.load(f)
             
-        # Try load parents
         parent_path = chunks_path.replace("chunks_", "parents_")
         if os.path.exists(parent_path):
             with open(parent_path, "rb") as f:
                 self.parent_map = pickle.load(f)
 
-    def search(self, query: str, top_k: int = 5):
-        """Vector search implementation."""
-        if not self.index: return []
+    async def search(self, query: str, top_k: int = 5) -> List[Tuple[Chunk, float]]:
+        """
+        Performs semantic vector search.
+        """
+        if not self.index or not self.child_chunks:
+            return []
         
-        query_emb = self.embedding_model.encode([query])
-        D, I = self.index.search(np.array(query_emb).astype("float32"), top_k * 3)
+        model = get_embedding_model()
+        
+        # 1. Encode Query (CPU)
+        query_emb = await asyncio.to_thread(model.encode, [query])
+        
+        # 2. Search Index (CPU)
+        # Search for 3x top_k to allow for parent-deduplication
+        D, I = await asyncio.to_thread(
+            self.index.search, np.array(query_emb).astype("float32"), top_k * 3
+        )
 
         results = []
         seen_parents = set()
 
+        # Process results
         for dist, idx in zip(D[0], I[0]):
-            if idx < len(self.child_chunks):
-                child = self.child_chunks[idx]
+            if idx < 0 or idx >= len(self.child_chunks):
+                continue
+
+            child = self.child_chunks[idx]
+            
+            # Retrieve Parent if available (Parent-Child Retrieval)
+            if child.parent_id and child.parent_id in self.parent_map:
+                if child.parent_id not in seen_parents:
+                    parent = self.parent_map[child.parent_id]
+                    results.append((parent, float(dist)))
+                    seen_parents.add(child.parent_id)
+            else:
+                # Fallback to child if no parent or parent not found
+                results.append((child, float(dist)))
                 
-                # Retrieve Parent if available (Parent-Child Retrieval)
-                if child.parent_id and child.parent_id in self.parent_map:
-                    if child.parent_id not in seen_parents:
-                        parent = self.parent_map[child.parent_id]
-                        results.append((parent, float(dist)))
-                        seen_parents.add(child.parent_id)
-                else:
-                    # Fallback to child
-                    results.append((child, float(dist)))
-                    
-                if len(results) >= top_k:
-                    break
+            if len(results) >= top_k:
+                break
+                
         return results
 
-    def generate_answer(self, question: str, context_chunks: List, graph_context: str = ""):
+    async def generate_answer(self, question: str, context_chunks: List[Tuple[Chunk, float]], graph_context: str = ""):
         """
-        Generates answer using Hybrid Context (Vector + Graph).
+        Generates answer using Hybrid Context (Vector + Graph) via the Async LLM.
         """
         # Build Vector Context
         vector_text = ""
@@ -191,21 +242,19 @@ class SmartRAG:
             vector_text += f"SOURCE: {chunk.source} (Page {chunk.page})\nCONTENT: {chunk.text}\n\n"
 
         # Build Hybrid Prompt
-        prompt = f"""You are an intelligent research assistant. Answer the question using the provided context.
-
-=== KNOWLEDGE GRAPH CONTEXT (Relationships & Entities) ===
-{graph_context if graph_context else "No graph data available."}
-
-=== DOCUMENT EXCERPTS (Detailed Text & Data) ===
-{vector_text if vector_text else "No relevant text found."}
-
----
-Question: {question}
-
-Instructions:
-1. Synthesize information from both the Graph and Documents.
-2. If the Graph provides relationships/connections not explicit in the text, highlight them.
-3. If the answer is not in the context, state that you don't know.
-Answer:"""
+        prompt = (
+            f"You are an intelligent research assistant. Answer the question using the provided context.\n\n"
+            f"=== KNOWLEDGE GRAPH CONTEXT (Relationships & Entities) ===\n"
+            f"{graph_context if graph_context else 'No graph data available.'}\n\n"
+            f"=== DOCUMENT EXCERPTS (Detailed Text & Data) ===\n"
+            f"{vector_text if vector_text else 'No relevant text found.'}\n\n"
+            f"---\n"
+            f"Question: {question}\n\n"
+            f"Instructions:\n"
+            f"1. Synthesize information from both the Graph and Documents.\n"
+            f"2. If the Graph provides relationships/connections not explicit in the text, highlight them.\n"
+            f"3. If the answer is not in the context, state that you don't know.\n"
+            f"Answer:"
+        )
         
-        return self.llm.generate(prompt)
+        return await self.llm.generate(prompt)

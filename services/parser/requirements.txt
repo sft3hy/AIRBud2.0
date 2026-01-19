@@ -11,5 +11,9 @@ pdf2image
 python-docx
 python-pptx
 pymupdf
+# Excel Support (NEW)
+pandas
+openpyxl
+tabulate
 # Video Processing
 moviepy

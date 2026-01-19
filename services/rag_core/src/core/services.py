@@ -2,127 +2,194 @@ import os
 import glob
 import re
 import requests
-from typing import List, Dict
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from typing import List, Dict, Optional
+from pathlib import Path
+
 from src.config import settings
 from src.utils.logger import logger
 
+# --- HTTP Client Configuration ---
+# specialized for high-concurrency internal microservice communication
+def create_retry_session(
+    retries: int = 3,
+    backoff_factor: float = 0.3,
+    status_forcelist: tuple = (500, 502, 503, 504),
+    pool_maxsize: int = 100
+) -> requests.Session:
+    """
+    Creates a requests Session with:
+    1. Connection Pooling (critical for 100+ concurrent users)
+    2. Automatic Retries (resilience against blips)
+    3. Timeouts (enforced at request time, but pool handles keepalives)
+    """
+    session = requests.Session()
+    retry = Retry(
+        total=retries,
+        read=retries,
+        connect=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=status_forcelist,
+    )
+    # Mount adapter for both HTTP and HTTPS
+    adapter = HTTPAdapter(max_retries=retry, pool_connections=20, pool_maxsize=pool_maxsize)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+# Global singleton session to be reused across threads
+_http_session = create_retry_session()
+
+
 class ExternalServices:
+    """
+    Handles communication with internal microservices (Parser, Vision).
+    Methods are synchronous/blocking to be compatible with asyncio.to_thread 
+    executors used in the pipeline.
+    """
+
     @staticmethod
     def parse_document(file_path: str, output_dir: str) -> Dict:
+        """
+        Calls the Parser Service to extract text and layout.
+        """
+        url = f"{settings.PARSER_API_URL}/parse"
+        payload = {"file_path": str(file_path), "output_dir": str(output_dir)}
+        
         try:
-            resp = requests.post(
-                f"{settings.PARSER_API_URL}/parse",
-                json={"file_path": str(file_path), "output_dir": str(output_dir)},
-                timeout=300
-            )
+            # High timeout because parsing PDFs/PPTX is CPU intensive
+            resp = _http_session.post(url, json=payload, timeout=300)
             resp.raise_for_status()
             return resp.json()
-        except Exception as e:
-            logger.error(f"Parser Service failed: {e}")
-            raise
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Parser Service failed for {file_path}: {str(e)}")
+            # Return empty structure to allow pipeline to fail gracefully or retry
+            raise RuntimeError(f"Parser Service Unreachable or Error: {e}")
 
     @staticmethod
     def analyze_image(image_path: str, model_name: str) -> str:
-        prompt = """Analyze the image and produce a precise, factual description.
-        If it contains charts/graphs: Identify type, transcribe titles/labels, list data points/values.
-        Do not omit numeric values."""
+        """
+        Calls the Vision Service to describe an image.
+        """
+        url = f"{settings.VISION_API_URL}/describe"
+        prompt = (
+            "Analyze the image and produce a precise, factual description. "
+            "If it contains charts/graphs: Identify type, transcribe titles/labels, list data points/values. "
+            "Do not omit numeric values."
+        )
         
+        payload = {
+            "image_path": str(image_path),
+            "prompt": prompt,
+            "model_name": model_name,
+        }
+
         try:
-            resp = requests.post(
-                f"{settings.VISION_API_URL}/describe",
-                json={
-                    "image_path": str(image_path),
-                    "prompt": prompt,
-                    "model_name": model_name,
-                },
-                timeout=120
-            )
+            resp = _http_session.post(url, json=payload, timeout=120)
             resp.raise_for_status()
-            return resp.json().get("description", "")
-        except Exception as e:
+            data = resp.json()
+            return data.get("description", "")
+        except requests.exceptions.RequestException as e:
             logger.warning(f"Vision Service failed for {image_path}: {e}")
-            return "Image analysis failed."
-        
+            return f"Image analysis unavailable: {str(e)}"
+
     @staticmethod
     def transcribe_audio(audio_path: str) -> str:
+        """
+        Calls the Vision Service (or Audio Service) to transcribe media.
+        """
+        url = f"{settings.VISION_API_URL}/transcribe"
+        
         try:
             logger.info(f"Sending audio to Vision Service: {audio_path}")
-            resp = requests.post(
-                f"{settings.VISION_API_URL}/transcribe",
-                json={"audio_path": str(audio_path)},
-                timeout=600 
-            )
+            resp = _http_session.post(url, json={"audio_path": str(audio_path)}, timeout=600)
             resp.raise_for_status()
-            return resp.json().get("text", "")
-        except Exception as e:
+            data = resp.json()
+            return data.get("text", "")
+        except requests.exceptions.RequestException as e:
             logger.error(f"Transcription Service failed: {e}")
-            return "Audio transcription failed."
+            return f"Audio transcription unavailable: {str(e)}"
+
 
 class ChartService:
+    """
+    Handles retrieval and listing of generated chart images from the file system.
+    """
+
     @staticmethod
     def get_charts_for_session(db_docs: List[Dict]) -> List[Dict]:
         charts = []
-        # Nginx routes /api/static -> rag_core:/static -> /data
-        base_url = "/api/static" 
+        base_url = "/api/static"
+        
+        # Security: Normalize base path to prevent directory traversal
+        allowed_base = Path(settings.DATA_DIR).resolve()
 
         logger.info(f"Scanning {len(db_docs)} documents for charts...")
 
         for doc in db_docs:
-            chart_dir = doc.get("chart_dir")
+            chart_dir_str = doc.get("chart_dir")
+            if not chart_dir_str:
+                continue
+
+            chart_dir = Path(chart_dir_str).resolve()
             
-            # --- DEBUG LOGGING ---
-            if not chart_dir:
-                logger.debug(f"Doc {doc['id']} has no chart_dir recorded.")
+            # 1. Security Check: Ensure chart_dir is inside allowed data directory
+            if not str(chart_dir).startswith(str(allowed_base)):
+                logger.warning(f"Security Alert: Document {doc['id']} points to path outside DATA_DIR: {chart_dir}")
                 continue
-                
-            if not os.path.exists(chart_dir):
-                logger.warning(f"Doc {doc['id']} chart_dir does not exist on disk: {chart_dir}")
-                # Check if permissions are blocking visibility
-                try:
-                    logger.debug(f"Parent dir listing: {os.listdir(os.path.dirname(chart_dir))}")
-                except Exception as e:
-                    logger.error(f"Cannot list parent dir: {e}")
+
+            if not chart_dir.exists():
+                logger.debug(f"Doc {doc['id']} chart_dir missing: {chart_dir}")
                 continue
-            # ---------------------
 
             descriptions = doc.get("chart_descriptions", {})
-            vision_model = doc.get("vision_model_used", "Unknown") 
+            vision_model = doc.get("vision_model_used", "Unknown")
 
-            # Recursive glob to find images
-            search_path = os.path.join(chart_dir, "**", "*.png")
-            files = glob.glob(search_path, recursive=True)
-            
-            logger.debug(f"Doc {doc['id']} found {len(files)} images in {chart_dir}")
-
-            for f in files:
-                filename = os.path.basename(f)
+            # 2. Secure Globbing using Pathlib
+            # Recursive search for images
+            try:
+                # We specifically look for png/jpg to avoid exposing other file types
+                files = list(chart_dir.rglob("*.png")) + list(chart_dir.rglob("*.jpg"))
                 
-                try:
+                logger.debug(f"Doc {doc['id']} found {len(files)} images in {chart_dir}")
+
+                for f in files:
                     # Calculate relative path for URL
-                    # If f is /data/charts/abc/img.png and DATA_DIR is /data
-                    # rel_path is charts/abc/img.png
-                    rel_path = os.path.relpath(f, settings.DATA_DIR)
-                    url = f"{base_url}/{rel_path}"
-                except ValueError:
-                    logger.warning(f"File {f} is not inside DATA_DIR {settings.DATA_DIR}")
-                    continue
+                    try:
+                        rel_path = f.relative_to(allowed_base)
+                    except ValueError:
+                        # Should be caught by the earlier startswith check, but double safety
+                        logger.warning(f"File {f} is not relative to DATA_DIR")
+                        continue
 
-                page_match = re.search(r"page(\d+)", filename)
-                page_num = int(page_match.group(1)) if page_match else 0
+                    # Construct URL
+                    url = f"{base_url}/{rel_path.as_posix()}"
+                    filename = f.name
 
-                desc = descriptions.get(filename)
-                if not desc:
-                    # Try matching without extension
-                    desc = descriptions.get(os.path.splitext(filename)[0], "No description available.")
+                    # Parse page number (convention: ...page123.png)
+                    page_match = re.search(r"page(\d+)", filename, re.IGNORECASE)
+                    page_num = int(page_match.group(1)) if page_match else 0
 
-                charts.append({
-                    "url": url,
-                    "filename": filename,
-                    "doc_name": doc.get("original_filename", "Unknown"),
-                    "page": page_num,
-                    "description": desc,
-                    "vision_model_used": vision_model
-                })
+                    # Match description
+                    desc = descriptions.get(filename)
+                    if not desc:
+                        # Try without extension
+                        desc = descriptions.get(f.stem, "No description available.")
 
+                    charts.append({
+                        "url": url,
+                        "filename": filename,
+                        "doc_name": doc.get("original_filename", "Unknown"),
+                        "page": page_num,
+                        "description": desc,
+                        "vision_model_used": vision_model
+                    })
+
+            except Exception as e:
+                logger.error(f"Error scanning charts for doc {doc['id']}: {e}")
+                continue
+
+        # Sort by Document Name, then Page Number
         charts.sort(key=lambda x: (x["doc_name"], x["page"]))
         return charts

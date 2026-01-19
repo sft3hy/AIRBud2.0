@@ -1,47 +1,88 @@
 import torch
 import gc
 import warnings
+import threading
+import io
 from abc import ABC, abstractmethod
+from typing import Optional
 from PIL import Image
+
+# Third-party libs
+import whisper
+# Try-except blocks allow the service to start even if some heavy dependencies 
+# are missing (useful for dev/test environments), though they are required for ops.
+try:
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+except ImportError:
+    AutoModelForCausalLM = None 
+    AutoTokenizer = None
+
+try:
+    import ollama
+except ImportError:
+    ollama = None
+
 from src.config import config
 from src.utils.logger import logger
-import whisper
 
+# Suppress HF warnings
 warnings.filterwarnings("ignore")
 
+
 class WhisperAudioModel:
+    """
+    Wrapper for OpenAI's Whisper model.
+    Handles loading, transcription, and memory cleanup.
+    """
     def __init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = None
+        self._lock = threading.Lock() # Serialize inference to prevent OOM
 
-    def load(self):
+    def load(self) -> bool:
         try:
-            logger.info(f"Loading Whisper 'medium' on {self.device}...")
+            logger.info(f"Loading Whisper 'medium' model on {self.device}...")
+            # 'medium' is a good balance of speed/accuracy for CPU/GPU
             self.model = whisper.load_model("medium", device=self.device)
             return True
         except Exception as e:
-            logger.error(f"Failed to load Whisper: {e}")
+            logger.error(f"Failed to load Whisper model: {e}", exc_info=True)
             return False
 
     def transcribe(self, audio_path: str) -> str:
         if not self.model:
-            self.load()
+            if not self.load():
+                return "[Error: Model could not be loaded]"
         
-        try:
-            logger.info(f"Transcribing {audio_path}...")
-            result = self.model.transcribe(audio_path)
-            return result["text"]
-        except Exception as e:
-            return f"[Transcription Error: {e}]"
+        # Serialize inference
+        with self._lock:
+            try:
+                logger.info(f"Transcribing audio file: {audio_path}")
+                # fp16=False is safer for CPU/MPS compatibility
+                result = self.model.transcribe(audio_path, fp16=(self.device == "cuda"))
+                return result.get("text", "").strip()
+            except Exception as e:
+                logger.error(f"Transcription error for {audio_path}: {e}")
+                return f"[Transcription Failed: {str(e)}]"
 
     def offload(self):
-        self.model = None
-        gc.collect()
-        torch.cuda.empty_cache()
+        """Releases VRAM/RAM resources."""
+        with self._lock:
+            self.model = None
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            elif torch.backends.mps.is_available():
+                torch.mps.empty_cache()
+            logger.info("Whisper model offloaded.")
+
 
 class VisionModel(ABC):
+    """
+    Abstract Base Class for Vision-Language Models.
+    """
     def __init__(self):
-        # Detect MPS (Mac) vs CUDA vs CPU
+        # Hardware Detection
         if torch.cuda.is_available():
             self.device = "cuda"
         elif torch.backends.mps.is_available():
@@ -52,108 +93,131 @@ class VisionModel(ABC):
         self._is_loaded = False
         self.model = None
         self.tokenizer = None
-        self.processor = None
+        
+        # Inference lock to prevent concurrent forward passes on the same model instance
+        self._inference_lock = threading.Lock()
 
     @abstractmethod
     def load(self) -> bool:
+        """Loads model weights into memory."""
         pass
 
     @abstractmethod
     def describe(self, image: Image.Image, prompt: str) -> str:
+        """Generates a description for the image."""
         pass
 
     @abstractmethod
     def get_name(self) -> str:
+        """Returns the unique model identifier."""
         pass
 
     def offload(self):
-        if not self._is_loaded:
-            return
+        """Common offloading logic."""
+        with self._inference_lock:
+            if not self._is_loaded:
+                return
 
-        logger.info(f"Offloading {self.get_name()}...")
-        self.model = None
-        self.tokenizer = None
-        self.processor = None
+            logger.info(f"Offloading {self.get_name()}...")
+            self.model = None
+            self.tokenizer = None
 
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
-        elif torch.backends.mps.is_available():
-            torch.mps.empty_cache()
+            # Force memory release
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+            elif torch.backends.mps.is_available():
+                torch.mps.empty_cache()
 
-        self._is_loaded = False
-        logger.info("Offload complete.")
+            self._is_loaded = False
+            logger.info(f"{self.get_name()} offload complete.")
 
 
-# --- Native Transformers Models ---
-
+# --- Concrete Implementations ---
 
 class Moondream2Model(VisionModel):
+    """
+    Lightweight, high-performance VLM.
+    Ideal for local deployment without massive GPUs.
+    """
     def load(self) -> bool:
+        if not AutoModelForCausalLM:
+            logger.error("Transformers library not installed.")
+            return False
+
         try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-
             logger.info(f"Loading Moondream2 on {self.device}...")
-
             model_id = "vikhyatk/moondream2"
-            
-            # --- FIX: Avoid device_map on CPU/MPS to prevent Meta Tensor errors ---
-            if self.device in ["cpu", "mps"]:
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    model_id,
-                    revision="2025-06-21",
-                    trust_remote_code=True,
-                    # No device_map="auto" or {"": device} for CPU/MPS
-                ).to(self.device)
-            else:
-                # CUDA supports device_map well
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    model_id,
-                    revision="2025-06-21",
-                    trust_remote_code=True,
-                    device_map={"": self.device},
-                )
-            # ----------------------------------------------------------------------
+            revision = "2025-06-21" # Pinned for stability based on current date context
 
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                model_id, trust_remote_code=True
-            )
+            # Device placement logic
+            if self.device == "cuda":
+                # CUDA: Use device_map for potential multi-gpu or optimized loading
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_id,
+                    revision=revision,
+                    trust_remote_code=True,
+                    device_map={"": "cuda"},
+                    torch_dtype=torch.float16 
+                )
+            else:
+                # CPU/MPS: Load directly to device, avoid float16 on CPU if unstable
+                dtype = torch.float32 if self.device == "cpu" else torch.float16
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_id,
+                    revision=revision,
+                    trust_remote_code=True
+                ).to(self.device, dtype=dtype)
+
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
             self._is_loaded = True
             return True
+            
         except Exception as e:
-            logger.error(f"Failed to load Moondream: {e}")
+            logger.error(f"Failed to load Moondream2: {e}", exc_info=True)
             return False
 
     def describe(self, image: Image.Image, prompt: str) -> str:
         if not self._is_loaded:
-            return "Model not loaded."
-        try:
-            enc_image = self.model.encode_image(image)
-            return self.model.answer_question(enc_image, prompt, self.tokenizer)
-        except Exception as e:
-            return f"Error: {e}"
+            return "[Error: Model not loaded]"
+        
+        with self._inference_lock:
+            try:
+                # Moondream expects PIL image
+                enc_image = self.model.encode_image(image)
+                answer = self.model.answer_question(enc_image, prompt, self.tokenizer)
+                return answer
+            except Exception as e:
+                logger.error(f"Moondream inference error: {e}")
+                return f"[Analysis Error: {str(e)}]"
 
     def get_name(self):
         return "Moondream2"
 
 
-
 class OllamaVisionModel(VisionModel):
-    def __init__(self, model_name):
+    """
+    Connector for external Ollama service hosting larger models (Llava, Bakllava, etc.)
+    Does not consume local VRAM in this container (offloaded to Ollama container).
+    """
+    def __init__(self, model_name: str):
         super().__init__()
         self.ollama_model_name = model_name
         self.host = config.OLLAMA_BASE_URL
+        self.timeout = 120 # Seconds
 
     def load(self) -> bool:
-        import ollama
+        if not ollama:
+            logger.error("Ollama library not installed.")
+            return False
 
-        logger.info(
-            f"Connecting to Ollama at {self.host} for model {self.ollama_model_name}..."
-        )
-        client = ollama.Client(host=self.host)
+        logger.info(f"Checking Ollama connection at {self.host}...")
         try:
-            client.list()  # Simple ping check
+            # We don't "load" weights locally, but we check if the service is reachable
+            # and potentially pull the model if missing?
+            client = ollama.Client(host=self.host, timeout=10)
+            client.list() 
             self._is_loaded = True
             return True
         except Exception as e:
@@ -161,27 +225,34 @@ class OllamaVisionModel(VisionModel):
             return False
 
     def describe(self, image: Image.Image, prompt: str) -> str:
-        import ollama
-        import io
-
-        client = ollama.Client(host=self.host)
-        img_byte_arr = io.BytesIO()
-        image.save(img_byte_arr, format="PNG")
-
+        # No inference lock needed strictly for safety (since it's HTTP), 
+        # but arguably good to prevent network flooding. 
+        # We will SKIP lock here to allow high concurrency against external service.
+        
+        client = ollama.Client(host=self.host, timeout=self.timeout)
+        
+        # Convert PIL to Bytes
         try:
+            with io.BytesIO() as output:
+                image.save(output, format="PNG")
+                img_bytes = output.getvalue()
+
             response = client.chat(
                 model=self.ollama_model_name,
                 messages=[
                     {
                         "role": "user",
                         "content": prompt,
-                        "images": [img_byte_arr.getvalue()],
+                        "images": [img_bytes],
                     }
                 ],
             )
-            return response["message"]["content"]
+            content = response.get("message", {}).get("content", "")
+            return content if content else "[No description generated]"
+            
         except Exception as e:
-            return f"[Ollama Error: {e}]"
+            logger.error(f"Ollama inference error for {self.ollama_model_name}: {e}")
+            return f"[Ollama Error: {str(e)}]"
 
     def get_name(self):
         return f"Ollama-{self.ollama_model_name}"

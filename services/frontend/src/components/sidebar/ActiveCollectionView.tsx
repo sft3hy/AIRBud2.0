@@ -15,8 +15,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  SelectLabel,
   SelectGroup,
+  SelectLabel,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
@@ -94,7 +94,7 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
   const queueRef = useRef<File[]>([]);
   const isProcessingRef = useRef(false);
 
-  // --- HANDLERS ---
+  // --- Handlers ---
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -107,16 +107,19 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
     setStagedFiles((prev) => prev.filter((f) => f !== fileToRemove));
   };
 
-  // --- ROBUST QUEUE PROCESSOR ---
+  // --- Queue Processor ---
   const processNextInQueue = useCallback(async () => {
     if (isProcessingRef.current) return;
     if (queueRef.current.length === 0) return;
+
+    // Double check: If active job exists, let the polling handler manage the flow
+    if (activeJobId) return;
 
     isProcessingRef.current = true;
     const currentFile = queueRef.current[0];
 
     try {
-      // 1. Optimistic Update (Prevent Sidebar "Completed" Stale Read)
+      // 1. Optimistic Status Update
       queryClient.setQueryData(["status", currentSessionId], {
         status: "queued",
         stage: "parsing",
@@ -124,26 +127,29 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
         progress: 0,
       });
 
-      // 2. Upload
+      // 2. Upload API Call
       const response = await uploadAndProcessDocument(
         currentSessionId,
         currentFile,
         selectedModel,
       );
 
-      // Handle the "Already Queued" response graciously
       if (response.status === "already_queued") {
-        // If we hit a race where backend is busy, wait and retry?
-        // For now, we just skip this file to prevent infinite loop
-        console.warn("Backend rejected file (busy).");
+        // --- CRITICAL FIX ---
+        // Backend says busy. This means we are desynced.
+        // We set activeJobId to resume polling. The Sidebar will poll, eventually see "completed",
+        // clear activeJobId, and that triggers useEffect -> processNextInQueue again.
+        console.warn("Backend reported busy. Re-syncing with active job...");
+        setActiveJobId(currentSessionId);
+
+        // Do NOT pop from queue. We will retry this file once the current job clears.
+      } else {
+        // Success: Trigger global polling
+        setActiveJobId(currentSessionId);
+        // Pop from queue
+        queueRef.current = queueRef.current.slice(1);
+        setQueueDisplay([...queueRef.current]);
       }
-
-      // 3. Trigger Global Polling
-      setActiveJobId(currentSessionId);
-
-      // 4. Update Queue State
-      queueRef.current = queueRef.current.slice(1);
-      setQueueDisplay([...queueRef.current]);
     } catch (e) {
       console.error("Upload failed", e);
       toast({
@@ -151,13 +157,20 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
         title: "Upload Failed",
         description: `Could not process ${currentFile.name}.`,
       });
-      // Remove failed item and continue
+      // Remove failed item to prevent blocking
       queueRef.current = queueRef.current.slice(1);
       setQueueDisplay([...queueRef.current]);
     } finally {
       isProcessingRef.current = false;
     }
-  }, [currentSessionId, selectedModel, setActiveJobId, toast, queryClient]);
+  }, [
+    currentSessionId,
+    selectedModel,
+    setActiveJobId,
+    activeJobId,
+    toast,
+    queryClient,
+  ]);
 
   // Watch for job completion to trigger next item
   useEffect(() => {
@@ -299,7 +312,7 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
             {/* Upload Area */}
             <div className="space-y-3 pt-4 border-t px-4 pb-4">
               {isQueueActive && (
-                <div className="mb-2 p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-md text-xs flex flex-col gap-1 border border-blue-100 dark:border-blue-800">
+                <div className="mb-2 p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-md text-xs flex flex-col gap-1 border border-blue-100 dark:border-blue-800 animate-in slide-in-from-bottom-2 fade-in">
                   <div className="flex items-center gap-2 font-semibold">
                     <Loader2 className="h-3 w-3 animate-spin" />
                     Processing Queue
@@ -349,7 +362,7 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept=".pdf,.docx,.pptx,.txt,.mp4"
+                  accept=".pdf,.docx,.pptx,.txt,.mp4,.xlsx"
                   className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
                   onChange={handleFileSelect}
                   disabled={isQueueActive}

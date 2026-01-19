@@ -7,6 +7,7 @@ from docx import Document
 from pptx import Presentation
 from typing import List, Tuple, Dict, Any
 import subprocess
+import pandas as pd # <--- NEW IMPORT
 import tempfile
 import shutil
 from moviepy import VideoFileClip
@@ -51,6 +52,8 @@ class DocumentParser:
                 text, images = self._extract_from_docx(file_path)
             elif file_ext == ".pptx":
                 text, images = self._extract_from_pptx(file_path)
+            elif file_ext == ".xlsx": # <--- NEW BRANCH
+                text = self._extract_from_xlsx(file_path)
             elif file_ext == ".txt":
                 text = self._extract_from_txt(file_path)
             elif file_ext == ".mp4":
@@ -67,6 +70,33 @@ class DocumentParser:
         except Exception as e:
             logger.error(f"Error parsing {file_path}: {e}", exc_info=True)
             raise
+
+    def _extract_from_xlsx(self, path: str) -> str:
+        """
+        Reads an Excel file and converts sheets to Markdown tables.
+        """
+        full_text = []
+        try:
+            # Read all sheets
+            xls = pd.read_excel(path, sheet_name=None)
+            
+            for sheet_name, df in xls.items():
+                full_text.append(f"## Sheet: {sheet_name}\n")
+                
+                # Clean data: Replace NaN with empty string
+                df = df.fillna("")
+                
+                # Convert to Markdown for better LLM comprehension
+                # requires 'tabulate' installed
+                markdown_table = df.to_markdown(index=False)
+                full_text.append(markdown_table)
+                full_text.append("\n\n")
+                
+        except Exception as e:
+            logger.error(f"Excel extraction failed: {e}")
+            raise ValueError(f"Could not parse Excel file: {e}")
+
+        return "".join(full_text)
 
     def _extract_from_pdf(self, path: str) -> Tuple[str, List[str]]:
         doc = fitz.open(path)

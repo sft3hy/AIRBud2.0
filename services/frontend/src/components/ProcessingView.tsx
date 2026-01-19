@@ -8,9 +8,10 @@ import {
   CheckCircle2,
   ScanLine,
   Database,
-  Music,
+  ArrowRight,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 
 interface ProcessingViewProps {
   status: {
@@ -18,6 +19,7 @@ interface ProcessingViewProps {
     step: string;
     progress: number;
   };
+  onComplete?: () => void; // New prop for manual override
 }
 
 const variants = {
@@ -26,7 +28,7 @@ const variants = {
   exit: { opacity: 0, scale: 0.8, transition: { duration: 0.3 } },
 };
 
-// --- STAGE 1: PARSING (Document Deconstruction) ---
+// --- STAGE ANIMATIONS (Unchanged) ---
 const ParsingAnim = () => (
   <div className="relative w-32 h-40 bg-white/10 border-2 border-primary/50 rounded-lg p-2 flex flex-col gap-2 overflow-hidden shadow-[0_0_30px_rgba(59,130,246,0.3)]">
     <motion.div
@@ -44,7 +46,6 @@ const ParsingAnim = () => (
       animate={{ width: ["80%", "40%", "70%"] }}
       transition={{ repeat: Infinity, duration: 1.8, delay: 0.4 }}
     />
-    {/* Scanning Line */}
     <motion.div
       className="absolute top-0 left-0 w-full h-1 bg-blue-400 shadow-[0_0_15px_#60a5fa]"
       animate={{ top: ["0%", "100%", "0%"] }}
@@ -53,29 +54,20 @@ const ParsingAnim = () => (
   </div>
 );
 
-// --- STAGE 2: VISION (Eye Scanning Image) ---
 const VisionAnim = () => (
   <div className="relative flex items-center justify-center">
     <div className="relative z-10 bg-black/20 p-6 rounded-full border border-purple-500/30 backdrop-blur-sm">
       <Eye className="w-16 h-16 text-purple-400" />
     </div>
-    {/* Radar Rings */}
     <motion.div
       className="absolute w-full h-full border border-purple-500/50 rounded-full"
       animate={{ scale: [1, 2], opacity: [1, 0] }}
       transition={{ repeat: Infinity, duration: 1.5 }}
     />
-    <motion.div
-      className="absolute w-full h-full border border-purple-500/50 rounded-full"
-      animate={{ scale: [1, 2], opacity: [1, 0] }}
-      transition={{ repeat: Infinity, duration: 1.5, delay: 0.5 }}
-    />
-    {/* Grid Overlay */}
     <div className="absolute inset-[-50px] border border-dashed border-purple-500/10 grid grid-cols-4 grid-rows-4 rounded-full opacity-50 animate-spin-slow" />
   </div>
 );
 
-// --- STAGE 3: INDEXING (Data Flow to Database) ---
 const IndexingAnim = () => (
   <div className="flex items-center gap-8">
     <div className="flex flex-col gap-2">
@@ -101,7 +93,6 @@ const IndexingAnim = () => (
   </div>
 );
 
-// --- STAGE 4: GRAPH (Nodes Connecting) ---
 const GraphAnim = () => (
   <div className="relative w-48 h-48">
     <motion.div
@@ -111,7 +102,6 @@ const GraphAnim = () => (
     >
       <Network className="w-24 h-24 text-orange-500" />
     </motion.div>
-    {/* Orbiting Nodes */}
     {[0, 120, 240].map((deg, i) => (
       <motion.div
         key={i}
@@ -133,14 +123,30 @@ const GraphAnim = () => (
   </div>
 );
 
+const SuccessAnim = () => (
+  <motion.div
+    initial={{ scale: 0 }}
+    animate={{ scale: 1 }}
+    transition={{ type: "spring", stiffness: 200, damping: 10 }}
+    className="flex flex-col items-center justify-center"
+  >
+    <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center border-4 border-green-500 mb-6 shadow-[0_0_40px_rgba(34,197,94,0.4)]">
+      <CheckCircle2 className="w-12 h-12 text-green-500" />
+    </div>
+    <h3 className="text-2xl font-bold text-green-600 dark:text-green-400">
+      Complete!
+    </h3>
+  </motion.div>
+);
+
 const PipelineStep = ({ label, active, completed, icon: Icon }: any) => (
   <div
-    className={`flex flex-col items-center gap-2 transition-all duration-500 ${
+    className={`flex flex-col items-center gap-2 transition-all duration-500 relative z-10 ${
       active ? "scale-110 opacity-100" : "opacity-50"
     } ${completed ? "text-primary opacity-80" : ""}`}
   >
     <div
-      className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors ${
+      className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors bg-background ${
         active
           ? "border-primary bg-primary/20 text-primary shadow-[0_0_20px_rgba(59,130,246,0.5)]"
           : completed
@@ -154,13 +160,16 @@ const PipelineStep = ({ label, active, completed, icon: Icon }: any) => (
         <Icon className="w-5 h-5" />
       )}
     </div>
-    <span className="text-[10px] font-medium uppercase tracking-wider">
+    <span className="text-[10px] font-medium uppercase tracking-wider bg-background px-1 rounded">
       {label}
     </span>
   </div>
 );
 
-export const ProcessingView: React.FC<ProcessingViewProps> = ({ status }) => {
+export const ProcessingView: React.FC<ProcessingViewProps> = ({
+  status,
+  onComplete,
+}) => {
   const { stage, step, progress } = status;
 
   const renderAnim = () => {
@@ -173,6 +182,8 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ status }) => {
         return <IndexingAnim />;
       case "graph":
         return <GraphAnim />;
+      case "done":
+        return <SuccessAnim />;
       default:
         return (
           <BrainCircuit className="w-20 h-20 text-muted-foreground animate-pulse" />
@@ -186,13 +197,15 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ status }) => {
   };
 
   const currentIdx = getStageIndex();
+  const isDone = stage === "done" || progress === 100;
+
+  // --- FIX 1: Clamp width to 100% ---
+  const barWidth = Math.min((currentIdx / 3) * 100, 100);
 
   return (
     <div className="h-full flex flex-col items-center justify-center bg-gradient-to-b from-background to-muted/20 p-10 relative overflow-hidden">
-      {/* Background Texture */}
       <div className="absolute inset-0 opacity-5 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px]" />
 
-      {/* Main Animation Container */}
       <div className="relative z-10 flex flex-col items-center w-full max-w-2xl">
         {/* Hero Animation */}
         <div className="h-64 w-64 flex items-center justify-center mb-12">
@@ -210,23 +223,37 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ status }) => {
         </div>
 
         {/* Status Text */}
-        <div className="text-center mb-12 space-y-2">
-          <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent animate-gradient">
-            {stage === "parsing"
-              ? "Deconstructing File"
-              : stage === "vision"
-                ? "Visual Intelligence"
-                : stage === "indexing"
-                  ? "Vectorization"
-                  : stage === "graph"
-                    ? "Knowledge Mapping"
-                    : "Processing"}
-          </h2>
-
-          {/* Enhanced Step Text for Granular Updates */}
-          <p className="text-muted-foreground font-mono text-sm min-h-[1.5rem] transition-all">
-            {step}
-          </p>
+        <div className="text-center mb-12 space-y-2 h-20">
+          {isDone ? (
+            // --- FIX 2: Manual Navigation Button ---
+            <div className="flex flex-col items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <p className="text-muted-foreground">Document ready for chat.</p>
+              <Button
+                onClick={onComplete}
+                size="lg"
+                className="gap-2 shadow-lg"
+              >
+                Continue to Chat <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent animate-gradient">
+                {stage === "parsing"
+                  ? "Deconstructing File"
+                  : stage === "vision"
+                    ? "Visual Intelligence"
+                    : stage === "indexing"
+                      ? "Vectorization"
+                      : stage === "graph"
+                        ? "Knowledge Mapping"
+                        : "Processing"}
+              </h2>
+              <p className="text-muted-foreground font-mono text-sm min-h-[1.5rem] transition-all">
+                {step}
+              </p>
+            </>
+          )}
         </div>
 
         {/* Pipeline Steps */}
@@ -235,7 +262,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ status }) => {
           <div className="absolute top-5 left-0 w-full h-0.5 bg-muted -z-10">
             <motion.div
               className="h-full bg-primary"
-              animate={{ width: `${(currentIdx / 3) * 100}%` }}
+              animate={{ width: `${barWidth}%` }}
               transition={{ duration: 0.5 }}
             />
           </div>
@@ -267,7 +294,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ status }) => {
         </div>
 
         {/* Global Progress Bar */}
-        <div className="w-full space-y-2">
+        <div className="w-full space-y-2 opacity-80">
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>Overall Progress</span>
             <span className="font-mono">{progress}%</span>
