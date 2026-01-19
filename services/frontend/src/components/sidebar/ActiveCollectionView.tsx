@@ -1,7 +1,7 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Trash2, Upload, Loader2, X } from "lucide-react";
+import { ArrowLeft, Trash2, Upload, Loader2, X, FileText } from "lucide-react";
 import { uploadAndProcessDocument, deleteDocument } from "../../lib/api";
 import { VisionModel, SessionDocument } from "../../types";
 import { ChartBrowser } from "../ChartBrowser";
@@ -39,6 +39,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { useToast } from "@/components/ui/use-toast";
 
 const VISION_MODELS: { value: VisionModel; label: string; desc: string }[] = [
   {
@@ -77,27 +78,102 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
 }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Local State
   const [selectedModel, setSelectedModel] = useState<VisionModel>(
-    "Ollama-Granite3.2-Vision"
+    "Ollama-Granite3.2-Vision",
   );
-  const [stagedFiles, setStagedFiles] = useState<File[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
 
-  // Handlers
-  const handleFileSelect = (e: any) => {
-    if (e.target.files) setStagedFiles(Array.from(e.target.files));
+  // Staging & Queue
+  const [stagedFiles, setStagedFiles] = useState<File[]>([]);
+  const [queueDisplay, setQueueDisplay] = useState<File[]>([]);
+
+  // Refs for stability
+  const queueRef = useRef<File[]>([]);
+  const isProcessingRef = useRef(false);
+
+  // --- HANDLERS ---
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setStagedFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleAddFiles = async () => {
-    setIsUploading(true);
-    for (const f of stagedFiles)
-      await uploadAndProcessDocument(currentSessionId, f, selectedModel);
-    setActiveJobId(currentSessionId);
-    setIsUploading(false);
+  const handleRemoveStagedFile = (fileToRemove: File) => {
+    setStagedFiles((prev) => prev.filter((f) => f !== fileToRemove));
+  };
+
+  // --- ROBUST QUEUE PROCESSOR ---
+  const processNextInQueue = useCallback(async () => {
+    if (isProcessingRef.current) return;
+    if (queueRef.current.length === 0) return;
+
+    isProcessingRef.current = true;
+    const currentFile = queueRef.current[0];
+
+    try {
+      // 1. Optimistic Update (Prevent Sidebar "Completed" Stale Read)
+      queryClient.setQueryData(["status", currentSessionId], {
+        status: "queued",
+        stage: "parsing",
+        step: `Initializing upload for ${currentFile.name}...`,
+        progress: 0,
+      });
+
+      // 2. Upload
+      const response = await uploadAndProcessDocument(
+        currentSessionId,
+        currentFile,
+        selectedModel,
+      );
+
+      // Handle the "Already Queued" response graciously
+      if (response.status === "already_queued") {
+        // If we hit a race where backend is busy, wait and retry?
+        // For now, we just skip this file to prevent infinite loop
+        console.warn("Backend rejected file (busy).");
+      }
+
+      // 3. Trigger Global Polling
+      setActiveJobId(currentSessionId);
+
+      // 4. Update Queue State
+      queueRef.current = queueRef.current.slice(1);
+      setQueueDisplay([...queueRef.current]);
+    } catch (e) {
+      console.error("Upload failed", e);
+      toast({
+        variant: "destructive",
+        title: "Upload Failed",
+        description: `Could not process ${currentFile.name}.`,
+      });
+      // Remove failed item and continue
+      queueRef.current = queueRef.current.slice(1);
+      setQueueDisplay([...queueRef.current]);
+    } finally {
+      isProcessingRef.current = false;
+    }
+  }, [currentSessionId, selectedModel, setActiveJobId, toast, queryClient]);
+
+  // Watch for job completion to trigger next item
+  useEffect(() => {
+    if (!activeJobId && queueRef.current.length > 0) {
+      processNextInQueue();
+    }
+  }, [activeJobId, processNextInQueue]);
+
+  const handleStartProcessing = () => {
+    queueRef.current = [...queueRef.current, ...stagedFiles];
+    setQueueDisplay([...queueRef.current]);
     setStagedFiles([]);
+
+    if (!activeJobId && !isProcessingRef.current) {
+      processNextInQueue();
+    }
   };
 
   const handleDeleteDoc = async (id: number) => {
@@ -105,6 +181,8 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
     queryClient.invalidateQueries({ queryKey: ["documents"] });
     queryClient.invalidateQueries({ queryKey: ["collections"] });
   };
+
+  const isQueueActive = queueDisplay.length > 0 || !!activeJobId;
 
   return (
     <div className="flex flex-col h-full bg-background overflow-hidden">
@@ -148,7 +226,6 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
                   key={doc.id}
                   className="flex items-center justify-between p-2 bg-card border rounded-md text-xs group w-full max-w-full"
                 >
-                  {/* FIX: 'w-0' combined with 'flex-1' forces this container to shrink regardless of text length */}
                   <div className="flex-1 w-0 mr-3">
                     <TooltipProvider>
                       <Tooltip delayDuration={300}>
@@ -167,7 +244,6 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
                     </TooltipProvider>
                   </div>
 
-                  {/* FIX: 'shrink-0' ensures these elements never collapse */}
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge
                       variant="outline"
@@ -220,83 +296,107 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
               )}
             </div>
 
-            {(!activeJobId || activeJobId === currentSessionId) && (
-              <div className="space-y-3 pt-4 border-t px-4 pb-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold uppercase text-muted-foreground">
-                    Upload
-                  </label>
-                  <Select
-                    value={selectedModel}
-                    onValueChange={(v) => setSelectedModel(v as VisionModel)}
-                  >
-                    <SelectTrigger className="h-6 text-[0.8rem] w-full">
-                      <SelectValue placeholder="Select a Vision Model" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectLabel>Vision Model</SelectLabel>
-                        {VISION_MODELS.map((m) => (
-                          <SelectItem key={m.value} value={m.value}>
-                            {m.label}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
+            {/* Upload Area */}
+            <div className="space-y-3 pt-4 border-t px-4 pb-4">
+              {isQueueActive && (
+                <div className="mb-2 p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-md text-xs flex flex-col gap-1 border border-blue-100 dark:border-blue-800">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Processing Queue
+                  </div>
+                  <div className="pl-5 opacity-90">
+                    {queueDisplay.length > 0
+                      ? `Uploading: ${queueDisplay[0].name}`
+                      : "Finalizing..."}
+                  </div>
+                  {queueDisplay.length > 1 && (
+                    <div className="pl-5 opacity-75">
+                      + {queueDisplay.length - 1} more waiting
+                    </div>
+                  )}
                 </div>
-                <Card className="p-3 border-dashed border-2 flex flex-col items-center gap-1 text-center hover:bg-muted/50 cursor-pointer relative w-full">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept=".pdf,.docx,.pptx,.txt,.mp4"
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    onChange={handleFileSelect}
-                    disabled={isUploading}
-                  />
-                  <Upload className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">
-                    Select Files
-                  </span>
-                </Card>
-                {stagedFiles.length > 0 && (
-                  <div className="space-y-2">
-                    {stagedFiles.map((f, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between text-xs px-1 min-w-0"
-                      >
-                        <span
-                          className="truncate flex-1 min-w-0"
-                          title={f.name}
-                        >
+              )}
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase text-muted-foreground">
+                  Upload
+                </label>
+                <Select
+                  value={selectedModel}
+                  onValueChange={(v) => setSelectedModel(v as VisionModel)}
+                  disabled={isQueueActive}
+                >
+                  <SelectTrigger className="h-6 text-[0.8rem] w-full">
+                    <SelectValue placeholder="Select a Vision Model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectLabel>Vision Model</SelectLabel>
+                      {VISION_MODELS.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Card
+                className={`p-3 border-dashed border-2 flex flex-col items-center gap-1 text-center relative w-full transition-colors ${isQueueActive ? "opacity-50 cursor-not-allowed bg-muted/20" : "hover:bg-muted/50 cursor-pointer"}`}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.docx,.pptx,.txt,.mp4"
+                  className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  onChange={handleFileSelect}
+                  disabled={isQueueActive}
+                />
+                <Upload className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">
+                  Drag or select files
+                </span>
+              </Card>
+
+              {stagedFiles.length > 0 && (
+                <div className="space-y-2">
+                  {stagedFiles.map((f, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between text-xs px-2 py-1 bg-muted/30 rounded border"
+                    >
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
+                        <span className="truncate min-w-0" title={f.name}>
                           {f.name}
                         </span>
-                        <X
-                          className="h-3 w-3 cursor-pointer flex-shrink-0 ml-2"
-                          onClick={() =>
-                            setStagedFiles((p) => p.filter((x) => x !== f))
-                          }
-                        />
                       </div>
-                    ))}
-                    <Button
-                      size="sm"
-                      className="w-full h-7 text-xs"
-                      onClick={handleAddFiles}
-                      disabled={isUploading}
-                    >
-                      {isUploading ? (
+                      <X
+                        className="h-3 w-3 cursor-pointer flex-shrink-0 ml-2 text-muted-foreground hover:text-destructive transition-colors"
+                        onClick={() => handleRemoveStagedFile(f)}
+                      />
+                    </div>
+                  ))}
+                  <Button
+                    size="sm"
+                    className="w-full h-7 text-xs"
+                    onClick={handleStartProcessing}
+                    disabled={isQueueActive}
+                  >
+                    {isQueueActive ? (
+                      <>
                         <Loader2 className="h-3 w-3 animate-spin mr-2" />
-                      ) : (
-                        "Process"
-                      )}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
+                        Queue Active
+                      </>
+                    ) : (
+                      `Process ${stagedFiles.length} File${stagedFiles.length > 1 ? "s" : ""}`
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
           </ScrollArea>
         </TabsContent>
         <TabsContent
