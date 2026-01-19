@@ -307,7 +307,7 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
                   <div className="pl-5 opacity-90">
                     {queueDisplay.length > 0
                       ? `Uploading: ${queueDisplay[0].name}`
-                      : "Finalizing..."}
+                      : "Working..."}
                   </div>
                   {queueDisplay.length > 1 && (
                     <div className="pl-5 opacity-75">
