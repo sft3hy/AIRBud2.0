@@ -112,7 +112,7 @@ export const MainContent = ({
             content: item.response,
             sources: item.sources || item.results || [],
           },
-        ]
+        ],
       );
       setChatHistory(formatted);
     } else if (sessionId && !serverHistory) {
