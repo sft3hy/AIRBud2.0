@@ -29,7 +29,7 @@ import { Separator } from "@/components/ui/separator";
 
 export const Help = () => {
   return (
-    <div className="min-h-screen bg-background text-foreground p-6 md:p-12">
+    <div className="min-h-screen bg-background text-foreground p-6 md:p-12 animate-in fade-in duration-500">
       <div className="max-w-5xl mx-auto space-y-12">
         {/* Header & Back Button */}
         <div className="space-y-6 border-b pb-8">

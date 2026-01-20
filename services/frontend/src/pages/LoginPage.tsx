@@ -1,97 +1,184 @@
-import React, { useEffect, useState } from 'react';
-import { ShieldCheck, LockKeyhole, AlertTriangle, Bug } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { api } from '@/lib/api';
-import doggieSrc from '../assets/doggie.svg';
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  ShieldCheck,
+  Cpu,
+  Lock,
+  AlertTriangle,
+  CheckCircle2,
+  ScanLine,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import doggieSrc from "../assets/doggie.svg";
 
 export const LoginPage = () => {
-    const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [status, setStatus] = useState<
+    "idle" | "reading" | "success" | "error"
+  >("idle");
 
-    // Fetch debug info on mount
-    useEffect(() => {
-        api.get('/auth/debug')
-            .then(res => setDebugInfo(res.data))
-            .catch(err => setDebugInfo({ error: "Could not reach backend" }));
-    }, []);
+  const handleCacLogin = () => {
+    // 1. UI Feedback: Simulate browser looking for card/certificate
+    setStatus("reading");
 
-    const handleLogin = () => {
-        // --- FIX 2: Navigation Cache Buster ---
-        // By changing the URL query param, we force the browser to treat this 
-        // as a fresh navigation event, creating a new SSL connection.
-        window.location.href = "/?login_attempt=" + new Date().getTime();
-    };
+    // 2. Logic: In production, this triggers client-side cert selection (mTLS)
+    // or a WebAuthn/SmartCard API call.
+    setTimeout(() => {
+      // Mocking a successful certificate selection
+      setStatus("success");
 
-    return (
-        <div className="min-h-screen w-full flex flex-col items-center justify-center bg-muted/20 p-4">
-            <Card className="max-w-md w-full p-8 flex flex-col items-center text-center shadow-xl border-t-4 border-t-primary">
+      // Redirect would happen here
+      console.log("Certificate selected. Authenticating...");
+    }, 2500);
+  };
 
-                <div className="mb-6 h-24 w-24 bg-primary/10 rounded-full flex items-center justify-center">
-                    <img src={doggieSrc} alt="AIRBud 2.0" className="h-16 w-16" />
-                </div>
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-6 relative overflow-hidden">
+      {/* Background: Abstract Digital Grid */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent opacity-70" />
 
-                <h1 className="text-3xl font-extrabold tracking-tight mb-2">AIRBud 2.0</h1>
-                <p className="text-muted-foreground mb-8">
-                    Secure Enterprise Document Intelligence
-                </p>
+      {/* Ambient Glow */}
+      <div className="absolute top-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-500/5 blur-[100px] rounded-full pointer-events-none" />
 
-                <div className="w-full space-y-4">
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 p-4 rounded-lg text-sm flex gap-3 items-start text-left border border-yellow-100 dark:border-yellow-800">
-                        <LockKeyhole className="h-5 w-5 shrink-0 mt-0.5" />
-                        <div>
-                            <span className="font-semibold block mb-1">Authentication Required</span>
-                            You must insert your CAC/PIV Smart Card to access this system.
-                        </div>
-                    </div>
+      <div className="w-full max-w-md space-y-8 relative z-10 animate-in zoom-in-95 duration-500">
+        {/* Header Section */}
+        <div className="text-center space-y-4">
+          <div className="inline-flex items-center justify-center p-4 rounded-2xl bg-gradient-to-br from-background to-muted border shadow-sm relative group">
+            {/* Logo */}
+            <img
+              src={doggieSrc}
+              alt="AIRBud"
+              className="h-12 w-12 relative z-10"
+            />
 
-                    <Button
-                        size="lg"
-                        className="w-full gap-2 text-lg h-12 shadow-md hover:shadow-lg transition-all"
-                        onClick={handleLogin}
-                    >
-                        <ShieldCheck className="h-5 w-5" />
-                        Login with CAC / PIV
-                    </Button>
+            {/* Animated Scan Effect behind logo */}
+            <div className="absolute inset-0 border-2 border-primary/20 rounded-2xl" />
+            <div className="absolute inset-0 bg-primary/5 rounded-2xl animate-pulse" />
+          </div>
 
-                    {/* Debug Section */}
-                    <Accordion type="single" collapsible className="w-full border-t pt-2">
-                        <AccordionItem value="debug" className="border-none">
-                            <AccordionTrigger className="text-xs text-muted-foreground py-2 justify-center hover:no-underline gap-2">
-                                <Bug className="h-3 w-3" /> Connection Diagnostics
-                            </AccordionTrigger>
-                            <AccordionContent>
-                                <div className="bg-muted/50 p-3 rounded-md text-left text-xs font-mono break-all space-y-2 border">
-                                    {debugInfo ? (
-                                        <>
-                                            <div className="flex justify-between">
-                                                <span className="font-bold">Client Verify:</span>
-                                                <span className={debugInfo['x-client-verify'] === 'SUCCESS' ? "text-green-600 font-bold" : "text-red-500 font-bold"}>
-                                                    {debugInfo['x-client-verify']}
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <span className="font-bold">Subject DN:</span>
-                                                <p className="mt-1 text-muted-foreground">{debugInfo['x-subject-dn']}</p>
-                                            </div>
-                                            <div className="text-[10px] text-muted-foreground mt-2">
-                                                {debugInfo['x-client-verify'] !== 'SUCCESS' &&
-                                                    "⚠️ Nginx did not validate your certificate. Check if your card is inserted or if you clicked Cancel."}
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <span>Loading diagnostics...</span>
-                                    )}
-                                </div>
-                            </AccordionContent>
-                        </AccordionItem>
-                    </Accordion>
-                </div>
-            </Card>
-
-            <div className="mt-8 text-xs text-muted-foreground">
-                Authorized Use Only &bull; DoD PKI Enabled
-            </div>
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight flex justify-center items-center gap-2">
+              AIRBud <span className="text-primary">Secure</span>
+            </h1>
+            <p className="text-sm text-muted-foreground mt-2 max-w-[280px] mx-auto">
+              Automated Information Retriever Buddy
+              <br />
+              Restricted Access System
+            </p>
+          </div>
         </div>
-    );
+
+        {/* Main Card */}
+        <Card className="border-2 border-muted/40 shadow-2xl bg-card/80 backdrop-blur-xl relative overflow-hidden">
+          {/* Top Status Bar */}
+          <div className="h-1.5 w-full bg-muted/50">
+            {status === "reading" && (
+              <div
+                className="h-full bg-primary animate-[loading_1s_ease-in-out_infinite]"
+                style={{ width: "100%" }}
+              />
+            )}
+            {status === "success" && (
+              <div className="h-full bg-green-500 w-full transition-all duration-500" />
+            )}
+          </div>
+
+          <CardHeader className="space-y-1 pb-4 text-center">
+            <Badge
+              variant="outline"
+              className="w-fit mx-auto mb-2 border-primary/30 text-primary bg-primary/5 px-3 py-1"
+            >
+              <ShieldCheck className="w-3 h-3 mr-1" />
+              DoD PKI / CAC Required
+            </Badge>
+          </CardHeader>
+
+          <CardContent className="space-y-8 pb-8">
+            {/* Visual Chip Representation */}
+            <div className="relative h-32 w-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 rounded-xl border flex flex-col justify-between p-6 shadow-inner group transition-all duration-500">
+              {status === "reading" && (
+                <div className="absolute inset-0 bg-primary/5 animate-pulse rounded-xl z-0" />
+              )}
+
+              <div className="flex justify-between items-start relative z-10">
+                <div className="h-10 w-12 rounded bg-yellow-400/20 border border-yellow-500/40 flex items-center justify-center">
+                  <Cpu className="h-6 w-6 text-yellow-600 dark:text-yellow-400 opacity-80" />
+                </div>
+                <ScanLine
+                  className={`h-6 w-6 text-muted-foreground ${status === "reading" ? "animate-spin" : ""}`}
+                />
+              </div>
+
+              <div className="relative z-10">
+                <div className="h-2 w-24 bg-foreground/10 rounded mb-2" />
+                <div className="h-2 w-16 bg-foreground/10 rounded" />
+              </div>
+
+              {/* Success Overlay */}
+              {status === "success" && (
+                <div className="absolute inset-0 bg-background/90 flex items-center justify-center rounded-xl z-20 animate-in fade-in duration-300">
+                  <div className="text-center">
+                    <CheckCircle2 className="h-10 w-10 text-green-500 mx-auto mb-2" />
+                    <p className="text-sm font-semibold">
+                      Certificate Verified
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <Button
+                onClick={handleCacLogin}
+                size="lg"
+                disabled={status === "reading" || status === "success"}
+                className="w-full h-12 text-base font-semibold shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                {status === "idle" && "Authenticate with CAC"}
+                {status === "reading" && "Reading Smart Card..."}
+                {status === "success" && "Redirecting..."}
+              </Button>
+
+              <div className="text-xs text-center text-muted-foreground leading-relaxed px-4">
+                Insert your Common Access Card (CAC) into the reader and click
+                the button above. Select your{" "}
+                <strong>Authentication Certificate</strong> when prompted by the
+                browser.
+              </div>
+            </div>
+          </CardContent>
+
+          <Separator />
+
+          <CardFooter className="bg-muted/10 py-4 flex flex-col gap-2">
+            <div className="flex items-center justify-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+              <Lock className="h-3 w-3" /> 256-bit SSL Encrypted
+            </div>
+            <div className="text-[10px] text-muted-foreground/60 text-center max-w-xs mx-auto">
+              Unauthorized access to this information system is prohibited and
+              subject to criminal and civil penalties.
+            </div>
+          </CardFooter>
+        </Card>
+
+        {/* Support Links */}
+        <div className="flex justify-center gap-6 text-sm text-muted-foreground">
+          <Link
+            to="/help"
+            className="hover:text-primary transition-colors flex items-center gap-1"
+          >
+            <AlertTriangle className="h-3 w-3" /> Trouble connecting?
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
 };

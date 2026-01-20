@@ -113,7 +113,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <div
       className={cn(
-        "flex flex-col h-full w-full bg-muted/10 border-r transition-all duration-300",
+        "flex flex-col h-full w-full bg-muted/10 border-r transition-all duration-300 animate-in fade-in duration-500",
         className,
       )}
     >

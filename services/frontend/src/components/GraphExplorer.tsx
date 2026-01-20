@@ -415,7 +415,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <Network className="h-16 w-16 mb-4 opacity-20" />
+            <Network className="h-32 w-16 mb-4 opacity-20" />
             <p className="text-base font-medium">No Knowledge Graph Data</p>
             <p className="text-xs mt-2">Upload a document to generate nodes.</p>
           </div>

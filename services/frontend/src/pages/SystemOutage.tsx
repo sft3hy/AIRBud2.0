@@ -5,15 +5,12 @@ import {
   CheckCircle2,
   XCircle,
   Activity,
-  Construction,
+  AlertOctagon,
+  WifiOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-interface ServiceStatus {
-  name: string;
-  status: "online" | "offline" | "degraded";
-}
+import { Badge } from "@/components/ui/badge";
 
 interface SystemOutageProps {
   services: Record<string, string>;
@@ -24,38 +21,46 @@ export const SystemOutage: React.FC<SystemOutageProps> = ({
   services,
   onRetry,
 }) => {
-  // Convert API object to array for mapping
-  const serviceList: ServiceStatus[] = Object.entries(services).map(
-    ([name, status]) => ({
-      name,
-      status: status as "online" | "offline" | "degraded",
-    })
-  );
+  const serviceList = Object.entries(services).map(([name, status]) => ({
+    name,
+    status: status as "online" | "offline" | "degraded",
+  }));
 
   const downCount = serviceList.filter((s) => s.status !== "online").length;
+  const isTotalOutage = downCount === serviceList.length;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-6">
-      <div className="max-w-xl w-full space-y-8">
-        {/* Header Section */}
-        <div className="text-center space-y-4">
-          <div className="relative inline-block">
-            <div className="h-24 w-24 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto animate-pulse">
-              <Construction className="h-12 w-12 text-red-600 dark:text-red-400" />
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      {/* Background Ambience */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-red-500/5 blur-[100px] rounded-full" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-orange-500/5 blur-[100px] rounded-full" />
+      </div>
+
+      <div className="max-w-lg w-full space-y-8 relative z-10">
+        {/* Header Icon */}
+        <div className="flex flex-col items-center justify-center space-y-6 text-center">
+          <div className="relative">
+            <div className="h-24 w-24 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center animate-pulse">
+              {isTotalOutage ? (
+                <WifiOff className="h-10 w-10 text-red-600 dark:text-red-400" />
+              ) : (
+                <AlertOctagon className="h-10 w-10 text-orange-600 dark:text-orange-400" />
+              )}
             </div>
-            <div className="absolute bottom-0 right-0 bg-white dark:bg-slate-950 rounded-full p-1 border shadow-sm">
-              <AlertTriangle className="h-6 w-6 text-orange-500" />
+            <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-1.5 shadow-sm border">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
             </div>
           </div>
 
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
-              System Maintenance
+          <div className="space-y-2">
+            <h1 className="text-3xl font-extrabold tracking-tight">
+              System {isTotalOutage ? "Offline" : "Disruption"}
             </h1>
-            <p className="text-lg text-slate-500 dark:text-slate-400 mt-2">
-              We are currently experiencing issues with{" "}
-              <span className="font-semibold text-red-600">
-                {downCount} microservice{downCount !== 1 ? "s" : ""}
+            <p className="text-muted-foreground">
+              We are experiencing connectivity issues with{" "}
+              <span className="font-semibold text-red-500">
+                {downCount} service{downCount !== 1 ? "s" : ""}
               </span>
               .
             </p>
@@ -63,37 +68,48 @@ export const SystemOutage: React.FC<SystemOutageProps> = ({
         </div>
 
         {/* Status Card */}
-        <Card className="border-red-100 dark:border-red-900/50 shadow-lg">
-          <CardHeader className="bg-slate-100/50 dark:bg-slate-900/50 pb-4 border-b">
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-              <Activity className="h-4 w-4" /> Live Service Status
-            </CardTitle>
+        <Card className="border-red-200 dark:border-red-900/30 shadow-lg overflow-hidden bg-card/80 backdrop-blur-sm">
+          <CardHeader className="bg-muted/30 pb-3 border-b">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                <Activity className="h-3.5 w-3.5" /> Real-time Status
+              </CardTitle>
+              <Badge
+                variant="outline"
+                className="text-[10px] font-mono opacity-70"
+              >
+                LIVE
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            <div className="divide-y">
               {serviceList.map((svc) => (
                 <div
                   key={svc.name}
-                  className="flex items-center justify-between p-4 hover:bg-slate-50/50 transition-colors"
+                  className="flex items-center justify-between p-4 px-5 hover:bg-muted/20 transition-colors"
                 >
-                  <span className="font-medium text-slate-700 dark:text-slate-300">
+                  <span className="font-mono text-sm font-medium text-foreground/80">
                     {svc.name}
                   </span>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <span
-                      className={`text-xs font-bold uppercase tracking-wider ${
+                      className={`text-xs font-bold tracking-wide ${
                         svc.status === "online"
-                          ? "text-green-600"
-                          : "text-red-600"
+                          ? "text-green-600 dark:text-green-400"
+                          : "text-red-600 dark:text-red-400"
                       }`}
                     >
-                      {svc.status}
+                      {svc.status.toUpperCase()}
                     </span>
                     {svc.status === "online" ? (
-                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                      <div className="relative flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                      </div>
                     ) : (
-                      <XCircle className="h-5 w-5 text-red-500 animate-pulse" />
+                      <XCircle className="h-4 w-4 text-red-500" />
                     )}
                   </div>
                 </div>
@@ -102,19 +118,20 @@ export const SystemOutage: React.FC<SystemOutageProps> = ({
           </CardContent>
         </Card>
 
-        {/* Footer Message */}
-        <div className="text-center space-y-6">
-          <div className="text-sm text-slate-500 max-w-sm mx-auto leading-relaxed">
-            Our engineering team has been notified and is working to restore
-            full functionality. Please try refreshing in a few moments.
-          </div>
+        {/* Action Area */}
+        <div className="text-center space-y-6 pt-2">
+          <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+            Our engineering team is currently investigating. Updates will push
+            automatically.
+          </p>
 
           <Button
             size="lg"
             onClick={onRetry}
-            className="gap-2 shadow-md bg-slate-900 hover:bg-slate-800 text-white px-8"
+            className="w-full sm:w-auto min-w-[200px] gap-2 shadow-md font-semibold"
           >
-            <RefreshCw className="h-4 w-4" /> Check Status
+            <RefreshCw className="h-4 w-4" />
+            Recheck Connection
           </Button>
         </div>
       </div>

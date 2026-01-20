@@ -194,7 +194,7 @@ export const GroupManager = () => {
         <UserStatus />
       </div>
 
-      <div className="flex-1 overflow-hidden p-8 bg-muted/10">
+      <div className="flex-1 overflow-hidden p-8 bg-muted/10 animate-in fade-in duration-500">
         <Tabs defaultValue="my_groups" className="h-full flex flex-col">
           <TabsList className="w-[400px] shrink-0 mx-auto mb-6">
             <TabsTrigger value="my_groups">

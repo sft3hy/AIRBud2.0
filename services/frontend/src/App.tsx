@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Dashboard } from "./components/Dashboard";
 import { SystemOverview } from "./pages/SystemOverview";
 import { Help } from "./pages/Help";
+import { Team } from "./pages/Team";
 import { LoginPage } from "./pages/LoginPage";
 import { SystemOutage } from "./pages/SystemOutage"; // <--- Import
 import { InviteHandler } from "./components/GroupManager";
@@ -103,6 +104,12 @@ const AppContent = () => {
             ) : (
               <Navigate to="/login" replace />
             )
+          }
+        />
+        <Route
+          path="/our-team"
+          element={
+            isAuthenticated ? <Team /> : <Navigate to="/login" replace />
           }
         />
         <Route

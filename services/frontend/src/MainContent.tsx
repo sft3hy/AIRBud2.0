@@ -112,12 +112,18 @@ const MemoizedMessage = memo(({ msg }: { msg: ChatMessage }) => {
 const WelcomeScreen = () => (
   <div className="flex h-full w-full flex-col bg-background">
     <div className="z-10 flex items-center justify-between border-b bg-card px-6 py-4 shadow-sm">
-      <div className="flex items-center gap-2">
-        <h1 className="text-lg font-semibold">AIRBud 2.0</h1>
+      <div className="flex items-center gap-3">
+        <FolderOpen className="h-6 w-6 text-primary" />
+        <div>
+          <h1 className="text-lg font-semibold leading-none">Collections</h1>
+          <p className="text-xs text-muted-foreground mt-1 leading-none">
+            Create knowledge bases and chat
+          </p>
+        </div>
       </div>
       <UserStatus />
     </div>
-    <div className="flex flex-col items-center justify-center flex-1 p-8 text-center bg-muted/10 rounded-xl m-4">
+    <div className="flex flex-col items-center justify-center flex-1 p-8 text-center bg-muted/10 rounded-xl m-4 animate-in fade-in duration-500">
       <div className="mb-6 h-24 w-24 bg-primary/10 rounded-full flex items-center justify-center">
         <img src={doggieSrc} alt="AIRBud 2.0" className="h-16 w-16" />
       </div>
@@ -134,6 +140,11 @@ const WelcomeScreen = () => (
         <Link to="/system-overview">
           <Button variant="link" className="text-primary gap-1 text-base">
             System Overview <span aria-hidden="true">&rarr;</span>
+          </Button>
+        </Link>
+        <Link to="/our-team">
+          <Button variant="link" className="text-primary gap-1 text-base">
+            Our team <span aria-hidden="true">&rarr;</span>
           </Button>
         </Link>
       </div>
@@ -302,7 +313,7 @@ export const MainContent = ({
         <UserStatus />
       </div>
 
-      <div className="flex-1 overflow-hidden relative bg-muted/20">
+      <div className="flex-1 overflow-hidden relative bg-muted/20 animate-in fade-in duration-500">
         <ScrollArea className="h-full px-4 md:px-20 py-4" ref={scrollRef}>
           <div className="space-y-10 pb-4 max-w-4xl mx-auto min-h-[500px]">
             {chatHistory.map((msg, idx) => (
@@ -332,7 +343,7 @@ export const MainContent = ({
       </div>
 
       {/* Input Area */}
-      <div className="p-6 bg-background border-t">
+      <div className="p-6 bg-background border-t animate-in fade-in duration-500">
         <div className="max-w-3xl mx-auto relative flex items-center gap-3">
           <Input
             placeholder={

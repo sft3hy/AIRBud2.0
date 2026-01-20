@@ -6,19 +6,22 @@ import {
   Layers,
   Database,
   Cpu,
-  FileText,
   Code,
   Server,
   Search,
   Box,
   Network,
   Share2,
+  Workflow,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import doggieSrc from "../assets/doggie.svg";
 
-// Helper for consistent external links
+// Sleek external link component
 const ExtLink = ({
   href,
   children,
@@ -30,7 +33,7 @@ const ExtLink = ({
     href={href}
     target="_blank"
     rel="noopener noreferrer"
-    className="text-blue-600 dark:text-blue-400 font-medium hover:underline decoration-blue-600/30 underline-offset-2 transition-colors"
+    className="text-primary font-medium hover:text-primary/80 hover:underline underline-offset-4 decoration-primary/30 transition-all"
   >
     {children}
   </a>
@@ -38,156 +41,181 @@ const ExtLink = ({
 
 export const SystemOverview = () => {
   return (
-    <div className="min-h-screen bg-background text-foreground p-6 md:p-12">
-      <div className="max-w-5xl mx-auto space-y-16">
+    <div className="min-h-screen bg-background text-foreground p-6 md:p-12 animate-in fade-in duration-500">
+      <div className="max-w-6xl mx-auto space-y-16">
         {/* Header & Back Button */}
         <div className="space-y-6 border-b pb-8">
           <Link to="/">
             <Button
               variant="ghost"
-              className="gap-2 pl-0 hover:bg-transparent hover:text-primary"
+              className="gap-2 pl-0 text-muted-foreground hover:text-primary hover:bg-transparent transition-colors"
             >
-              <ArrowLeft className="h-4 w-4" /> Back
+              <ArrowLeft className="h-4 w-4" /> Back to Dashboard
             </Button>
           </Link>
-          <div>
-            <h1 className="flex items-center gap-3 text-4xl font-extrabold tracking-tight lg:text-5xl mb-2">
-              <img src={doggieSrc} alt="AIRBud 2.0" className="h-16 w-16" />
-              <span>AIRBud 2.0 System Overview</span>
-            </h1>
-
-            <p className="text-xl text-muted-foreground">
-              A deep dive into the architecture, computer vision, and hybrid
-              retrieval strategies powering this application.
-            </p>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-2">
+              <h1 className="flex items-center gap-4 text-4xl font-extrabold tracking-tight lg:text-5xl">
+                <img
+                  src={doggieSrc}
+                  alt="AIRBud"
+                  className="h-14 w-14 drop-shadow-sm"
+                />
+                <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/50">
+                  System Architecture
+                </span>
+              </h1>
+              <p className="text-xl text-muted-foreground max-w-2xl">
+                A technical deep dive into the hybrid retrieval strategies and
+                computer vision powering AIRBud 2.0.
+              </p>
+            </div>
+            <div className="hidden md:block">
+              <Badge
+                variant="outline"
+                className="px-3 py-1 text-sm font-normal uppercase tracking-widest text-muted-foreground"
+              >
+                v2.0.4-stable
+              </Badge>
+            </div>
           </div>
         </div>
 
         {/* Section 1: The Core Concept */}
-        <section className="space-y-4">
-          <h2 className="text-2xl font-bold">1. The RAG Paradigm</h2>
-          <p className="leading-relaxed text-lg text-muted-foreground">
-            <strong>Retrieval-Augmented Generation (RAG)</strong> bridges the
-            gap between a static Large Language Model (LLM) and your private
-            data. Instead of hoping the model "knows" your data, we
-            mathematically retrieve relevant snippets and feed them to the model
-            as context.
-          </p>
+        <section className="grid md:grid-cols-3 gap-8 items-center">
+          <div className="md:col-span-2 space-y-4">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <Zap className="h-5 w-5 text-yellow-500 fill-yellow-500/20" />
+              The RAG Paradigm
+            </h2>
+            <p className="leading-relaxed text-lg text-muted-foreground">
+              <strong>Retrieval-Augmented Generation (RAG)</strong> bridges the
+              gap between a static Large Language Model (LLM) and your private
+              data. Instead of relying on the model's training data, we
+              mathematically retrieve relevant snippets from your vector index
+              and feed them to the model as context at runtime.
+            </p>
+          </div>
+          <Card className="bg-muted/30 border-dashed">
+            <CardContent className="p-6 text-sm text-muted-foreground italic">
+              "We don't just ask the AI what it knows. We show it the facts,
+              then ask it to synthesize."
+            </CardContent>
+          </Card>
         </section>
 
+        <Separator />
+
         {/* Section 2: Architectural Improvements */}
-        <section className="space-y-6">
-          <h2 className="text-2xl font-bold">2. Architectural Improvements</h2>
+        <section className="space-y-8">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold">Architectural Pillars</h2>
+            <p className="text-muted-foreground">
+              Four key innovations that separate AIRBud from standard RAG
+              implementations.
+            </p>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="bg-card/50">
-              <CardHeader className="flex flex-row items-center gap-4 pb-2">
-                <div className="h-10 w-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
-                  <Network className="h-5 w-5" />
+            {/* GraphRAG */}
+            <Card className="group hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-md">
+              <CardHeader className="flex flex-row items-center gap-4 pb-3">
+                <div className="h-12 w-12 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform">
+                  <Network className="h-6 w-6" />
                 </div>
-                <CardTitle className="text-lg">
-                  GraphRAG & Knowledge Graphs
-                </CardTitle>
+                <CardTitle className="text-lg">GraphRAG & Knowledge</CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-2">
+              <CardContent className="text-muted-foreground leading-relaxed space-y-3">
                 <p>
-                  Vector search is great for similarity, but bad at structure.
-                  We use <ExtLink href="https://neo4j.com/">Neo4j</ExtLink> to
-                  build a <strong>Knowledge Graph</strong>.
+                  Vector search handles similarity, but fails at structure. We
+                  utilize <ExtLink href="https://neo4j.com/">Neo4j</ExtLink> to
+                  construct a <strong>Knowledge Graph</strong>.
                 </p>
-                <p>
-                  An LLM extracts entities (People, Companies, Concepts) and
-                  their relationships from your docs. This allows us to perform
-                  "multi-hop" reasoning—connecting facts across different
-                  documents that might use different wording but refer to the
-                  same entity.
+                <p className="text-sm">
+                  By extracting entities and relationships, we enable
+                  "multi-hop" reasoning—connecting disparately worded facts that
+                  refer to the same entity across documents.
                 </p>
               </CardContent>
             </Card>
 
-            <Card className="bg-card/50">
-              <CardHeader className="flex flex-row items-center gap-4 pb-2">
-                <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                  <Eye className="h-5 w-5" />
+            {/* Vision */}
+            <Card className="group hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-md">
+              <CardHeader className="flex flex-row items-center gap-4 pb-3">
+                <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                  <Eye className="h-6 w-6" />
                 </div>
-                <CardTitle className="text-lg">
-                  Layout Analysis & Vision
-                </CardTitle>
+                <CardTitle className="text-lg">Computer Vision</CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-2">
+              <CardContent className="text-muted-foreground leading-relaxed space-y-3">
                 <p>
-                  Standard RAG blindly extracts text, losing the meaning of
-                  charts. We use{" "}
+                  We use{" "}
                   <ExtLink href="https://github.com/facebookresearch/detectron2">
                     Detectron2
                   </ExtLink>{" "}
-                  to draw bounding boxes around figures and tables.
+                  for layout analysis, identifying bounding boxes around figures
+                  and charts.
                 </p>
-                <p>
-                  We then crop these images and feed them to Multimodal LLMs
-                  like{" "}
-                  <ExtLink href="https://huggingface.co/vikhyatk/moondream2">
-                    Moondream2
-                  </ExtLink>{" "}
-                  or <strong>Gemma3</strong> to generate detailed text
-                  descriptions, making your charts "readable" to the search
-                  engine.
+                <p className="text-sm">
+                  These regions are cropped and processed by Multimodal LLMs
+                  (e.g., <strong>Moondream2</strong>), converting visual data
+                  into semantic text descriptions for the search engine.
                 </p>
               </CardContent>
             </Card>
 
-            <Card className="bg-card/50">
-              <CardHeader className="flex flex-row items-center gap-4 pb-2">
-                <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400">
-                  <Layers className="h-5 w-5" />
+            {/* Chunking */}
+            <Card className="group hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-md">
+              <CardHeader className="flex flex-row items-center gap-4 pb-3">
+                <div className="h-12 w-12 rounded-xl bg-green-500/10 flex items-center justify-center text-green-600 dark:text-green-400 group-hover:scale-110 transition-transform">
+                  <Layers className="h-6 w-6" />
                 </div>
                 <CardTitle className="text-lg">Parent-Child Chunking</CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-2">
+              <CardContent className="text-muted-foreground leading-relaxed space-y-3">
                 <p>
-                  Splitting text into arbitrary fragments destroys context. We
-                  use a{" "}
-                  <ExtLink href="https://medium.com/@seahorse.technologies.sl/parent-child-chunking-in-langchain-for-advanced-rag-e7c37171995a">
-                    Parent-Child strategy
-                  </ExtLink>
-                  .
+                  We decouple the <em>searchable</em> unit from the{" "}
+                  <em>retrievable</em> unit using a{" "}
+                  <ExtLink href="#">Parent-Child strategy</ExtLink>.
                 </p>
-                <p>
-                  We index small "Child" chunks for high-precision search, but
-                  we return the larger "Parent" chunk (rich context) to the LLM.
-                  This ensures the model gets full paragraphs or pages of
-                  context, not just half-sentences.
+                <p className="text-sm">
+                  We index granular "Child" chunks for high-precision matching,
+                  but deliver the larger "Parent" chunk to the LLM. This ensures
+                  the model receives full context, not fragmented sentences.
                 </p>
               </CardContent>
             </Card>
 
-            <Card className="bg-card/50">
-              <CardHeader className="flex flex-row items-center gap-4 pb-2">
-                <div className="h-10 w-10 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400">
-                  <Cpu className="h-5 w-5" />
+            {/* Microservices */}
+            <Card className="group hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-md">
+              <CardHeader className="flex flex-row items-center gap-4 pb-3">
+                <div className="h-12 w-12 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-600 dark:text-orange-400 group-hover:scale-110 transition-transform">
+                  <Cpu className="h-6 w-6" />
                 </div>
-                <CardTitle className="text-lg">
-                  Microservice Architecture
-                </CardTitle>
+                <CardTitle className="text-lg">Microservice Grid</CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-2">
+              <CardContent className="text-muted-foreground leading-relaxed space-y-3">
                 <p>
-                  The application is split into specialized{" "}
-                  <ExtLink href="https://www.docker.com/">Docker</ExtLink>{" "}
-                  containers:
+                  Orchestrated via{" "}
+                  <ExtLink href="https://www.docker.com/">Docker</ExtLink>, the
+                  system is modular:
                 </p>
-                <ul className="list-disc pl-4 space-y-1">
-                  <li>
-                    <strong>KG Service:</strong> Graph extraction &{" "}
-                    <ExtLink href="https://neo4j.com/">Neo4j</ExtLink>.
+                <ul className="grid grid-cols-2 gap-2 text-sm">
+                  <li className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />{" "}
+                    KG Service
                   </li>
-                  <li>
-                    <strong>Vision:</strong> GPU-accelerated inference.
+                  <li className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />{" "}
+                    Vision GPU
                   </li>
-                  <li>
-                    <strong>Core:</strong> Orchestration & Vector Search.
+                  <li className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />{" "}
+                    Core API
                   </li>
-                  <li>
-                    <strong>Parser:</strong> PDF/Docx processing.
+                  <li className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />{" "}
+                    Parser
                   </li>
                 </ul>
               </CardContent>
@@ -196,10 +224,12 @@ export const SystemOverview = () => {
         </section>
 
         {/* Section 3: The Tech Stack */}
-        <section className="space-y-6">
-          <h2 className="text-2xl font-bold">
-            3. Under the Hood: Technology Stack
-          </h2>
+        <section className="space-y-8">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold">Technology Stack</h2>
+            <div className="h-px flex-1 bg-border ml-6" />
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               {
@@ -207,48 +237,56 @@ export const SystemOverview = () => {
                 role: "Graph Database",
                 icon: Share2,
                 url: "https://neo4j.com/",
+                color: "text-indigo-500",
               },
               {
                 name: "Detectron2",
                 role: "Layout Analysis",
                 icon: Box,
                 url: "https://github.com/facebookresearch/detectron2",
+                color: "text-blue-500",
               },
               {
                 name: "FAISS",
                 role: "Vector Index",
                 icon: Search,
                 url: "https://github.com/facebookresearch/faiss",
+                color: "text-cyan-500",
               },
               {
                 name: "PostgreSQL",
                 role: "Relational DB",
                 icon: Database,
                 url: "https://www.postgresql.org/",
+                color: "text-sky-600",
               },
               {
                 name: "FastAPI",
                 role: "Backend API",
                 icon: Server,
                 url: "https://fastapi.tiangolo.com/",
+                color: "text-teal-500",
               },
               {
                 name: "React + Vite",
                 role: "Frontend",
                 icon: Code,
                 url: "https://react.dev/",
+                color: "text-violet-500",
               },
               {
                 name: "LangChain",
                 role: "Orchestration",
-                icon: Layers,
+                icon: Workflow,
                 url: "https://www.langchain.com/",
+                color: "text-emerald-500",
               },
               {
                 name: "Docker",
                 role: "Containerization",
                 icon: Box,
                 url: "https://www.docker.com/",
+                color: "text-blue-400",
               },
             ].map((tech) => (
               <a
@@ -256,11 +294,13 @@ export const SystemOverview = () => {
                 href={tech.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg border hover:bg-muted/60 transition-colors hover:border-blue-300 group"
+                className="flex items-center gap-3 p-4 rounded-xl border bg-card hover:bg-muted/50 hover:border-primary/40 transition-all duration-200 group"
               >
-                <tech.icon className="h-5 w-5 text-muted-foreground group-hover:text-blue-500" />
+                <tech.icon
+                  className={`h-5 w-5 ${tech.color} group-hover:scale-110 transition-transform`}
+                />
                 <div>
-                  <div className="font-semibold text-sm group-hover:text-blue-600">
+                  <div className="font-semibold text-sm group-hover:text-foreground/90">
                     {tech.name}
                   </div>
                   <div className="text-xs text-muted-foreground">
@@ -273,90 +313,68 @@ export const SystemOverview = () => {
         </section>
 
         {/* Section 4: The Data Pipeline */}
-        <section className="space-y-6">
-          <h2 className="text-2xl font-bold">4. The Hybrid Pipeline</h2>
-          <div className="bg-card border rounded-xl p-6 md:p-8 space-y-8 relative overflow-hidden">
-            {/* Step 1 */}
-            <div className="relative z-10 flex gap-4 md:gap-8 items-start">
-              <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0 mt-1">
-                1
-              </div>
-              <div className="space-y-2">
-                <h3 className="font-bold text-lg">Ingestion & Analysis</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  Files are uploaded.{" "}
-                  <ExtLink href="https://github.com/facebookresearch/detectron2">
-                    Detectron2
-                  </ExtLink>{" "}
-                  extracts charts, which are described by{" "}
-                  <strong>Vision Models</strong>. Simultaneously, an LLM scans
-                  the text to extract Entities (Nodes) and Relationships
-                  (Edges).
-                </p>
-              </div>
-            </div>
+        <section className="space-y-8">
+          <h2 className="text-2xl font-bold">The Hybrid Pipeline</h2>
 
-            {/* Step 2 */}
-            <div className="relative z-10 flex gap-4 md:gap-8 items-start">
-              <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0 mt-1">
-                2
-              </div>
-              <div className="space-y-2">
-                <h3 className="font-bold text-lg">Dual Indexing</h3>
-                <div className="text-muted-foreground text-sm leading-relaxed">
-                  <ul className="list-disc pl-4 space-y-1">
-                    <li>
-                      <strong>Vector Path:</strong> Text is chunked and embedded
-                      into{" "}
-                      <ExtLink href="https://github.com/facebookresearch/faiss">
-                        FAISS
-                      </ExtLink>{" "}
-                      for semantic search.
-                    </li>
-                    <li>
-                      <strong>Graph Path:</strong> Extracted triples are written
-                      to <ExtLink href="https://neo4j.com/">Neo4j</ExtLink> to
-                      build a connected web of knowledge.
-                    </li>
-                  </ul>
+          <div className="relative border rounded-2xl p-8 bg-gradient-to-br from-card to-background overflow-hidden">
+            {/* Background Decorator */}
+            <div className="absolute top-0 right-0 -mr-16 -mt-16 h-64 w-64 rounded-full bg-primary/5 blur-3xl" />
+
+            <div className="relative z-10 space-y-12">
+              {[
+                {
+                  id: 1,
+                  title: "Ingestion & Analysis",
+                  desc: "Files are processed in parallel. Detectron2 handles visuals while LLMs extract entities (Nodes) and relationships (Edges).",
+                  link: "https://github.com/facebookresearch/detectron2",
+                },
+                {
+                  id: 2,
+                  title: "Dual Indexing",
+                  desc: "Text is chunked into FAISS for semantic search. Extracted triples are written to Neo4j to build the knowledge graph.",
+                  link: null,
+                },
+                {
+                  id: 3,
+                  title: "Hybrid Retrieval",
+                  desc: "User queries trigger simultaneous lookups: Vector similarity (FAISS) + Graph traversal (Neo4j).",
+                  link: null,
+                },
+                {
+                  id: 4,
+                  title: "Synthesis",
+                  desc: "The LLM receives a composite context window of text, chart descriptions, and graph connections to formulate the final answer.",
+                  link: null,
+                },
+              ].map((step, idx, arr) => (
+                <div key={step.id} className="relative flex gap-6 md:gap-10">
+                  {/* Connector Line */}
+                  {idx !== arr.length - 1 && (
+                    <div className="absolute left-[1.2rem] top-10 bottom-[-3rem] w-0.5 bg-gradient-to-b from-border to-transparent md:left-[1.2rem]" />
+                  )}
+
+                  <div className="flex-shrink-0">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 border border-primary/20 text-primary flex items-center justify-center font-bold shadow-sm">
+                      {step.id}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-1">
+                    <h3 className="font-bold text-lg text-foreground">
+                      {step.title}
+                    </h3>
+                    <p className="text-muted-foreground text-sm leading-relaxed max-w-2xl">
+                      {step.desc}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
-
-            {/* Step 3 */}
-            <div className="relative z-10 flex gap-4 md:gap-8 items-start">
-              <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0 mt-1">
-                3
-              </div>
-              <div className="space-y-2">
-                <h3 className="font-bold text-lg">Hybrid Retrieval</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  When you ask a question, we query <strong>FAISS</strong> for
-                  relevant text chunks AND query <strong>Neo4j</strong> for
-                  related entities and their neighbors.
-                </p>
-              </div>
-            </div>
-
-            {/* Step 4 */}
-            <div className="relative z-10 flex gap-4 md:gap-8 items-start">
-              <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0 mt-1">
-                4
-              </div>
-              <div className="space-y-2">
-                <h3 className="font-bold text-lg">Synthesis</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  The LLM receives a rich context containing specific text
-                  excerpts, chart descriptions, and structural graph
-                  relationships to generate a comprehensive, fact-based answer.
-                </p>
-              </div>
-            </div>
-
-            {/* Decorator Line */}
-            <div className="absolute left-[2.85rem] md:left-[3.85rem] top-8 bottom-8 w-0.5 bg-border -z-0" />
           </div>
         </section>
+
+        {/* Footer spacer */}
+        <div className="h-8" />
       </div>
     </div>
   );

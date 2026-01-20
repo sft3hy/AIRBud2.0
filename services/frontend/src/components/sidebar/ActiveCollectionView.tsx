@@ -1,7 +1,22 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Trash2, Upload, Loader2, X, FileText } from "lucide-react";
+import {
+  ArrowLeft,
+  Trash2,
+  Upload,
+  Loader2,
+  X,
+  FileText,
+  FileSpreadsheet,
+  FileCode,
+  FileImage,
+  Film,
+  Cpu,
+  Layers,
+  BarChart3,
+  Paperclip,
+} from "lucide-react";
 import { uploadAndProcessDocument, deleteDocument } from "../../lib/api";
 import { VisionModel, SessionDocument } from "../../types";
 import { ChartBrowser } from "../ChartBrowser";
@@ -22,6 +37,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import {
   Tooltip,
   TooltipContent,
@@ -50,14 +66,37 @@ const VISION_MODELS: { value: VisionModel; label: string; desc: string }[] = [
   {
     value: "Moondream2",
     label: "Moondream2 (1.6B)",
-    desc: "Fast - Recommended (Local)",
+    desc: "Fast",
   },
   {
     value: "Ollama-Gemma3",
     label: "Gemma 3 (4B)",
-    desc: "Strong Reasoning - Requires Ollama",
+    desc: "Strong Reasoning",
   },
 ];
+
+// Helper for file icons
+const getFileIcon = (filename: string) => {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  const classes = "h-4 w-4 shrink-0";
+  switch (ext) {
+    case "pdf":
+      return <FileText className={`${classes} text-red-500`} />;
+    case "xlsx":
+    case "csv":
+      return <FileSpreadsheet className={`${classes} text-green-500`} />;
+    case "png":
+    case "jpg":
+    case "jpeg":
+      return <FileImage className={`${classes} text-blue-500`} />;
+    case "mp4":
+      return <Film className={`${classes} text-purple-500`} />;
+    case "txt":
+      return <FileCode className={`${classes} text-slate-500`} />;
+    default:
+      return <FileText className={`${classes} text-muted-foreground`} />;
+  }
+};
 
 interface ActiveCollectionViewProps {
   currentSessionId: string;
@@ -135,14 +174,8 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
       );
 
       if (response.status === "already_queued") {
-        // --- CRITICAL FIX ---
-        // Backend says busy. This means we are desynced.
-        // We set activeJobId to resume polling. The Sidebar will poll, eventually see "completed",
-        // clear activeJobId, and that triggers useEffect -> processNextInQueue again.
         console.warn("Backend reported busy. Re-syncing with active job...");
         setActiveJobId(currentSessionId);
-
-        // Do NOT pop from queue. We will retry this file once the current job clears.
       } else {
         // Success: Trigger global polling
         setActiveJobId(currentSessionId);
@@ -198,231 +231,340 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
   const isQueueActive = queueDisplay.length > 0 || !!activeJobId;
 
   return (
-    <div className="flex flex-col h-full bg-background overflow-hidden">
-      <div className="p-3 border-b flex items-center gap-2 bg-muted/20 shrink-0">
+    <div className="flex flex-col h-full bg-background overflow-hidden relative">
+      {/* Background Decorator */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 blur-3xl pointer-events-none" />
+
+      {/* Header */}
+      <div className="p-3 border-b bg-background/80 backdrop-blur-md flex items-center gap-3 shrink-0 z-10">
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8"
+          className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-colors rounded-full"
           onClick={() => navigate("/collections")}
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="font-semibold text-sm truncate flex-1 min-w-0">
-          {activeCollectionName}
+        <div className="flex flex-col min-w-0">
+          <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">
+            Current Collection
+          </span>
+          <div className="font-bold text-sm truncate flex items-center gap-2">
+            <Layers className="h-3.5 w-3.5 text-primary" />
+            {activeCollectionName}
+          </div>
         </div>
       </div>
 
       <Tabs defaultValue="docs" className="flex-1 flex flex-col min-h-0 w-full">
+        {/* Navigation Tabs */}
         <div className="px-4 py-2 bg-muted/20 border-b shrink-0">
-          <TabsList className="grid w-full grid-cols-3 h-8">
-            <TabsTrigger value="docs" className="text-xs">
-              Files
+          <TabsList className="grid w-full grid-cols-3 h-9 bg-background/50 p-1">
+            <TabsTrigger
+              value="docs"
+              className="text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-2"
+            >
+              <FileText className="h-3.5 w-3.5" /> Files
             </TabsTrigger>
-            <TabsTrigger value="charts" className="text-xs">
-              Charts
+            <TabsTrigger
+              value="charts"
+              className="text-xs data-[state=active]:bg-blue-500/10 data-[state=active]:text-blue-600 gap-2"
+            >
+              <BarChart3 className="h-3.5 w-3.5" /> Charts
             </TabsTrigger>
-            <TabsTrigger value="graph" className="text-xs">
-              Graph
+            <TabsTrigger
+              value="graph"
+              className="text-xs data-[state=active]:bg-purple-500/10 data-[state=active]:text-purple-600 gap-2"
+            >
+              <Cpu className="h-3.5 w-3.5" /> Graph
             </TabsTrigger>
           </TabsList>
         </div>
 
+        {/* --- FILES TAB --- */}
         <TabsContent
           value="docs"
-          className="flex-1 flex flex-col min-h-0 mt-0 w-full"
+          className="flex-1 flex flex-col min-h-0 mt-0 w-full relative"
         >
           <ScrollArea className="flex-1 w-full">
             <div className="px-4 py-4 space-y-2 mb-6">
               {currentDocs.map((doc) => (
                 <div
                   key={doc.id}
-                  className="flex items-center justify-between p-2 bg-card border rounded-md text-xs group w-full max-w-full"
+                  className="group grid grid-cols-[auto_1fr_auto] items-center gap-3 w-full p-3 bg-card hover:bg-muted/30 border rounded-lg text-xs transition-all duration-200 hover:shadow-sm hover:border-primary/20"
                 >
-                  <div className="flex-1 w-0 mr-3">
+                  {/* Icon - fixed width */}
+                  <div className="p-2 bg-muted rounded-md group-hover:bg-background transition-colors">
+                    {getFileIcon(doc.original_filename)}
+                  </div>
+
+                  {/* Text Content - takes remaining space and truncates */}
+                  <div className="flex flex-col min-w-0 overflow-hidden">
                     <TooltipProvider>
                       <Tooltip delayDuration={300}>
                         <TooltipTrigger asChild>
-                          <span className="truncate block font-medium cursor-default">
+                          <span className="truncate font-semibold text-foreground cursor-default block">
                             {doc.original_filename}
                           </span>
                         </TooltipTrigger>
                         <TooltipContent
-                          side="bottom"
-                          className="max-w-[300px] break-all z-50"
+                          side="top"
+                          className="max-w-[300px] z-50 break-all"
                         >
                           {doc.original_filename}
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
+
+                    <div className="flex items-center gap-2 mt-1 min-w-0">
+                      <span className="text-[10px] text-muted-foreground uppercase flex-shrink-0">
+                        Model:
+                      </span>
+                      <span className="text-[10px] font-mono text-primary/80 truncate">
+                        {doc.vision_model_used.split("-")[1] || "Default"}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] h-5 px-1.5 max-w-[80px] truncate block text-center"
-                    >
-                      {doc.vision_model_used
-                        .replace("Ollama-", "")
-                        .replace("-Vision", "")}
-                    </Badge>
-
-                    {isOwner && (
+                  {/* Trash Can - fixed width, always visible */}
+                  {isOwner ? (
+                    <div className="flex-shrink-0">
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                          <TooltipProvider>
+                            <Tooltip delayDuration={200}>
+                              {" "}
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-bold hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent className="bg-gray-900 border-gray-800">
+                                <p className="text-red-400 font-bold">
+                                  Delete file
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </AlertDialogTrigger>
+
                         <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>
-                              Delete Document?
+                              Confirm Deletion
                             </AlertDialogTitle>
                             <AlertDialogDescription>
-                              Remove <b>{doc.original_filename}</b>?
+                              Are you sure you want to delete{" "}
+                              <span className="font-semibold text-foreground">
+                                {doc.original_filename}
+                              </span>
+                              ? This action cannot be undone.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
                               onClick={() => handleDeleteDoc(doc.id)}
-                              className="bg-destructive"
+                              className="bg-red-600 hover:bg-red-700"
                             >
-                              Delete
+                              Delete File
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="w-7" /> // Spacer to maintain consistent layout
+                  )}
                 </div>
               ))}
+
               {currentDocs.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-4">
-                  No files.
-                </p>
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground/50 border-2 border-dashed border-muted/50 rounded-xl bg-muted/5">
+                  <Paperclip className="h-8 w-8 mb-2" />
+                  <p className="text-xs">No documents indexed.</p>
+                </div>
               )}
             </div>
 
-            {/* Upload Area */}
-            <div className="space-y-3 pt-4 border-t px-4 pb-4">
+            {/* Upload & Controls Area */}
+            <div className="space-y-4 pt-4 border-t bg-gradient-to-t from-background via-background to-transparent px-4 pb-6">
+              {/* Queue Status Monitor */}
               {isQueueActive && (
-                <div className="mb-2 p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-md text-xs flex flex-col gap-1 border border-blue-100 dark:border-blue-800 animate-in slide-in-from-bottom-2 fade-in">
-                  <div className="flex items-center gap-2 font-semibold">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Processing Queue
-                  </div>
-                  <div className="pl-5 opacity-90">
-                    {queueDisplay.length > 0
-                      ? `Uploading: ${queueDisplay[0].name}`
-                      : "Working..."}
-                  </div>
-                  {queueDisplay.length > 1 && (
-                    <div className="pl-5 opacity-75">
-                      + {queueDisplay.length - 1} more waiting
+                <div className="relative overflow-hidden rounded-lg bg-slate-950 dark:bg-slate-900 border border-slate-800 p-3 shadow-inner">
+                  {/* Scanline Effect */}
+                  <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-10 pointer-events-none bg-[length:100%_2px,3px_100%]" />
+
+                  <div className="relative z-20 flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-[10px] text-blue-400 font-mono uppercase tracking-wider">
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        System Processing
+                      </span>
+                      <span>Queue: {queueDisplay.length}</span>
                     </div>
-                  )}
+
+                    <div className="font-mono text-xs text-slate-300 truncate">
+                      {queueDisplay.length > 0
+                        ? `> Uploading: ${queueDisplay[0].name}`
+                        : "> Ingesting data chunks..."}
+                    </div>
+
+                    {/* Fake progress bar */}
+                    <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden mt-1">
+                      <div className="h-full bg-blue-500 animate-[loading_1.5s_ease-in-out_infinite] w-full origin-left" />
+                    </div>
+                  </div>
                 </div>
               )}
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase text-muted-foreground">
-                  Upload
-                </label>
-                <Select
-                  value={selectedModel}
-                  onValueChange={(v) => setSelectedModel(v as VisionModel)}
-                  disabled={isQueueActive}
-                >
-                  <SelectTrigger className="h-6 text-[0.8rem] w-full">
-                    <SelectValue placeholder="Select a Vision Model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectLabel>Vision Model</SelectLabel>
-                      {VISION_MODELS.map((m) => (
-                        <SelectItem key={m.value} value={m.value}>
-                          {m.label}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Card
-                className={`p-3 border-dashed border-2 flex flex-col items-center gap-1 text-center relative w-full transition-colors ${isQueueActive ? "opacity-50 cursor-not-allowed bg-muted/20" : "hover:bg-muted/50 cursor-pointer"}`}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept=".pdf,.docx,.pptx,.txt,.mp4,.xlsx"
-                  className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                  onChange={handleFileSelect}
-                  disabled={isQueueActive}
-                />
-                <Upload className="h-4 w-4 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">
-                  Drag or select files
-                </span>
-              </Card>
-
-              {stagedFiles.length > 0 && (
-                <div className="space-y-2">
-                  {stagedFiles.map((f, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between text-xs px-2 py-1 bg-muted/30 rounded border"
-                    >
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        <span className="truncate min-w-0" title={f.name}>
-                          {f.name}
-                        </span>
-                      </div>
-                      <X
-                        className="h-3 w-3 cursor-pointer flex-shrink-0 ml-2 text-muted-foreground hover:text-destructive transition-colors"
-                        onClick={() => handleRemoveStagedFile(f)}
-                      />
-                    </div>
-                  ))}
-                  <Button
-                    size="sm"
-                    className="w-full h-7 text-xs"
-                    onClick={handleStartProcessing}
+              {/* Upload Controls */}
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                    <Cpu className="h-3 w-3" /> Select Vision Model
+                  </label>
+                  <Select
+                    value={selectedModel}
+                    onValueChange={(v) => setSelectedModel(v as VisionModel)}
                     disabled={isQueueActive}
                   >
-                    {isQueueActive ? (
-                      <>
-                        <Loader2 className="h-3 w-3 animate-spin mr-2" />
-                        Queue Active
-                      </>
-                    ) : (
-                      `Process ${stagedFiles.length} File${stagedFiles.length > 1 ? "s" : ""}`
-                    )}
-                  </Button>
+                    <SelectTrigger className="h-8 text-xs w-full bg-card border-input shadow-sm">
+                      <SelectValue placeholder="Select a Vision Model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectLabel className="text-xs text-muted-foreground">
+                          Vision Model
+                        </SelectLabel>
+                        {VISION_MODELS.map((m) => (
+                          <SelectItem
+                            key={m.value}
+                            value={m.value}
+                            className="text-xs"
+                          >
+                            <span className="font-medium">{m.label}</span>
+                            <span className="block text-[10px] text-muted-foreground mt-0.5">
+                              {m.desc}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
+
+                <div
+                  className={`
+                    group relative w-full rounded-xl border-2 border-dashed transition-all duration-300
+                    ${
+                      isQueueActive
+                        ? "opacity-60 cursor-not-allowed border-muted bg-muted/10"
+                        : "cursor-pointer border-muted-foreground/20 hover:border-primary/50 hover:bg-primary/5"
+                    }
+                  `}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.docx,.pptx,.txt,.mp4,.xlsx"
+                    className="absolute inset-0 opacity-0 z-20 cursor-pointer disabled:cursor-not-allowed"
+                    onChange={handleFileSelect}
+                    disabled={isQueueActive}
+                  />
+                  <div className="p-4 flex flex-col items-center gap-2 text-center">
+                    <div
+                      className={`p-2 rounded-full bg-background border shadow-sm transition-transform duration-300 ${!isQueueActive && "group-hover:scale-110"}`}
+                    >
+                      <Upload className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-semibold text-foreground block">
+                        Click to Upload
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block">
+                        PDF, Word, Excel, Video, Text
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {stagedFiles.length > 0 && (
+                  <div className="animate-in slide-in-from-bottom-2 fade-in space-y-3 pt-2">
+                    <Separator />
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+                        <span>Staging ({stagedFiles.length})</span>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0 text-[10px] text-red-500"
+                          onClick={() => setStagedFiles([])}
+                        >
+                          Clear All
+                        </Button>
+                      </div>
+                      {stagedFiles.map((f, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between text-xs px-3 py-2 bg-card rounded-md border shadow-sm"
+                        >
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            {getFileIcon(f.name)}
+                            <span
+                              className="truncate min-w-0 font-medium"
+                              title={f.name}
+                            >
+                              {f.name}
+                            </span>
+                          </div>
+                          <X
+                            className="h-3 w-3 cursor-pointer flex-shrink-0 ml-2 text-muted-foreground hover:text-red-500 transition-colors"
+                            onClick={() => handleRemoveStagedFile(f)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <Button
+                      size="sm"
+                      className="w-full h-9 text-xs font-semibold shadow-md bg-primary hover:bg-primary/90"
+                      onClick={handleStartProcessing}
+                      disabled={isQueueActive}
+                    >
+                      {isQueueActive ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                          Processing Queue...
+                        </>
+                      ) : (
+                        `Start Ingestion (${stagedFiles.length})`
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           </ScrollArea>
         </TabsContent>
+
+        {/* --- OTHER TABS --- */}
         <TabsContent
           value="charts"
-          className="flex-1 mt-0 overflow-hidden w-full"
+          className="flex-1 mt-0 overflow-hidden w-full h-full data-[state=inactive]:hidden"
         >
-          <div className="h-full p-2 w-full">
+          <div className="h-full w-full bg-muted/10">
             <ChartBrowser collectionId={currentSessionId} />
           </div>
         </TabsContent>
+
         <TabsContent
           value="graph"
-          className="flex-1 mt-0 overflow-hidden bg-white w-full"
+          className="flex-1 mt-0 overflow-hidden bg-background w-full h-full data-[state=inactive]:hidden"
         >
           <div className="h-full w-full">
             <GraphExplorer
