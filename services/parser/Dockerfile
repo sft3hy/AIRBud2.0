@@ -1,17 +1,24 @@
-FROM python:3.10-slim-bookworm
+# ============================================================
+# PROD: Linux amd64 + NVIDIA GPU
+# Detectron2-compatible, pinned, reproducible
+# ============================================================
 
-# Automatically set by Docker (amd64 or arm64)
-ARG TARGETARCH
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
-ENV PYTHONUNBUFFERED=1 \
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
     MODEL_DIR=/root/.torch/detectron2_models \
     MODEL_URL="https://www.dropbox.com/s/dgy9c10wykk4lq4/model_final.pth?dl=1"
 
 WORKDIR /app
 
-# 1. System Deps
-# Added libglib2.0-0 which is often required by OpenCV/Detectron2
+# ------------------------------------------------------------
+# 1. System dependencies
+# ------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3.10-dev \
+    python3-pip \
     build-essential \
     git \
     poppler-utils \
@@ -24,32 +31,44 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Smart Install (FIXED)
-RUN pip install --no-cache-dir --upgrade pip && \
-    if [ "$TARGETARCH" = "amd64" ]; then \
-        echo "Detected GPU Architecture (T4/Intel). Installing CUDA wheels..." && \
-        # PROD: Install Pre-built CUDA wheels
-        pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
-        pip install --no-cache-dir detectron2 -f https://dl.fbaipublicfiles.com/detectron2/wheels/cu121/torch2.1/index.html; \
-    else \
-        echo "Detected ARM Architecture (Mac M1/M2). Compiling from source..." && \
-        # DEV: Install Ninja (speeds up compilation) & Torch first
-        pip install --no-cache-dir ninja && \
-        pip install --no-cache-dir torch torchvision torchaudio && \
-        # THE FIX: --no-build-isolation allows setup.py to see the 'torch' we just installed
-        pip install --no-cache-dir --no-build-isolation 'git+https://github.com/facebookresearch/detectron2.git'; \
-    fi
+# Ensure python == python3.10
+RUN ln -sf python3.10 /usr/bin/python && \
+    pip install --upgrade pip
 
-# 3. Download Model Weights
-RUN mkdir -p $MODEL_DIR && \
-    curl -L -o "$MODEL_DIR/publaynet_faster_rcnn_R_50_FPN_3x.pth" $MODEL_URL && \
-    echo "Verified model download."
+# ------------------------------------------------------------
+# 2. PyTorch (PINNED, CUDA 12.1)
+# ------------------------------------------------------------
+RUN pip install --no-cache-dir \
+    torch==2.1.2+cu121 \
+    torchvision==0.16.2+cu121 \
+    torchaudio==2.1.2+cu121 \
+    --extra-index-url https://download.pytorch.org/whl/cu121
 
-# 4. Remaining Requirements
+# ------------------------------------------------------------
+# 3. Detectron2 (PREBUILT WHEELS — DO NOT CHANGE)
+# ------------------------------------------------------------
+RUN pip install --no-cache-dir \
+    detectron2 \
+    -f https://dl.fbaipublicfiles.com/detectron2/wheels/cu121/torch2.1/index.html
+
+# ------------------------------------------------------------
+# 4. Download model weights (cached layer)
+# ------------------------------------------------------------
+RUN mkdir -p "${MODEL_DIR}" && \
+    curl -L -o "${MODEL_DIR}/publaynet_faster_rcnn_R_50_FPN_3x.pth" "${MODEL_URL}"
+
+# ------------------------------------------------------------
+# 5. Remaining Python requirements
+# ------------------------------------------------------------
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. Source Code
+# ------------------------------------------------------------
+# 6. Application source
+# ------------------------------------------------------------
 COPY . .
 
+# ------------------------------------------------------------
+# 7. Runtime
+# ------------------------------------------------------------
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
