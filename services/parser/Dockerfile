@@ -1,9 +1,15 @@
 # =============================================================
-# Base image: slim Ubuntu with Python 3.10
+# Base image: NVIDIA CUDA Devel (Required to compile Detectron2 with GPU support)
+# We match the CUDA version (11.8) to the PyTorch version we intend to use.
 # =============================================================
-FROM python:3.10-slim-bookworm
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 
 ENV PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    # Force Detectron2 to compile with CUDA support even if no GPU is present during build
+    FORCE_CUDA="1" \
+    # Architectures to compile for (Ampere, Turing, Volta, etc.)
+    TORCH_CUDA_ARCH_LIST="Kepler;Kepler+Tesla;Maxwell;Maxwell+Tegra;Pascal;Volta;Turing;Ampere" \
     MODEL_DIR=/root/.torch/detectron2_models \
     MODEL_URL="https://www.dropbox.com/s/dgy9c10wykk4lq4/model_final.pth?dl=1"
 
@@ -11,8 +17,12 @@ WORKDIR /app
 
 # =============================================================
 # 1. System dependencies
+# Ubuntu 22.04 includes Python 3.10 by default
 # =============================================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-dev \
     build-essential \
     cmake \
     git \
@@ -24,14 +34,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     poppler-utils \
     tesseract-ocr \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/bin/python3 /usr/bin/python
 
 # =============================================================
 # 2. Install PyTorch (CUDA-enabled)
 # =============================================================
-RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
-# Adjust the CUDA version to match your GPU / PyTorch wheel availability
+# Install PyTorch for CUDA 11.8
 RUN pip install --no-cache-dir \
     torch==2.1.0+cu118 \
     torchvision==0.16.0+cu118 \
@@ -39,11 +50,14 @@ RUN pip install --no-cache-dir \
     --index-url https://download.pytorch.org/whl/cu118
 
 # =============================================================
-# 3. Install Detectron2 from source (GitHub)
+# 3. Install Detectron2 from source
 # =============================================================
+# Note 1: We use --no-build-isolation so it sees the Torch we just installed
+# Note 2: We removed '-e' so it installs the library files into site-packages,
+#         allowing us to delete the source folder safely.
 RUN git clone --depth 1 https://github.com/facebookresearch/detectron2.git /tmp/detectron2 && \
-    pip install --no-cache-dir --upgrade cython && \
-    pip install --no-cache-dir -e /tmp/detectron2 && \
+    python -m pip install --no-cache-dir --upgrade cython && \
+    python -m pip install --no-cache-dir --no-build-isolation /tmp/detectron2 && \
     rm -rf /tmp/detectron2
 
 # =============================================================
