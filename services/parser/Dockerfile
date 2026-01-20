@@ -1,8 +1,6 @@
-# ============================================================
-# PROD: Linux amd64 + NVIDIA GPU
-# Detectron2-compatible, pinned, reproducible
-# ============================================================
-
+# =============================================================
+# Base: Ubuntu + CUDA runtime
+# =============================================================
 FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -12,63 +10,55 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /app
 
-# ------------------------------------------------------------
-# 1. System dependencies
-# ------------------------------------------------------------
+# -------------------------------------------------------------
+# 1. System dependencies (build essentials + Python + git)
+# -------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 \
-    python3.10-dev \
-    python3-pip \
-    build-essential \
-    git \
-    poppler-utils \
-    tesseract-ocr \
-    libreoffice \
-    curl \
-    ca-certificates \
-    libgl1 \
-    libglib2.0-0 \
-    ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+    python3.10 python3.10-dev python3-pip \
+    build-essential git cmake ninja-build \
+    poppler-utils tesseract-ocr libreoffice \
+    curl ca-certificates libgl1 libglib2.0-0 ffmpeg && \
+    rm -rf /var/lib/apt/lists/*
 
-# Ensure python == python3.10
+# Create python symlink
 RUN ln -sf python3.10 /usr/bin/python && \
     pip install --upgrade pip
 
-# ------------------------------------------------------------
-# 2. PyTorch (PINNED, CUDA 12.1)
-# ------------------------------------------------------------
+# -------------------------------------------------------------
+# 2. Install PyTorch (CUDA enabled)
+# -------------------------------------------------------------
 RUN pip install --no-cache-dir \
-    torch==2.1.2+cu121 \
-    torchvision==0.16.2+cu121 \
-    torchaudio==2.1.2+cu121 \
+    torch==2.1.1+cu121 \
+    torchvision==0.16.1+cu121 \
+    torchaudio==2.1.1+cu121 \
     --extra-index-url https://download.pytorch.org/whl/cu121
 
-# ------------------------------------------------------------
-# 3. Detectron2 (PREBUILT WHEELS — DO NOT CHANGE)
-# ------------------------------------------------------------
-RUN pip install --no-cache-dir \
-    detectron2 \
-    -f https://dl.fbaipublicfiles.com/detectron2/wheels/cu121/torch2.1/index.html
+# -------------------------------------------------------------
+# 3. Build Detectron2 from source
+#    - from GitHub
+#    - uses ninja for faster builds
+#    - must happen after torch
+# -------------------------------------------------------------
+RUN git clone --branch master --depth 1 https://github.com/facebookresearch/detectron2.git /tmp/detectron2 && \
+    pip install --no-cache-dir --upgrade cython && \
+    pip install --no-cache-dir /tmp/detectron2 && \
+    rm -rf /tmp/detectron2
 
-# ------------------------------------------------------------
+# -------------------------------------------------------------
 # 4. Download model weights (cached layer)
-# ------------------------------------------------------------
+# -------------------------------------------------------------
 RUN mkdir -p "${MODEL_DIR}" && \
     curl -L -o "${MODEL_DIR}/publaynet_faster_rcnn_R_50_FPN_3x.pth" "${MODEL_URL}"
 
-# ------------------------------------------------------------
-# 5. Remaining Python requirements
-# ------------------------------------------------------------
+# -------------------------------------------------------------
+# 5. Remaining requirements
+# -------------------------------------------------------------
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ------------------------------------------------------------
-# 6. Application source
-# ------------------------------------------------------------
+# -------------------------------------------------------------
+# 6. App code
+# -------------------------------------------------------------
 COPY . .
 
-# ------------------------------------------------------------
-# 7. Runtime
-# ------------------------------------------------------------
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
