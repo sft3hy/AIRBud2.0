@@ -387,7 +387,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
       </Card>
 
       <div
-        className="flex-1 w-full h-full overflow-hidden"
+        className="flex-1 w-full h-screen overflow-hidden"
         style={{ cursor: hoveredNode ? "pointer" : "grab" }}
       >
         {hasData ? (

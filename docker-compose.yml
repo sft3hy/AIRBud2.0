@@ -38,6 +38,7 @@ services:
       - "5173:5173"
     environment:
       - VITE_API_URL=http://localhost:8000
+      - VITE_NETWORK=LOW
       - VITE_TEST_MODE=${TEST:-False}
       - WATCHPACK_POLLING=true
       - CHOKIDAR_USEPOLLING=true # Better for Docker file watching

@@ -233,10 +233,10 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
   return (
     <div className="flex flex-col h-full bg-background overflow-hidden relative">
       {/* Background Decorator */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 blur-3xl pointer-events-none" />
+      {/* <div className="absolute right-0 w-64 h-64 bg-primary/5 blur-3xl pointer-events-none" /> */}
 
       {/* Header */}
-      <div className="p-3 border-b bg-background/80 backdrop-blur-md flex items-center gap-3 shrink-0 z-10">
+      <div className="px-6 py-4 border-b bg-background/80 backdrop-blur-md flex items-center gap-3 shrink-0 z-10">
         <Button
           variant="ghost"
           size="icon"
@@ -284,37 +284,44 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
         {/* --- FILES TAB --- */}
         <TabsContent
           value="docs"
-          className="flex-1 flex flex-col min-h-0 mt-0 w-full relative"
+          className="p-6 flex-1 flex flex-col min-h-0 mt-0 w-full relative"
         >
           <ScrollArea className="flex-1 w-full">
             <div className="px-4 py-4 space-y-2 mb-6">
-              {currentDocs.map((doc) => (
+              {currentDocs.map((doc, index) => (
                 <div
                   key={doc.id}
-                  className="group grid grid-cols-[auto_1fr_auto] items-center gap-3 w-full p-3 bg-card hover:bg-muted/30 border rounded-lg text-xs transition-all duration-200 hover:shadow-sm hover:border-primary/20"
+                  className="group grid grid-cols-[1fr_auto] items-center gap-3 w-full p-3 bg-card hover:bg-muted/30 border rounded-lg text-xs transition-all duration-200 hover:shadow-sm hover:border-primary/20"
                 >
-                  {/* Icon - fixed width */}
-                  <div className="p-2 bg-muted rounded-md group-hover:bg-background transition-colors">
-                    {getFileIcon(doc.original_filename)}
-                  </div>
-
-                  {/* Text Content - takes remaining space and truncates */}
+                  {/* Left side: Number, Icon, Filename, Model info */}
                   <div className="flex flex-col min-w-0 overflow-hidden">
-                    <TooltipProvider>
-                      <Tooltip delayDuration={300}>
-                        <TooltipTrigger asChild>
-                          <span className="truncate font-semibold text-foreground cursor-default block">
-                            {doc.original_filename}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent
-                          side="top"
-                          className="max-w-[300px] z-50 break-all"
-                        >
-                          {doc.original_filename}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                    <span className="flex items-center gap-2 min-w-0">
+                      <div className="text-muted-foreground font-mono select-none flex-shrink-0">
+                        {index + 1}.
+                      </div>
+                      <div className="p-2 bg-muted rounded-md group-hover:bg-background transition-colors flex-shrink-0">
+                        {getFileIcon(doc.original_filename)}
+                      </div>
+
+                      {/* Filename with tooltip */}
+                      <div className="min-w-0 overflow-hidden flex-1">
+                        <TooltipProvider>
+                          <Tooltip delayDuration={300}>
+                            <TooltipTrigger asChild>
+                              <span className="truncate font-semibold text-foreground cursor-default block">
+                                {doc.original_filename}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent
+                              side="top"
+                              className="max-w-[300px] z-50 break-all"
+                            >
+                              {doc.original_filename}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                    </span>
 
                     <div className="flex items-center gap-2 mt-1 min-w-0">
                       <span className="text-[10px] text-muted-foreground uppercase flex-shrink-0">
@@ -326,19 +333,18 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Trash Can - fixed width, always visible */}
+                  {/* Right side: Trash Can - always visible, always on the right */}
                   {isOwner ? (
                     <div className="flex-shrink-0">
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <TooltipProvider>
                             <Tooltip delayDuration={200}>
-                              {" "}
                               <TooltipTrigger asChild>
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-7 w-7 text-bold hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
+                                  className="h-7 w-7 text-bold hover:text-red-500 hover:bg-red-500/10 transition-all"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -386,7 +392,7 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
               {currentDocs.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-12 text-muted-foreground/50 border-2 border-dashed border-muted/50 rounded-xl bg-muted/5">
                   <Paperclip className="h-8 w-8 mb-2" />
-                  <p className="text-xs">No documents indexed.</p>
+                  <p className="text-xs">No files uploaded</p>
                 </div>
               )}
             </div>

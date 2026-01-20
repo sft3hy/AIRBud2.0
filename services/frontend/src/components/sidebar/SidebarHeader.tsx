@@ -31,13 +31,15 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
     <div
       className={cn(
         "border-b bg-background flex shrink-0 transition-all",
-        isCollapsed ? "p-2 justify-center flex-col gap-2" : "p-4 flex-col gap-4"
+        isCollapsed
+          ? "p-2 justify-center flex-col gap-2"
+          : "p-4 flex-col gap-4",
       )}
     >
       <div
         className={cn(
           "flex items-center",
-          isCollapsed ? "justify-center" : "justify-between"
+          isCollapsed ? "justify-center" : "justify-between",
         )}
       >
         {!isCollapsed && (
@@ -49,7 +51,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
                 "h-2.5 w-2.5 rounded-full shrink-0",
                 systemStatus?.online
                   ? "bg-green-500"
-                  : "bg-red-500 animate-pulse"
+                  : "bg-red-500 animate-pulse",
               )}
             />
           </h2>
@@ -64,7 +66,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
                 onClick={toggleSidebar}
                 className={cn(
                   "h-8 w-8 text-muted-foreground",
-                  isCollapsed && "h-10 w-10"
+                  isCollapsed && "h-10 w-10",
                 )}
               >
                 {isCollapsed ? (
@@ -93,7 +95,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
               "text-sm font-medium py-1.5 rounded-md transition-all",
               mode === "collections"
                 ? "bg-background shadow-sm text-foreground"
-                : "text-muted-foreground hover:text-foreground"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             Collections
@@ -104,7 +106,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
               "text-sm font-medium py-1.5 rounded-md transition-all",
               mode === "groups"
                 ? "bg-background shadow-sm text-foreground"
-                : "text-muted-foreground hover:text-foreground"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             Groups

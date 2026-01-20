@@ -17,6 +17,21 @@ import { Toaster } from "@/components/ui/toaster";
 
 const queryClient = new QueryClient();
 
+const AppLayout = ({ children }: { children: React.ReactNode }) => {
+  return (
+    // <div className="flex flex-col h-screen w-screen bg-background">
+    // {/* Top Banner */}
+    // <ClassificationBanner />
+
+    // {/* Main Content Area - Grows to fill space, handles its own scrolling */}
+    <div className="flex-1 min-h-0 relative flex flex-col">{children}</div>
+
+    // {/* Bottom Banner */}
+    // <ClassificationBanner />
+    // </div>
+  );
+};
+
 const AppContent = () => {
   const {
     data: status,

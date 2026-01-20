@@ -209,3 +209,5 @@ __marimo__/
 *.key
 *.pem
 *.crt
+*.csr
+ClassificationBanner.tsx

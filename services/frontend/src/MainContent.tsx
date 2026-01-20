@@ -313,7 +313,7 @@ export const MainContent = ({
         <UserStatus />
       </div>
 
-      <div className="flex-1 overflow-hidden relative bg-muted/20 animate-in fade-in duration-500">
+      <div className="flex-1 overflow-auto relative bg-muted/20 animate-in fade-in duration-500">
         <ScrollArea className="h-full px-4 md:px-20 py-4" ref={scrollRef}>
           <div className="space-y-10 pb-4 max-w-4xl mx-auto min-h-[500px]">
             {chatHistory.map((msg, idx) => (
