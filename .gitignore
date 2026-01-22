@@ -211,4 +211,7 @@ __marimo__/
 *.crt
 *.csr
 ClassificationBanner.tsx
+model_cache
+package-lock.json
+package.json
 helm-chart/apiKeys.yaml
