@@ -1,6 +1,7 @@
 import time
 import json
 import uuid
+import os
 import psycopg2
 from psycopg2 import pool
 from psycopg2.extras import RealDictCursor
@@ -157,9 +158,12 @@ class DatabaseManager:
                     chart_dir TEXT,
                     faiss_index_path TEXT,
                     chunks_path TEXT,
-                    chart_descriptions_json TEXT
+                    chart_descriptions_json TEXT,
+                    preview_path TEXT
                 )
             """)
+            cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS preview_path TEXT")
+
             
             # 6. Queries
             cur.execute("""
@@ -340,17 +344,17 @@ class DatabaseManager:
     # --- Document Operations ---
     def add_document_record(self, filename: str, vision_model: str, chart_dir: str, 
                           faiss_path: str, chunks_path: str, chart_descriptions: Any, 
-                          collection_id: int) -> int:
+                          collection_id: int, preview_path: str) -> int: # Added preview_path param
         
         desc_json = json.dumps(chart_descriptions) if isinstance(chart_descriptions, dict) else "{}"
         
         with self.get_cursor(commit=True) as cur:
             cur.execute("""
                 INSERT INTO documents 
-                (collection_id, original_filename, vision_model_used, timestamp, chart_dir, faiss_index_path, chunks_path, chart_descriptions_json)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                (collection_id, original_filename, vision_model_used, timestamp, chart_dir, faiss_index_path, chunks_path, chart_descriptions_json, preview_path)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            """, (collection_id, filename, vision_model, datetime.now(), chart_dir, faiss_path, chunks_path, desc_json))
+            """, (collection_id, filename, vision_model, datetime.now(), chart_dir, faiss_path, chunks_path, desc_json, preview_path))
             return cur.fetchone()['id']
 
     def update_document_paths(self, doc_id: int, faiss_path: str, chunks_path: str):
@@ -394,6 +398,14 @@ class DatabaseManager:
             return cur.fetchone()
 
     def delete_document(self, doc_id: int):
+        # Fetch path before deleting record
+        doc = self.get_document_by_id(doc_id)
+        if doc and doc.get('preview_path') and os.path.exists(doc['preview_path']):
+            try:
+                os.remove(doc['preview_path'])
+            except OSError:
+                pass
+                
         with self.get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM documents WHERE id=%s", (doc_id,))
 

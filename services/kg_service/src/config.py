@@ -23,6 +23,6 @@ class Config:
         MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct" 
     else:
         LLM_PROVIDER = "sanctuary"
-        MODEL_NAME = "claude-3-haiku-20240307" # Haiku is great/cheap for graph extraction
+        MODEL_NAME = "bedrock-claude-4-5-sonnet-v1" # Haiku is great/cheap for graph extraction
 
 settings = Config()

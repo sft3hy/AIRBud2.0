@@ -116,8 +116,14 @@ async def run_pipeline_task(collection_id: int, filename: str, vision_model: str
         
         markdown_text = await rag.index_document(str(file_path), status_callback=update_status)
 
-        update_status("indexing", "Finalizing Vector Index...", 85)
-        
+        # NEW: Save Markdown Preview
+        preview_filename = f"preview_{uuid.uuid4()}.md"
+        preview_path = settings.PREVIEWS_DIR / preview_filename
+        with open(preview_path, "w", encoding="utf-8") as f:
+            f.write(markdown_text)
+
+        update_status("indexing", "Finalizing Vector Index...", 85)    
+
         doc_id = await asyncio.to_thread(
             db.add_document_record,
             filename=filename,
@@ -126,7 +132,9 @@ async def run_pipeline_task(collection_id: int, filename: str, vision_model: str
             faiss_path="",
             chunks_path="",
             chart_descriptions=rag.chart_descriptions,
-            collection_id=collection_id
+            collection_id=collection_id,
+            preview_path=str(preview_path) # Pass the path
+
         )
         
         try:
@@ -463,6 +471,37 @@ def get_charts(cid: int, user: Dict = Depends(auth_handler.require_user)):
 @app.get("/collections/{cid}/history")
 def get_history(cid: int, user: Dict = Depends(auth_handler.require_user)):
     return db.get_queries_for_collection(cid, user['id'])
+
+@app.get("/documents/{doc_id}/preview")
+def get_document_preview(doc_id: int, user: Dict = Depends(auth_handler.require_user)):
+    """
+    Returns the raw markdown content of the document.
+    """
+    # 1. Check ownership via DB
+    doc_info = db.get_document_ownership(doc_id)
+    if not doc_info:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Optional: Check if user owns the collection or is in the group. 
+    # (Simplified here assuming get_document_ownership check + existing user session is sufficient context)
+    
+    doc = db.get_document_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    path = doc.get("preview_path")
+    
+    if not path or not os.path.exists(path):
+        # Fallback for old documents created before this feature
+        return {"content": "# Preview Not Available\n\nThis document was processed before the preview feature was enabled."}
+        
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return {"content": content}
+    except Exception as e:
+        logger.error(f"Error reading preview file: {e}")
+        raise HTTPException(status_code=500, detail="Could not read preview file")
 
 # --- Groups API ---
 

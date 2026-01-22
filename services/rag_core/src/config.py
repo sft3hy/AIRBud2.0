@@ -20,6 +20,8 @@ class Config:
     CHARTS_DIR = DATA_DIR / "charts"
     FAISS_DIR = DATA_DIR / "faiss_indexes"
     CHUNKS_DIR = DATA_DIR / "chunks"
+    PREVIEWS_DIR = DATA_DIR / "previews" 
+
 
     # Database
     DB_HOST = os.getenv("POSTGRES_SERVER", "postgres")
@@ -42,7 +44,7 @@ class Config:
     if LLM_PROVIDER == "groq":
         GEN_MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"
     else:
-        GEN_MODEL_NAME = "claude-3.5-sonnet"
+        GEN_MODEL_NAME = "bedrock-claude-4-5-sonnet-v1"
     
     # RAG Settings
     EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
@@ -51,5 +53,5 @@ class Config:
 settings = Config()
 
 # Ensure directories exist
-for d in [settings.DATA_DIR, settings.UPLOAD_DIR, settings.CHARTS_DIR, settings.FAISS_DIR, settings.CHUNKS_DIR]:
+for d in [settings.DATA_DIR, settings.UPLOAD_DIR, settings.CHARTS_DIR, settings.FAISS_DIR, settings.CHUNKS_DIR, settings.PREVIEWS_DIR]:
     os.makedirs(d, exist_ok=True)
