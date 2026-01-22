@@ -58,18 +58,29 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ include "smart-rag.fullname" . }}-env
-                  key: NEO4J_PASSWORD # Reusing password as per compose or create new secret
+                  key: NEO4J_PASSWORD
             - name: DOCKER_INFLUXDB_INIT_ADMIN_TOKEN
               value: {{ .Values.global.secrets.influxToken | quote }}
           volumeMounts:
             - name: influxdb-data
               mountPath: /var/lib/influxdb2
-          healthcheck:
-             exec:
-               command: ["curl", "-f", "http://localhost:8086/health"]
-             interval: 5s
-             timeout: 10s
-             retries: 5
+          
+          # --- FIXED SECTION: Changed healthcheck to probes ---
+          livenessProbe:
+            exec:
+              command: ["curl", "-f", "http://localhost:8086/health"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            exec:
+              command: ["curl", "-f", "http://localhost:8086/health"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+          # --------------------------------------------------
+
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
