@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "smart-rag.fullname" . }}-frontend
+spec:
+  ports: [port: 5173]
+  selector:
+    {{- include "smart-rag.labels" . | nindent 4 }}
+    component: frontend
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "smart-rag.fullname" . }}-rag-core
+spec:
+  ports: [port: 8000]
+  selector:
+    {{- include "smart-rag.labels" . | nindent 4 }}
+    component: rag-core
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "smart-rag.fullname" . }}-parser
+spec:
+  ports: [port: 8001]
+  selector:
+    {{- include "smart-rag.labels" . | nindent 4 }}
+    component: parser
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "smart-rag.fullname" . }}-vision
+spec:
+  ports: [port: 8002]
+  selector:
+    {{- include "smart-rag.labels" . | nindent 4 }}
+    component: vision
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "smart-rag.fullname" . }}-kg-service
+spec:
+  ports: [port: 8003]
+  selector:
+    {{- include "smart-rag.labels" . | nindent 4 }}
+    component: kg-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "smart-rag.fullname" . }}-postgres
+spec:
+  ports: [port: 5432]
+  selector:
+    {{- include "smart-rag.labels" . | nindent 4 }}
+    component: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "smart-rag.fullname" . }}-neo4j
+spec:
+  ports: 
+    - port: 7474
+      name: http
+    - port: 7687
+      name: bolt
+  selector:
+    {{- include "smart-rag.labels" . | nindent 4 }}
+    component: neo4j

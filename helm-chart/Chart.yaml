@@ -1,0 +1,7 @@
+apiVersion: v2
+appVersion: 1.0.0
+description: Enterprise RAG system with GraphRAG, Vision, and mTLS Auth
+icon: https://i.imgur.com/Z9qmhkH.png
+name: smart-rag
+type: application
+version: 1.0.0

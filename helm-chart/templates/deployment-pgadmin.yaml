@@ -1,0 +1,79 @@
+{{- if .Values.pgadmin.enabled -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "smart-rag.fullname" . }}-pgadmin-data
+spec:
+  accessModes: [ "ReadWriteOnce" ]
+  resources:
+    requests:
+      storage: {{ .Values.pgadmin.storage }}
+  storageClassName: {{ .Values.global.storageClass }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "smart-rag.fullname" . }}-pgadmin
+  labels:
+    {{- include "smart-rag.labels" . | nindent 4 }}
+    component: pgadmin
+spec:
+  ports:
+    - port: 5050
+      targetPort: 80
+      name: http
+  selector:
+    {{- include "smart-rag.selectorLabels" . | nindent 4 }}
+    component: pgadmin
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "smart-rag.fullname" . }}-pgadmin
+  labels:
+    {{- include "smart-rag.labels" . | nindent 4 }}
+    component: pgadmin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "smart-rag.selectorLabels" . | nindent 6 }}
+      component: pgadmin
+  template:
+    metadata:
+      labels:
+        {{- include "smart-rag.selectorLabels" . | nindent 8 }}
+        component: pgadmin
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: pgadmin
+          image: "{{ .Values.pgadmin.image }}"
+          ports:
+            - containerPort: 80
+          env:
+            - name: PGADMIN_DEFAULT_EMAIL
+              value: {{ .Values.pgadmin.email | quote }}
+            - name: PGADMIN_DEFAULT_PASSWORD
+              value: "admin" # Change this in production
+            - name: PGADMIN_CONFIG_CONSOLE_LOG_LEVEL
+              value: "50"
+          volumeMounts:
+            - name: pgadmin-data
+              mountPath: /var/lib/pgadmin
+      volumes:
+        - name: pgadmin-data
+          persistentVolumeClaim:
+            claimName: {{ include "smart-rag.fullname" . }}-pgadmin-data
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

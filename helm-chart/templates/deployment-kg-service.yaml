@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "smart-rag.fullname" . }}-kg-service
+  labels:
+    {{- include "smart-rag.labels" . | nindent 4 }}
+    component: kg-service
+spec:
+  replicas: {{ .Values.kgService.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "smart-rag.selectorLabels" . | nindent 6 }}
+      component: kg-service
+  template:
+    metadata:
+      labels:
+        {{- include "smart-rag.selectorLabels" . | nindent 8 }}
+        component: kg-service
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: kg-service
+          image: "{{ .Values.kgService.image.repository }}:{{ .Values.kgService.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.kgService.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: 8003
+              protocol: TCP
+          # Load sensitive keys (GROQ_API_KEY, NEO4J_PASSWORD, etc.)
+          envFrom:
+            - secretRef:
+                name: {{ include "smart-rag.fullname" . }}-env
+          env:
+            - name: NEO4J_URI
+              value: "bolt://{{ include "smart-rag.fullname" . }}-neo4j:7687"
+            - name: NEO4J_USER
+              value: "neo4j"
+            # Ensure TEST mode matches global config
+            - name: TEST
+              value: "{{ .Values.global.testMode | default "False" }}"
+          resources:
+            {{- toYaml .Values.kgService.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

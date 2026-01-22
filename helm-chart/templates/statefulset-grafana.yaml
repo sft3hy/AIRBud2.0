@@ -1,0 +1,73 @@
+{{- if .Values.grafana.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "smart-rag.fullname" . }}-grafana
+  labels:
+    {{- include "smart-rag.labels" . | nindent 4 }}
+    component: grafana
+spec:
+  ports:
+    - port: 3000
+      targetPort: 3000
+      name: http
+  selector:
+    {{- include "smart-rag.selectorLabels" . | nindent 4 }}
+    component: grafana
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "smart-rag.fullname" . }}-grafana
+  labels:
+    {{- include "smart-rag.labels" . | nindent 4 }}
+    component: grafana
+spec:
+  serviceName: {{ include "smart-rag.fullname" . }}-grafana
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "smart-rag.selectorLabels" . | nindent 6 }}
+      component: grafana
+  template:
+    metadata:
+      labels:
+        {{- include "smart-rag.selectorLabels" . | nindent 8 }}
+        component: grafana
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: grafana
+          image: "{{ .Values.grafana.image }}"
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: "admin"
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: {{ .Values.global.secrets.grafanaPassword | quote }}
+          volumeMounts:
+            - name: grafana-data
+              mountPath: /var/lib/grafana
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: grafana-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ .Values.global.storageClass }}
+        resources:
+          requests:
+            storage: {{ .Values.grafana.storage }}
+{{- end }}

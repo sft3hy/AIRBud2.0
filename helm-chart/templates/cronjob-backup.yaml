@@ -1,0 +1,74 @@
+{{- if .Values.backup.enabled -}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "smart-rag.fullname" . }}-backup
+  labels:
+    {{- include "smart-rag.labels" . | nindent 4 }}
+    component: backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "smart-rag.labels" . | nindent 12 }}
+            component: backup
+        spec:
+          restartPolicy: OnFailure
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: backup
+              image: "{{ .Values.backup.image.repository }}:{{ .Values.backup.image.tag }}"
+              env:
+                - name: TZ
+                  value: {{ .Values.backup.env.tz }}
+                - name: POSTGRES_SERVER
+                  value: "{{ include "smart-rag.fullname" . }}-postgres"
+                - name: POSTGRES_USER
+                  value: "rag_user"
+                - name: POSTGRES_DB
+                  value: "rag_db"
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "smart-rag.fullname" . }}-env
+                      key: POSTGRES_PASSWORD
+              volumeMounts:
+                - name: docker-sock
+                  mountPath: /var/run/docker.sock
+                # Mount shared data to be backed up
+                - name: shared-data
+                  mountPath: /shared_data
+                  readOnly: true
+                # Mount location to write backups to
+                - name: shared-data
+                  mountPath: /backups
+                  subPath: backups
+                # Attempt to mount Neo4j data (Might fail if not RWX)
+                - name: neo4j-data
+                  mountPath: /neo4j_data
+                  readOnly: true
+          volumes:
+            - name: docker-sock
+              hostPath:
+                path: /var/run/docker.sock
+            - name: shared-data
+              persistentVolumeClaim:
+                claimName: {{ include "smart-rag.fullname" . }}-shared-data
+            - name: neo4j-data
+              persistentVolumeClaim:
+                claimName: {{ include "smart-rag.fullname" . }}-neo4j-data
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

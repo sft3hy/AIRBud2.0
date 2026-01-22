@@ -1,0 +1,169 @@
+# Global settings
+nameOverride: ""
+fullnameOverride: "smart-rag"
+
+global:
+  storageClass: "standard" # Change to 'efs' or 'nfs' if running on a cluster with multiple nodes
+  secrets:
+    groqApiKey: "your-groq-key" # Mapped from GROQ_API_KEY
+    sanctuaryApiKey: "your-sanctuary-key" # Mapped from SANCTUARY_API_KEY
+    postgresPassword: "rag_password" # Mapped from POSTGRES_PASSWORD
+    neo4jPassword: "smartrag_password" # Mapped from NEO4J_PASSWORD
+    influxToken: "smartrag-admin-token" # New: For InfluxDB
+    grafanaPassword: "smartrag" # New: For Grafana
+
+# Shared Storage for RAG/Vision/Parser (/data)
+sharedData:
+  size: 10Gi
+  accessMode: ReadWriteMany
+
+# --- Services Configuration ---
+
+gateway:
+  replicaCount: 1
+  image:
+    repository: nginx
+    tag: alpine
+  service:
+    type: NodePort # Or LoadBalancer for production
+    port: 443
+    nodePort: 30443
+  # TLS Certs must be manually created as a secret named 'gateway-certs'
+
+frontend:
+  replicaCount: 1
+  image:
+    repository: harbor.i2cv.io/cosmichorizon/smart-rag-frontend
+    tag: latest
+    pullPolicy: Always
+  env:
+    viteApiUrl: "https://chart-example.local" # Public URL for the browser
+    viteNetwork: "LOW"
+    viteTestMode: "False"
+
+ragCore:
+  replicaCount: 1
+  image:
+    repository: harbor.i2cv.io/cosmichorizon/smart-rag-core
+    tag: latest
+  env:
+    llmProvider: "groq"
+    test: "False"
+    # K8s DNS: service-name.namespace.svc.cluster.local
+    parserApiUrl: "http://smart-rag-parser:8001"
+    visionApiUrl: "http://smart-rag-vision:8002"
+    postgresUser: "rag_user"
+    postgresDb: "rag_db"
+    hfHome: "/data/huggingface"
+  resources:
+    limits:
+      memory: 4Gi
+      cpu: 1
+    requests:
+      memory: 1Gi
+      cpu: 500m
+
+vision:
+  replicaCount: 1
+  image:
+    repository: harbor.i2cv.io/cosmichorizon/smart-rag-vision
+    tag: latest
+  env:
+    # NOTE: host.docker.internal does not exist in K8s.
+    # If Ollama is on the Node, use the Node IP or external service entry.
+    ollamaBaseUrl: "http://host-node-ip:11434"
+  gpu:
+    enabled: true
+    count: 1
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: 8Gi
+    requests:
+      memory: 4Gi
+
+parser:
+  replicaCount: 1
+  image:
+    repository: harbor.i2cv.io/cosmichorizon/smart-rag-parser
+    tag: latest
+
+kgService:
+  replicaCount: 1
+  image:
+    repository: harbor.i2cv.io/cosmichorizon/smart-rag-kg
+    tag: latest
+  env:
+    neo4jUser: "neo4j"
+    test: "False"
+    neo4jUri: "bolt://smart-rag-neo4j:7687"
+
+# --- Databases (StatefulSets) ---
+
+postgres:
+  enabled: true
+  storage: 10Gi
+  image: postgres:15-alpine
+  env:
+    user: "rag_user"
+    db: "rag_db"
+
+neo4j:
+  enabled: true
+  storage: 10Gi
+  image: neo4j:5.15-community
+  resources:
+    limits:
+      memory: 2Gi
+    requests:
+      memory: 1Gi
+  env:
+    heapInitial: "512m"
+    heapMax: "1G"
+
+# --- Monitoring & Admin (New Sections) ---
+
+pgadmin:
+  enabled: true
+  image: dpage/pgadmin4
+  email: "admin@example.com"
+  storage: 1Gi
+
+influxdb:
+  enabled: true
+  image: influxdb:2.7
+  storage: 5Gi
+  org: "smartrag_org"
+  bucket: "glances"
+
+grafana:
+  enabled: true
+  image: grafana/grafana:latest
+  storage: 2Gi
+
+# --- Backups ---
+backup:
+  enabled: true
+  schedule: "0 0 * * 3" # Wednesday at Midnight
+  image:
+    repository: harbor.i2cv.io/cosmichorizon/smart-rag-backups
+    tag: latest
+  env:
+    tz: "America/New_York"
+
+# --- Node Selection ---
+nodeSelector:
+  project: cosmichorizon
+
+tolerations:
+  - effect: NoSchedule
+    key: cosmichorizon.worker/cpu
+    operator: Equal
+    value: "true"
+  - effect: NoExecute
+    key: cosmichorizon.worker/cpu
+    operator: Equal
+    value: "true"
+
+imagePullSecrets:
+  - name: s-hxl2n

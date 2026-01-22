@@ -1,0 +1,90 @@
+{{- if .Values.influxdb.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "smart-rag.fullname" . }}-influxdb
+  labels:
+    {{- include "smart-rag.labels" . | nindent 4 }}
+    component: influxdb
+spec:
+  ports:
+    - port: 8086
+      targetPort: 8086
+      name: http
+  selector:
+    {{- include "smart-rag.selectorLabels" . | nindent 4 }}
+    component: influxdb
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "smart-rag.fullname" . }}-influxdb
+  labels:
+    {{- include "smart-rag.labels" . | nindent 4 }}
+    component: influxdb
+spec:
+  serviceName: {{ include "smart-rag.fullname" . }}-influxdb
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "smart-rag.selectorLabels" . | nindent 6 }}
+      component: influxdb
+  template:
+    metadata:
+      labels:
+        {{- include "smart-rag.selectorLabels" . | nindent 8 }}
+        component: influxdb
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: influxdb
+          image: "{{ .Values.influxdb.image }}"
+          ports:
+            - containerPort: 8086
+              name: http
+          env:
+            - name: DOCKER_INFLUXDB_INIT_MODE
+              value: "setup"
+            - name: DOCKER_INFLUXDB_INIT_USERNAME
+              value: "admin"
+            - name: DOCKER_INFLUXDB_INIT_ORG
+              value: {{ .Values.influxdb.org | quote }}
+            - name: DOCKER_INFLUXDB_INIT_BUCKET
+              value: {{ .Values.influxdb.bucket | quote }}
+            - name: DOCKER_INFLUXDB_INIT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "smart-rag.fullname" . }}-env
+                  key: NEO4J_PASSWORD # Reusing password as per compose or create new secret
+            - name: DOCKER_INFLUXDB_INIT_ADMIN_TOKEN
+              value: {{ .Values.global.secrets.influxToken | quote }}
+          volumeMounts:
+            - name: influxdb-data
+              mountPath: /var/lib/influxdb2
+          healthcheck:
+             exec:
+               command: ["curl", "-f", "http://localhost:8086/health"]
+             interval: 5s
+             timeout: 10s
+             retries: 5
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: influxdb-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ .Values.global.storageClass }}
+        resources:
+          requests:
+            storage: {{ .Values.influxdb.storage }}
+{{- end }}
