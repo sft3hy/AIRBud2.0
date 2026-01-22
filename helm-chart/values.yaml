@@ -12,6 +12,15 @@ global:
     influxToken: "smartrag-admin-token" # New: For InfluxDB
     grafanaPassword: "smartrag" # New: For Grafana
 
+# --- NEW SECTION: External Secrets Configuration ---
+externalSecrets:
+  groq:
+    secretName: "groq-api-key"
+    key: "GROQ_API_KEY" # Ensure this matches the key inside your Rancher secret
+  sanctuary:
+    secretName: "sanctuary"
+    key: "SANCTUARY_API_KEY" # Ensure this matches the key inside your Rancher secret
+
 # Shared Storage for RAG/Vision/Parser (/data)
 sharedData:
   size: 10Gi
@@ -28,6 +37,9 @@ gateway:
     type: NodePort # Or LoadBalancer for production
     port: 443
     nodePort: 30443
+  tls:
+    serverSecretName: "airbud-server-cert" # The TLS secret you created
+    clientCaSecretName: "airbud-client-ca" # The Opaque secret you created
   # TLS Certs must be manually created as a secret named 'gateway-certs'
 
 frontend:

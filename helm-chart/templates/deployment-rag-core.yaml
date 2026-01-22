@@ -42,6 +42,16 @@ spec:
             - secretRef:
                 name: {{ include "smart-rag.fullname" . }}-env
           env:
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.groq.secretName }}
+                  key: {{ .Values.externalSecrets.groq.key }}
+            - name: SANCTUARY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.sanctuary.secretName }}
+                  key: {{ .Values.externalSecrets.sanctuary.key }}
             - name: PARSER_API_URL
               value: "http://{{ include "smart-rag.fullname" . }}-parser:8001"
             - name: VISION_API_URL

@@ -29,16 +29,27 @@ spec:
             - name: http
               containerPort: 8003
               protocol: TCP
-          # Load sensitive keys (GROQ_API_KEY, NEO4J_PASSWORD, etc.)
+          # Load generic secrets (DB passwords, etc.)
           envFrom:
             - secretRef:
                 name: {{ include "smart-rag.fullname" . }}-env
           env:
+            # --- External Secrets Mapping ---
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.groq.secretName }}
+                  key: {{ .Values.externalSecrets.groq.key }}
+            - name: SANCTUARY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.sanctuary.secretName }}
+                  key: {{ .Values.externalSecrets.sanctuary.key }}
+            # -------------------------------
             - name: NEO4J_URI
               value: "bolt://{{ include "smart-rag.fullname" . }}-neo4j:7687"
             - name: NEO4J_USER
               value: "neo4j"
-            # Ensure TEST mode matches global config
             - name: TEST
               value: "{{ .Values.global.testMode | default "False" }}"
           resources:

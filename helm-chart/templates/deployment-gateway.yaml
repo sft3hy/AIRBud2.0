@@ -23,20 +23,39 @@ spec:
           ports:
             - containerPort: 443
           volumeMounts:
+            # Mount Config
             - name: config
               mountPath: /etc/nginx/nginx.conf
               subPath: nginx.conf
             - name: config
               mountPath: /usr/share/nginx/html/no-cert.html
               subPath: no-cert.html
-            - name: certs
-              mountPath: /etc/nginx/certs
+            
+            # Mount Server Certs (tls.crt/tls.key from K8s TLS secret)
+            - name: server-certs
+              mountPath: /etc/nginx/certs/server.crt
+              subPath: tls.crt
+            - name: server-certs
+              mountPath: /etc/nginx/certs/server.key
+              subPath: tls.key
+
+            # Mount Client CA (trust_chain.pem)
+            - name: client-ca
+              mountPath: /etc/nginx/certs/trust_chain.pem
+              subPath: trust_chain.pem
               readOnly: true
+
       volumes:
         - name: config
           configMap:
             name: {{ include "smart-rag.fullname" . }}-gateway-conf
-        - name: certs
+        
+        # Reference the TLS Secret (Rancher type: TLS Certificate)
+        - name: server-certs
           secret:
-            # You must create this secret manually or via external process
-            secretName: gateway-certs
+            secretName: {{ .Values.gateway.tls.serverSecretName }}
+        
+        # Reference the Opaque Secret (Rancher type: Opaque)
+        - name: client-ca
+          secret:
+            secretName: {{ .Values.gateway.tls.clientCaSecretName }}
