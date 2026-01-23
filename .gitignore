@@ -214,3 +214,4 @@ ClassificationBanner.tsx
 model_cache
 helm-chart/apiKeys.yaml
 helm-chart/*
+*.cnf
