@@ -14,4 +14,15 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    host: true,
+    strictPort: true,
+    port: 5173,
+    // Allow this host (your ELB hostname)
+    allowedHosts: [
+      'localhost',
+      'smart-rag-frontend',
+      'test-cosmichorizon-worker-68a3110f01feebd0.elb.us-gov-west-1.amazonaws.com'
+    ],
+  },
 })
