@@ -91,7 +91,7 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
 
   return (
     <>
-      <div className="flex flex-col h-full bg-background border-l border-border/60">
+      <div className="flex flex-col h-full bg-background/80 border-l border-border/60">
         {/* Header / Navigation */}
         <div className="flex items-center justify-between p-3 border-b bg-card/50 backdrop-blur-sm shrink-0">
           <Button
@@ -126,7 +126,7 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
           <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[radial-gradient(#000_1px,transparent_1px)] dark:bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
 
           <Card
-            className="relative group w-full h-full max-h-[400px] flex items-center justify-center bg-background/50 border-dashed border-2 overflow-hidden cursor-zoom-in transition-all duration-300 hover:border-primary/30 hover:shadow-lg"
+            className="relative group w-full h-full max-h-[400px] flex items-center justify-center bg-background/80/50 border-dashed border-2 overflow-hidden cursor-zoom-in transition-all duration-300 hover:border-primary/30 hover:shadow-lg"
             onClick={() => setIsFullscreen(true)}
           >
             {currentChart && currentChart.url ? (
@@ -165,7 +165,7 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
                   <FileText className="h-4 w-4" />
                 </div>
                 <span
-                  className="text-sm font-medium truncate"
+                  className="grid grid-cols-[1fr_auto] items-center text-xs px-3 py-2 bg-card rounded-md border shadow-sm gap-2 w-full"
                   title={currentChart?.doc_name}
                 >
                   {currentChart?.doc_name}
@@ -197,7 +197,7 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
 
               <div className="relative group flex-1 flex flex-col">
                 <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/10 to-blue-600/10 rounded-lg blur opacity-50 group-hover:opacity-100 transition duration-500" />
-                <div className="relative flex-1 text-sm text-muted-foreground leading-relaxed bg-background/80 p-4 rounded-md border shadow-sm font-sans">
+                <div className="relative flex-1 text-sm text-muted-foreground leading-relaxed bg-background/80/80 p-4 rounded-md border shadow-sm font-sans">
                   {currentChart?.description || (
                     <span className="italic opacity-50">
                       No analysis generated for this figure.

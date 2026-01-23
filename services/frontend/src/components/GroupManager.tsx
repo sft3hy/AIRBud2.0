@@ -9,69 +9,35 @@ import {
   fetchSystemStatus,
   leaveGroup,
 } from "../lib/api";
-import {
-  Globe,
-  Copy,
-  Trash2,
-  LogIn,
-  LogOut,
-  Lock,
-  Check,
-  Users,
-  Search,
-  XCircle,
-  Pencil,
-  X,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea"; // Assuming you have a Textarea component or use native
+import { Search } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "./ui/scroll-area";
-import { useNavigate, useParams } from "react-router-dom";
-import { joinGroup } from "../lib/api";
-import { UserStatus } from "./UserStatus";
+
+// Sub-components
+import { GroupManagerHeader } from "./group-manager/GroupManagerHeader";
+import { GroupSearchBar } from "./group-manager/GroupSearchBar";
+import { MyGroupCard } from "./group-manager/MyGroupCard";
+import { PublicGroupCard } from "./group-manager/PublicGroupCard";
+import { EditGroupDialog } from "./group-manager/EditGroupDialog";
+import { InviteHandler } from "./group-manager/InviteHandler";
+
+export { InviteHandler }; // Re-export for router use
 
 export const GroupManager = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Search State - separate for each tab
+  // Search State
   const [myGroupsSearchQuery, setMyGroupsSearchQuery] = useState("");
   const [publicSearchQuery, setPublicSearchQuery] = useState("");
 
-  // Edit State (Name + Description)
+  // Edit State
   const [editId, setEditId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
 
+  // Queries
   const { data: systemStatus } = useQuery({
     queryKey: ["session"],
     queryFn: fetchSystemStatus,
@@ -87,7 +53,7 @@ export const GroupManager = () => {
 
   const currentUserId = systemStatus?.user?.id;
 
-  // Filter Logic for My Groups
+  // Filters
   const filteredMyGroups = myGroups.filter((group: any) => {
     const query = myGroupsSearchQuery.toLowerCase();
     return (
@@ -97,7 +63,6 @@ export const GroupManager = () => {
     );
   });
 
-  // Filter Logic for Public Groups
   const filteredPublicGroups = publicGroups.filter((group: any) => {
     const query = publicSearchQuery.toLowerCase();
     return (
@@ -107,6 +72,7 @@ export const GroupManager = () => {
     );
   });
 
+  // Mutations
   const handleUpdate = async () => {
     if (!editId || !editName.trim()) return;
     try {
@@ -177,26 +143,19 @@ export const GroupManager = () => {
     toast({ title: "Link Copied", description: "Invite link ready to share." });
   };
 
-  return (
-    <div className="h-full flex flex-col bg-background">
-      <div className="z-10 flex items-center justify-between border-b bg-card px-6 py-4 shadow-sm shrink-0">
-        <div className="flex items-center gap-3">
-          <Users className="h-6 w-6 text-primary" />
-          <div>
-            <h1 className="text-lg font-semibold leading-none">
-              Group Management
-            </h1>
-            <p className="text-xs text-muted-foreground mt-1 leading-none">
-              Manage teams & discover public groups
-            </p>
-          </div>
-        </div>
-        <UserStatus />
-      </div>
+  const openEditModal = (group: any) => {
+    setEditId(group.id);
+    setEditName(group.name);
+    setEditDesc(group.description || "");
+  };
 
-      <div className="flex-1 overflow-hidden p-8 bg-muted/10 animate-in fade-in duration-500">
+  return (
+    <div className="h-full flex flex-col bg-transparent">
+      <GroupManagerHeader />
+
+      <div className="flex-1 overflow-hidden p-8 bg-transparent animate-in fade-in duration-500">
         <Tabs defaultValue="my_groups" className="h-full flex flex-col">
-          <TabsList className="w-[400px] shrink-0 mx-auto mb-6">
+          <TabsList className="w-[400px] shrink-0 mx-auto mb-6 bg-background/50 backdrop-blur-sm border">
             <TabsTrigger value="my_groups">
               My Groups ({myGroups.length})
             </TabsTrigger>
@@ -204,239 +163,52 @@ export const GroupManager = () => {
           </TabsList>
 
           <ScrollArea className="flex-1 pr-4">
+            {/* MY GROUPS TAB */}
             <TabsContent value="my_groups" className="mt-0 space-y-4">
-              {/* Search Bar for My Groups */}
-              <div className="mb-6 relative max-w-lg mx-auto">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search your groups..."
-                  className="pl-9 pr-9 h-10 shadow-sm"
-                  value={myGroupsSearchQuery}
-                  onChange={(e) => setMyGroupsSearchQuery(e.target.value)}
-                />
-                {myGroupsSearchQuery && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7"
-                    onClick={() => setMyGroupsSearchQuery("")}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
+              <GroupSearchBar
+                value={myGroupsSearchQuery}
+                onChange={setMyGroupsSearchQuery}
+                placeholder="Search your groups..."
+              />
 
               {filteredMyGroups.length === 0 && (
-                <div className="text-center py-12 border-2 border-dashed rounded-xl text-muted-foreground bg-muted/20">
+                <div className="text-center py-12 border-2 border-dashed rounded-xl text-muted-foreground bg-muted/5">
                   {myGroupsSearchQuery
                     ? "No groups match your search."
                     : "No groups yet. Create one in the sidebar!"}
                 </div>
               )}
+
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                {filteredMyGroups.map((group: any) => {
-                  const isOwner = currentUserId === group.owner_id;
-                  return (
-                    <Card key={group.id}>
-                      <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-lg font-bold flex items-center gap-2">
-                          {group.name}
-                          {group.is_public ? (
-                            <Globe className="h-3 w-3 text-blue-500" />
-                          ) : (
-                            <Lock className="h-3 w-3 text-amber-500" />
-                          )}
-                        </CardTitle>
-                        <Badge variant="outline" className="text-xs">
-                          {group.member_count}{" "}
-                          {group.member_count === 1 ? "member" : "members"}
-                        </Badge>
-                      </CardHeader>
-                      <CardContent>
-                        <CardDescription className="mb-4 line-clamp-2 min-h-[40px]">
-                          {group.description || "No description provided."}
-                        </CardDescription>
-                        <div className="text-xs text-muted-foreground mb-4">
-                          Owner:{" "}
-                          <span className="font-medium text-foreground">
-                            {group.owner_name}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center border-t pt-4">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => copyInvite(group.invite_token)}
-                          >
-                            <Copy className="h-3 w-3 mr-2" /> Invite Link
-                          </Button>
-
-                          <div className="flex gap-2">
-                            {isOwner ? (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-muted-foreground hover:text-primary"
-                                  onClick={() => {
-                                    setEditId(group.id);
-                                    setEditName(group.name);
-                                    setEditDesc(group.description || "");
-                                  }}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="text-destructive hover:bg-destructive/10"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>
-                                        Delete Group?
-                                      </AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        Permanently delete <b>{group.name}</b>{" "}
-                                        and all its collections?
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>
-                                        Cancel
-                                      </AlertDialogCancel>
-                                      <AlertDialogAction
-                                        className="bg-destructive hover:bg-destructive/90"
-                                        onClick={() =>
-                                          deleteMutation.mutate(group.id)
-                                        }
-                                      >
-                                        Delete
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </>
-                            ) : (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-orange-600 hover:bg-orange-100 hover:text-orange-700"
-                                  >
-                                    <LogOut className="h-4 w-4 mr-1" /> Leave
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>
-                                      Leave Group?
-                                    </AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      You will lose access to{" "}
-                                      <b>{group.name}</b>'s collections.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>
-                                      Cancel
-                                    </AlertDialogCancel>
-                                    <AlertDialogAction
-                                      className="bg-orange-600 hover:bg-orange-700"
-                                      onClick={() =>
-                                        leaveMutation.mutate(group.id)
-                                      }
-                                    >
-                                      Leave
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                {filteredMyGroups.map((group: any) => (
+                  <MyGroupCard
+                    key={group.id}
+                    group={group}
+                    currentUserId={currentUserId}
+                    onCopyInvite={copyInvite}
+                    onEdit={openEditModal}
+                    onDelete={(id) => deleteMutation.mutate(id)}
+                    onLeave={(id) => leaveMutation.mutate(id)}
+                  />
+                ))}
               </div>
             </TabsContent>
 
+            {/* PUBLIC GROUPS TAB */}
             <TabsContent value="explore" className="mt-0">
-              {/* Search Bar for Public Groups */}
-              <div className="mb-6 relative max-w-lg mx-auto">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by group name or owner..."
-                  className="pl-9 pr-9 h-10 shadow-sm"
-                  value={publicSearchQuery}
-                  onChange={(e) => setPublicSearchQuery(e.target.value)}
-                />
-                {publicSearchQuery && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7"
-                    onClick={() => setPublicSearchQuery("")}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
+              <GroupSearchBar
+                value={publicSearchQuery}
+                onChange={setPublicSearchQuery}
+                placeholder="Search by group name or owner..."
+              />
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 {filteredPublicGroups.map((group: any) => (
-                  <Card
+                  <PublicGroupCard
                     key={group.id}
-                    className="bg-white dark:bg-card border-dashed"
-                  >
-                    <CardHeader>
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        {group.name}
-                        <Badge
-                          variant="secondary"
-                          className="text-[10px] font-normal"
-                        >
-                          Public
-                        </Badge>
-                      </CardTitle>
-                      <CardDescription>{group.description}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-muted-foreground">
-                          {group.member_count}{" "}
-                          {group.member_count === 1 ? "member" : "members"}{" "}
-                          &bull; Owner: {group.owner_name}
-                        </span>
-
-                        {group.is_member ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            disabled
-                            className="opacity-70"
-                          >
-                            <Check className="h-3 w-3 mr-2" /> Joined
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            onClick={() => joinMutation.mutate(group.id)}
-                          >
-                            <LogIn className="h-3 w-3 mr-2" /> Join
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
+                    group={group}
+                    onJoin={(id) => joinMutation.mutate(id)}
+                  />
                 ))}
                 {filteredPublicGroups.length === 0 && (
                   <div className="col-span-2 flex flex-col items-center justify-center py-12 text-muted-foreground">
@@ -454,77 +226,15 @@ export const GroupManager = () => {
         </Tabs>
       </div>
 
-      {/* GROUP EDIT DIALOG */}
-      <Dialog open={!!editId} onOpenChange={(open) => !open && setEditId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Group Details</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Name</label>
-              <Input
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder="Group Name"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Description</label>
-              <textarea
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                value={editDesc}
-                onChange={(e) => setEditDesc(e.target.value)}
-                placeholder="Group Description"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditId(null)}>
-              Cancel
-            </Button>
-            <Button onClick={handleUpdate} disabled={!editName.trim()}>
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-};
-
-// Invite Handler Wrapper
-export const InviteHandler = () => {
-  const { token } = useParams();
-  const navigate = useNavigate();
-  const { toast } = useToast();
-  const { mutate } = useMutation({
-    mutationFn: () => joinGroup(token!),
-    onSuccess: () => {
-      toast({
-        title: "Joined Group",
-        description: "You have been added to the group.",
-      });
-      navigate("/");
-    },
-    onError: () => {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Invalid link or you are already a member.",
-      });
-      navigate("/");
-    },
-  });
-
-  React.useEffect(() => {
-    if (token) mutate();
-  }, [token]);
-
-  return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-background gap-4">
-      <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-      <p className="text-muted-foreground animate-pulse">Joining Group...</p>
+      <EditGroupDialog
+        isOpen={!!editId}
+        onClose={() => setEditId(null)}
+        name={editName}
+        setName={setEditName}
+        description={editDesc}
+        setDescription={setEditDesc}
+        onSave={handleUpdate}
+      />
     </div>
   );
 };

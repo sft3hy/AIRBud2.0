@@ -1,63 +1,27 @@
 import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  FolderPlus,
-  Search,
-  X,
-  Users,
-  FolderLock,
-  Pencil,
-  Trash2,
-  ChevronRight,
-  Folder,
-  User,
-} from "lucide-react";
+import { Users, User } from "lucide-react";
 import {
   createCollection,
   renameCollection,
   deleteCollection,
 } from "../../lib/api";
-import { cn } from "@/lib/utils";
 
 // UI Components
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  SelectLabel,
-} from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { SelectGroup } from "@radix-ui/react-select";
+
+// Sub Components
+import { CollectionCard } from "./collections/CollectionCard";
+import { CreateCollectionForm } from "./collections/CreateCollectionForm";
+import { CollectionSearch } from "./collections/CollectionSearch";
+import { RenameCollectionDialog } from "./collections/RenameCollectionDialog";
 
 interface CollectionsViewProps {
   collections: any[];
@@ -134,14 +98,19 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
     if (!newCollectionName.trim()) return;
     const id = await createCollection(
       newCollectionName,
-      selectedGroupId === "personal" ? undefined : parseInt(selectedGroupId),
+      selectedGroupId === "personal" ? undefined : parseInt(selectedGroupId!),
     );
     queryClient.invalidateQueries({ queryKey: ["collections"] });
     navigate(`/collections/${id}`);
     setNewCollectionName("");
   };
 
-  const handleRenameCollection = async () => {
+  const handleRenameInit = (id: number, currentName: string) => {
+    setRenameCid(id);
+    setRenameName(currentName);
+  };
+
+  const handleRenameSave = async () => {
     if (!renameCid || !renameName.trim()) return;
     await renameCollection(renameCid, renameName);
     queryClient.invalidateQueries({ queryKey: ["collections"] });
@@ -154,155 +123,23 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
     queryClient.invalidateQueries({ queryKey: ["collections"] });
   };
 
-  // --- Render Helper: Collection Card ---
-  const renderCollectionCard = (c: any) => {
-    const isOwner = currentUserId === c.owner_id;
-    return (
-      <div
-        key={c.id}
-        className={cn(
-          "flex items-center justify-between p-2 rounded-md mb-1 cursor-pointer transition-all group",
-          String(c.id) === currentSessionId
-            ? "bg-primary/10 text-primary font-medium"
-            : "hover:bg-muted/50 text-muted-foreground hover:text-foreground",
-        )}
-        onClick={() => navigate(`/collections/${c.id}`)}
-      >
-        <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-          <div className="shrink-0">
-            {c.group_id ? (
-              <Folder className="h-4 w-4" />
-            ) : (
-              <FolderLock className="h-4 w-4" />
-            )}
-          </div>
-          <span className="truncate text-sm">{c.name}</span>
-          <span className="text-[10px] bg-muted px-1.5 rounded-full shrink-0">
-            {c.docs}
-          </span>
-        </div>
-
-        <div
-          className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {isOwner && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-muted-foreground hover:text-primary"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setRenameCid(c.id);
-                  setRenameName(c.name);
-                }}
-              >
-                <Pencil className="h-3 w-3" />
-              </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-muted-foreground hover:text-red-600"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete {c.name}?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Action cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => handleDeleteCollection(c.id)}
-                      className="bg-destructive"
-                    >
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </>
-          )}
-        </div>
-      </div>
-    );
+  const handleSelectCollection = (id: number) => {
+    navigate(`/collections/${id}`);
   };
 
   return (
     <>
       <ScrollArea className="flex-1 px-4 py-4">
-        {/* Create New */}
-        <Card className="p-4 bg-background border-dashed mb-6">
-          <h3 className="text-xs font-bold uppercase text-muted-foreground mb-3 flex items-center gap-2">
-            <FolderPlus className="h-4 w-4" /> New Collection
-          </h3>
-          <div className="space-y-3">
-            <Input
-              className="h-8 text-sm"
-              placeholder="Collection Name..."
-              value={newCollectionName}
-              onChange={(e) => setNewCollectionName(e.target.value)}
-            />
-            {userGroups.length > 0 && (
-              <Select
-                value={selectedGroupId}
-                onValueChange={setSelectedGroupId}
-              >
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Select personal or a group" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectLabel>Collection Group</SelectLabel>
+        <CreateCollectionForm
+          name={newCollectionName}
+          setName={setNewCollectionName}
+          selectedGroupId={selectedGroupId}
+          setSelectedGroupId={setSelectedGroupId}
+          userGroups={userGroups}
+          onCreate={handleCreateCollection}
+        />
 
-                    <SelectItem value="personal">Personal (Private)</SelectItem>
-                    {userGroups.map((g: any) => (
-                      <SelectItem key={g.id} value={String(g.id)}>
-                        Group: {g.name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            )}
-            <Button
-              size="sm"
-              onClick={handleCreateCollection}
-              disabled={!newCollectionName.trim()}
-              className="w-full h-8"
-            >
-              Create
-            </Button>
-          </div>
-        </Card>
-
-        {/* Search Bar */}
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            className="h-8 pl-9 pr-8 text-sm"
-            placeholder="Search collections..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6"
-              onClick={() => setSearchQuery("")}
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          )}
-        </div>
+        <CollectionSearch value={searchQuery} onChange={setSearchQuery} />
 
         {/* CONTENT AREA */}
         {searchQuery ? (
@@ -316,7 +153,17 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                 No matching collections.
               </p>
             ) : (
-              filteredCollections.map(renderCollectionCard)
+              filteredCollections.map((c) => (
+                <CollectionCard
+                  key={c.id}
+                  collection={c}
+                  currentSessionId={currentSessionId}
+                  currentUserId={currentUserId}
+                  onSelect={handleSelectCollection}
+                  onRenameInit={handleRenameInit}
+                  onDelete={handleDeleteCollection}
+                />
+              ))
             )}
           </div>
         ) : (
@@ -332,7 +179,17 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                   No private collections.
                 </p>
               ) : (
-                personalCollections.map(renderCollectionCard)
+                personalCollections.map((c) => (
+                  <CollectionCard
+                    key={c.id}
+                    collection={c}
+                    currentSessionId={currentSessionId}
+                    currentUserId={currentUserId}
+                    onSelect={handleSelectCollection}
+                    onRenameInit={handleRenameInit}
+                    onDelete={handleDeleteCollection}
+                  />
+                ))
               )}
             </div>
 
@@ -352,7 +209,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                     >
                       <AccordionTrigger className="hover:no-underline py-2 text-sm font-medium">
                         <div className="flex items-center gap-2">
-                          <span className="truncate max-w-[140px] text-left">
+                          <span className="truncate text-left">
                             {group.name}
                           </span>
                           <span className="text-[10px] text-muted-foreground font-normal">
@@ -362,7 +219,17 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                       </AccordionTrigger>
                       <AccordionContent className="pb-2 pt-1">
                         <div className="pl-2 border-l-2 border-muted ml-1 space-y-1">
-                          {group.collections.map(renderCollectionCard)}
+                          {group.collections.map((c) => (
+                            <CollectionCard
+                              key={c.id}
+                              collection={c}
+                              currentSessionId={currentSessionId}
+                              currentUserId={currentUserId}
+                              onSelect={handleSelectCollection}
+                              onRenameInit={handleRenameInit}
+                              onDelete={handleDeleteCollection}
+                            />
+                          ))}
                         </div>
                       </AccordionContent>
                     </AccordionItem>
@@ -374,34 +241,13 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
         )}
       </ScrollArea>
 
-      {/* Rename Dialog */}
-      <Dialog
-        open={!!renameCid}
-        onOpenChange={(open) => !open && setRenameCid(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rename Collection</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <Input
-              value={renameName}
-              onChange={(e) => setRenameName(e.target.value)}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameCid(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleRenameCollection}
-              disabled={!renameName.trim()}
-            >
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <RenameCollectionDialog
+        isOpen={!!renameCid}
+        onClose={() => setRenameCid(null)}
+        renameName={renameName}
+        setRenameName={setRenameName}
+        onSave={handleRenameSave}
+      />
     </>
   );
 };

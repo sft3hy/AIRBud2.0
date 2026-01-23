@@ -52,7 +52,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ userGroups }) => {
   return (
     <>
       <ScrollArea className="flex-1 px-4 py-4">
-        <Card className="p-4 bg-background border-dashed mb-6">
+        <Card className="p-4 bg-background/80 border-dashed mb-6">
           <h3 className="text-xs font-bold uppercase text-muted-foreground mb-3 flex items-center gap-2">
             <Users className="h-4 w-4" /> Create Group
           </h3>

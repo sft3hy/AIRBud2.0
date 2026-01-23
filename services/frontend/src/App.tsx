@@ -9,17 +9,16 @@ import { SystemOverview } from "./pages/SystemOverview";
 import { Help } from "./pages/Help";
 import { Team } from "./pages/Team";
 import { LoginPage } from "./pages/LoginPage";
-import { SystemOutage } from "./pages/SystemOutage"; // <--- Import
+import { SystemOutage } from "./pages/SystemOutage";
 import { InviteHandler } from "./components/GroupManager";
 import { fetchSystemStatus } from "./lib/api";
 import { Loader2 } from "lucide-react";
 import { Toaster } from "@/components/ui/toaster";
 
 const queryClient = new QueryClient();
-
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   return (
-    // <div className="flex flex-col h-screen w-screen bg-background">
+    // <div className="flex flex-col h-screen w-screen bg-background/80">
     // {/* Top Banner */}
     // <ClassificationBanner />
 
@@ -47,7 +46,7 @@ const AppContent = () => {
 
   if (isLoading) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-background gap-4">
+      <div className="h-screen w-screen flex flex-col items-center justify-center gap-4">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
         <p className="text-muted-foreground animate-pulse">
           Establishing Secure Connection...
@@ -151,11 +150,23 @@ const AppContent = () => {
     </BrowserRouter>
   );
 };
-
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppContent />
+      {/* --- UNIFIED COSMIC BACKGROUND START --- */}
+      {/* This sits at z-0. All content is z-10 or higher. */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 h-96 w-96 rounded-full bg-blue-500/10 blur-[100px]" />
+        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 h-96 w-96 rounded-full bg-purple-500/10 blur-[100px]" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:32px_32px]" />
+      </div>
+      {/* --- UNIFIED COSMIC BACKGROUND END --- */}
+
+      {/* Main Content Wrapper - Ensures content sits ABOVE the background */}
+      <div className="relative z-10 w-full h-full">
+        <AppContent />
+      </div>
+
       <Toaster />
     </QueryClientProvider>
   );

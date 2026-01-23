@@ -83,7 +83,7 @@ const IndexingAnim = () => (
     <div className="relative">
       <Database className="w-20 h-20 text-green-500" />
       <motion.div
-        className="absolute -bottom-2 -right-2 bg-background rounded-full p-1 border border-green-500"
+        className="absolute -bottom-2 -right-2 bg-background/80 rounded-full p-1 border border-green-500"
         animate={{ rotate: 360 }}
         transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
       >
@@ -146,7 +146,7 @@ const PipelineStep = ({ label, active, completed, icon: Icon }: any) => (
     } ${completed ? "text-primary opacity-80" : ""}`}
   >
     <div
-      className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors bg-background ${
+      className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors bg-background/80 ${
         active
           ? "border-primary bg-primary/20 text-primary shadow-[0_0_20px_rgba(59,130,246,0.5)]"
           : completed
@@ -160,7 +160,7 @@ const PipelineStep = ({ label, active, completed, icon: Icon }: any) => (
         <Icon className="w-5 h-5" />
       )}
     </div>
-    <span className="text-[10px] font-medium uppercase tracking-wider bg-background px-1 rounded">
+    <span className="text-[10px] font-medium uppercase tracking-wider bg-background/80 px-1 rounded">
       {label}
     </span>
   </div>
@@ -192,7 +192,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
   };
 
   const getStageIndex = () => {
-    const order = ["parsing", "vision", "indexing", "graph", "done"];
+    const order = ["parsing", "vision", "indexing", "graph" | "done"];
     return order.indexOf(stage);
   };
 
@@ -203,8 +203,8 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
   const barWidth = Math.min((currentIdx / 3) * 100, 100);
 
   return (
-    <div className="h-full flex flex-col items-center justify-center bg-gradient-to-b from-background to-muted/20 p-10 relative overflow-hidden">
-      <div className="absolute inset-0 opacity-5 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px]" />
+    <div className="h-full flex flex-col items-center justify-center bg-transparent relative overflow-hidden">
+      {/* Background Decorator Removed to transparently show app background */}
 
       <div className="relative z-10 flex flex-col items-center w-full max-w-2xl">
         {/* Hero Animation */}
@@ -259,7 +259,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
         {/* Pipeline Steps */}
         <div className="w-full flex justify-between items-center relative mb-8">
           {/* Connecting Line */}
-          <div className="absolute top-5 left-0 w-full h-0.5 bg-muted -z-10">
+          <div className="absolute top-5 left-0 w-full h-0.5 bg-muted/30 -z-10">
             <motion.div
               className="h-full bg-primary"
               animate={{ width: `${barWidth}%` }}
@@ -299,7 +299,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
             <span>Overall Progress</span>
             <span className="font-mono">{progress}%</span>
           </div>
-          <Progress value={progress} className="h-2" />
+          <Progress value={progress} className="h-2 bg-muted/30" />
         </div>
       </div>
     </div>

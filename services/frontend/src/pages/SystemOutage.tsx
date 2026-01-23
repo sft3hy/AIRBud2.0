@@ -31,18 +31,10 @@ export const SystemOutage: React.FC<SystemOutageProps> = ({
   const isTotalOutage = downCount === serviceList.length;
 
   return (
-    /* Outer Container: Fixed height (screen), Flex Column */
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-background relative">
-      {/* Background Ambience - Moved here so it stays fixed behind the scrolling content */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-red-500/5 blur-[100px] rounded-full" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-orange-500/5 blur-[100px] rounded-full" />
-      </div>
-
+    /* Outer Container: Transparent to show Global Background */
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-transparent relative">
       {/* Top Banner - Frozen at Top */}
       <div className="z-20">
-        {" "}
-        {/* z-index ensures banner sits above background blobs */}
         <ClassificationBanner />
       </div>
 
@@ -64,7 +56,7 @@ export const SystemOutage: React.FC<SystemOutageProps> = ({
                     <AlertOctagon className="h-10 w-10 text-orange-600 dark:text-orange-400" />
                   )}
                 </div>
-                <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-1.5 shadow-sm border">
+                <div className="absolute -bottom-1 -right-1 bg-background/80 rounded-full p-1.5 shadow-sm border">
                   <AlertTriangle className="h-5 w-5 text-red-500" />
                 </div>
               </div>

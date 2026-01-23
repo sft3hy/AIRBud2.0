@@ -41,22 +41,17 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-background relative">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-transparent relative">
       {/* Top Banner */}
       <ClassificationBanner />
       <div className="flex-1 min-h-0 relative overflow-y-auto flex flex-col">
-        <div className="min-h-screen flex items-center justify-center bg-background p-6 relative overflow-hidden">
-          {/* Background: Abstract Digital Grid */}
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent opacity-70" />
-
-          {/* Ambient Glow */}
-          <div className="absolute top-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-500/5 blur-[100px] rounded-full pointer-events-none" />
+        <div className="min-h-screen flex items-center justify-center bg-transparent p-6 relative overflow-hidden">
+          {/* Local background effects removed to use Global App Background */}
 
           <div className="w-full max-w-md space-y-8 relative z-10 animate-in zoom-in-95 duration-500">
             {/* Header Section */}
             <div className="text-center space-y-4">
-              <div className="inline-flex items-center justify-center p-4 rounded-2xl bg-gradient-to-br from-background to-muted border shadow-sm relative group">
+              <div className="inline-flex items-center justify-center p-4 rounded-2xl bg-gradient-to-br from-background/50 to-muted/50 border shadow-sm relative group backdrop-blur-sm">
                 {/* Logo */}
                 <img
                   src={doggieSrc}
@@ -129,7 +124,7 @@ export const LoginPage = () => {
 
                   {/* Success Overlay */}
                   {status === "success" && (
-                    <div className="absolute inset-0 bg-background/90 flex items-center justify-center rounded-xl z-20 animate-in fade-in duration-300">
+                    <div className="absolute inset-0 bg-background/80/90 flex items-center justify-center rounded-xl z-20 animate-in fade-in duration-300">
                       <div className="text-center">
                         <CheckCircle2 className="h-10 w-10 text-green-500 mx-auto mb-2" />
                         <p className="text-sm font-semibold">

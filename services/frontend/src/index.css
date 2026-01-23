@@ -3,50 +3,50 @@
 
 @layer base {
   :root {
-    /* ... (keep all your existing color variables) ... */
-    --background: 40 20% 96%;
-    --foreground: 220 20% 15%;
-    --card: 40 15% 98%;
-    --card-foreground: 220 20% 15%;
-    --popover: 40 15% 98%;
-    --popover-foreground: 220 20% 15%;
+    /* LIGHT MODE: Tactical Sand background with Logo Blue accents */
+    --background: 35 25% 95%;
+    --foreground: 222 47% 11%;
+    --card: 35 30% 98%;
+    --card-foreground: 222 47% 11%;
+    --popover: 35 30% 98%;
+    --popover-foreground: 222 47% 11%;
     --primary: 199 97% 46%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 40 25% 90%;
-    --secondary-foreground: 220 20% 15%;
-    --muted: 40 20% 92%;
-    --muted-foreground: 220 15% 45%;
-    --accent: 40 25% 90%;
-    --accent-foreground: 220 20% 15%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 40 20% 88%;
-    --input: 40 20% 88%;
-    --ring: 220 70% 45%;
-    --radius: 0.5rem;
+    --secondary: 35 20% 88%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 35 15% 85%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 35 20% 88%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 40%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 35 15% 82%;
+    --input: 35 15% 82%;
+    --ring: 199 97% 46%;
+    --radius: 0.25rem;
   }
 
   @media (prefers-color-scheme: dark) {
     :root {
-      /* ... (keep existing dark variables) ... */
-      --background: 220 45% 12%;
-      --foreground: 210 30% 96%;
-      --card: 220 40% 15%;
-      --card-foreground: 210 30% 96%;
-      --popover: 220 40% 15%;
-      --popover-foreground: 210 30% 96%;
+      /* DARK MODE: Deep Navy background */
+      --background: 222 47% 10%;
+      --foreground: 210 40% 98%;
+      --card: 222 40% 14%;
+      --card-foreground: 210 40% 98%;
+      --popover: 222 40% 14%;
+      --popover-foreground: 210 40% 98%;
       --primary: 210 80% 65%;
       --primary-foreground: 220 45% 12%;
-      --secondary: 220 35% 20%;
-      --secondary-foreground: 210 30% 96%;
-      --muted: 220 35% 20%;
-      --muted-foreground: 210 20% 70%;
-      --accent: 220 35% 22%;
-      --accent-foreground: 210 30% 96%;
-      --destructive: 0 72% 51%;
-      --destructive-foreground: 210 30% 96%;
-      --border: 220 35% 20%;
-      --input: 220 35% 22%;
+      --secondary: 217 32% 17%;
+      --secondary-foreground: 210 40% 98%;
+      --muted: 217 32% 17%;
+      --muted-foreground: 215 20% 65%;
+      --accent: 217 32% 22%;
+      --accent-foreground: 210 40% 98%;
+      --destructive: 0 62% 30%;
+      --destructive-foreground: 210 40% 98%;
+      --border: 217 32% 20%;
+      --input: 217 32% 20%;
       --ring: 210 80% 65%;
     }
   }
@@ -56,13 +56,13 @@
   }
 
   html {
-    /* INCREASED FONT SIZE HERE */
     font-size: 17px;
   }
 
   body {
     font-family: system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
+    /* CHANGE: Removed '/80' to make background solid for better contrast with blobs */
     @apply bg-background text-foreground;
   }
 
@@ -71,16 +71,11 @@
     width: 100%;
     margin: 0;
     padding: 0;
+    /* CHANGE: Removed '/80' here as well */
     @apply bg-background text-foreground;
   }
 
-  body {
-    font-family: system-ui, -apple-system, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  /* --- ADD THIS NEW BLOCK --- */
-  /* Restore the pointer cursor for all interactive elements */
+  /* Interaction fixes */
   button,
   [role="button"],
   a,
@@ -89,7 +84,6 @@
     cursor: pointer;
   }
 
-  /* Keep 'not-allowed' cursor for disabled elements */
   button:disabled,
   button[aria-disabled="true"],
   input:disabled {
@@ -98,7 +92,6 @@
 }
 
 @theme {
-  /* ... (keep your existing theme config) ... */
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
   --color-card: hsl(var(--card));

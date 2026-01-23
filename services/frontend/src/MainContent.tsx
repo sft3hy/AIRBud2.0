@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, memo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
-import { Send, FolderOpen, Loader2 } from "lucide-react";
+import { CircleArrowUp, FolderOpen, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import {
@@ -17,7 +17,7 @@ import { SourceViewer } from "./components/SourceViewer";
 import { ProcessingView } from "./components/ProcessingView";
 import { UserStatus } from "./components/UserStatus";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+// Input is used as a controlled component below
 import { ScrollArea } from "@/components/ui/scroll-area";
 import doggieSrc from "./assets/doggie.svg";
 import userSrc from "./assets/user.svg";
@@ -31,25 +31,16 @@ const MemoizedMessage = memo(({ msg }: { msg: ChatMessage }) => {
         msg.role === "user" ? "justify-end" : "justify-start"
       }`}
     >
-      {msg.role === "assistant" && (
-        <div className="h-12 w-12 rounded-full bg-card p-1.5 flex items-center justify-center shrink-0 border shadow-sm mt-1">
-          <img
-            src={doggieSrc}
-            alt="Bot"
-            className="h-full w-full object-contain"
-          />
-        </div>
-      )}
       <div
         className={`flex flex-col max-w-[85%] ${
           msg.role === "user" ? "items-end" : "items-start"
         }`}
       >
         <div
-          className={`px-6 py-5 rounded-3xl text-base leading-relaxed shadow-sm ${
+          className={`px-4 py-2 rounded-3xl text-base leading-relaxed shadow-md backdrop-blur-sm ${
             msg.role === "user"
               ? "bg-primary text-primary-foreground rounded-br-sm prose-invert"
-              : "bg-card border rounded-bl-sm text-card-foreground"
+              : "bg-card/20 border rounded-bl-sm text-card-foreground"
           }`}
         >
           <ReactMarkdown
@@ -96,7 +87,7 @@ const MemoizedMessage = memo(({ msg }: { msg: ChatMessage }) => {
           <SourceViewer sources={msg.sources} documents={[]} />
         )}
       </div>
-      {msg.role === "user" && (
+      {/* {msg.role === "user" && (
         <div className="h-12 w-12 rounded-full bg-muted p-1 flex items-center justify-center shrink-0 border shadow-sm mt-1">
           <img
             src={userSrc}
@@ -104,14 +95,14 @@ const MemoizedMessage = memo(({ msg }: { msg: ChatMessage }) => {
             className="h-full w-full object-cover rounded-full"
           />
         </div>
-      )}
+      )} */}
     </div>
   );
 });
 
 const WelcomeScreen = () => (
-  <div className="flex h-full w-full flex-col bg-background">
-    <div className="z-10 flex items-center justify-between border-b bg-card px-6 py-4 shadow-sm">
+  <div className="flex h-full w-full flex-col bg-transparent">
+    <div className="z-10 flex items-center justify-between border-b bg-background/80 backdrop-blur-md px-6 py-4 shadow-sm">
       <div className="flex items-center gap-3">
         <FolderOpen className="h-6 w-6 text-primary" />
         <div>
@@ -123,13 +114,14 @@ const WelcomeScreen = () => (
       </div>
       <UserStatus />
     </div>
-    <div className="flex flex-col items-center justify-center flex-1 p-8 text-center bg-muted/10 rounded-xl m-4 animate-in fade-in duration-500">
-      <div className="mb-6 h-24 w-24 bg-primary/10 rounded-full flex items-center justify-center">
+    <div className="flex flex-col items-center justify-center flex-1 p-8 text-center bg-background/20 rounded-xl m-4 border border-white/10 animate-in fade-in duration-500">
+      <div className="mb-6 h-24 w-24 bg-primary/10 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(59,130,246,0.2)]">
         <img src={doggieSrc} alt="AIRBud 2.0" className="h-16 w-16" />
       </div>
       <h2 className="text-3xl font-bold mb-4">👋 Welcome to AIRBud 2.0</h2>
       <p className="text-lg text-muted-foreground mb-4 max-w-md">
-        Create or select a collection from the sidebar to begin.
+        Create or select a collection from the sidebar to begin. Or check out
+        some groups!
       </p>
       <div className="flex gap-4">
         <Link to="/help">
@@ -159,17 +151,18 @@ export const MainContent = ({
   sessionId: string | null;
   activeJobId: string | null;
 }) => {
-  const queryClient = useQueryClient(); // Used for manual invalidation if needed
+  const queryClient = useQueryClient();
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [queryStatus, setQueryStatus] = useState("Finding answer...");
+  const [isFocused, setIsFocused] = useState(false);
 
-  // Local force-clear mechanism for the manual "Continue" button
+  // REMOVED: local isPending state. We use sendMessageMutation.isPending instead.
+
   const [forceViewChat, setForceViewChat] = useState(false);
 
-  // Reset force view when job changes
   useEffect(() => {
     if (activeJobId) setForceViewChat(false);
   }, [activeJobId]);
@@ -249,13 +242,16 @@ export const MainContent = ({
     },
   });
 
+  // Use the mutation's status for loading state
+  const isPending = sendMessageMutation.isPending;
+
   useEffect(() => {
     if (bottomRef.current) {
       requestAnimationFrame(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
       });
     }
-  }, [chatHistory, sendMessageMutation.isPending, queryStatus]);
+  }, [chatHistory, isPending, queryStatus]);
 
   const handleSend = () => {
     if (!input.trim() || !sessionId || !hasDocuments) return;
@@ -271,7 +267,6 @@ export const MainContent = ({
     }
   };
 
-  // --- PROCESSING VIEW LOGIC ---
   const showProcessing =
     !forceViewChat &&
     activeJobId &&
@@ -279,16 +274,14 @@ export const MainContent = ({
     jobStatus.status !== "idle" &&
     jobStatus.status !== "completed" &&
     jobStatus.status !== "error" &&
-    jobStatus.stage !== "done"; // --- FIX: Also check stage!
+    jobStatus.stage !== "done";
 
   if (showProcessing) {
     return (
       <ProcessingView
         status={jobStatus!}
         onComplete={() => {
-          // Manual override if auto-detection fails
           setForceViewChat(true);
-          // Also trigger a refresh of documents
           queryClient.invalidateQueries({ queryKey: ["documents"] });
         }}
       />
@@ -298,14 +291,14 @@ export const MainContent = ({
   if (!sessionId) return <WelcomeScreen />;
 
   return (
-    <div className="flex h-full w-full flex-col bg-background">
+    <div className="flex h-full w-full flex-col ">
       {/* Header */}
-      <div className="z-10 flex items-center justify-between border-b bg-card px-6 py-4 shadow-sm">
+      <div className="z-10 flex items-center justify-between  px-6 py-4 shadow-sm">
         <div className="flex items-center gap-2">
           <FolderOpen className="h-6 w-6 text-primary" />
           <p className="flex items-center text-lg font-semibold">
             <span>
-              Collection:{" "}
+              Chatting with:{" "}
               {activeCollection ? activeCollection.name : "Active Session"}
             </span>
           </p>
@@ -313,14 +306,14 @@ export const MainContent = ({
         <UserStatus />
       </div>
 
-      <div className="flex-1 overflow-auto relative bg-muted/20 animate-in fade-in duration-500">
-        <ScrollArea className="h-full px-4 md:px-20 py-4" ref={scrollRef}>
-          <div className="space-y-10 pb-4 max-w-4xl mx-auto min-h-[500px]">
+      <div className="flex-1 overflow-auto relative bg-transparent animate-in fade-in duration-500">
+        <ScrollArea className="h-full md:px-10 py-0" ref={scrollRef}>
+          <div className="space-y-10 pb-4 max-w-2xl mx-auto min-h-[500px]">
             {chatHistory.map((msg, idx) => (
               <MemoizedMessage key={idx} msg={msg} />
             ))}
 
-            {sendMessageMutation.isPending && (
+            {isPending && (
               <div className="flex gap-4">
                 <div className="h-12 w-12 rounded-full bg-card p-1.5 flex items-center justify-center shrink-0 border shadow-sm mt-1">
                   <img
@@ -329,7 +322,7 @@ export const MainContent = ({
                     className="h-full w-full object-contain"
                   />
                 </div>
-                <div className="bg-card border px-6 py-5 rounded-3xl rounded-bl-sm text-base text-muted-foreground flex items-center gap-3 shadow-sm">
+                <div className="bg-card/90 backdrop-blur border px-1 py-5 rounded-3xl rounded-bl-sm text-base text-muted-foreground flex items-center gap-3 shadow-sm">
                   <Loader2 className="h-5 w-5 animate-spin" />
                   <span className="italic font-medium animate-pulse">
                     {queryStatus}
@@ -342,33 +335,74 @@ export const MainContent = ({
         </ScrollArea>
       </div>
 
-      {/* Input Area */}
-      <div className="p-6 bg-background border-t animate-in fade-in duration-500">
-        <div className="max-w-3xl mx-auto relative flex items-center gap-3">
-          <Input
-            placeholder={
-              hasDocuments
-                ? "Ask a question..."
-                : "Upload a document to start chatting..."
-            }
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className={`pr-14 py-7 rounded-full shadow-sm text-lg bg-card text-card-foreground ${
-              !hasDocuments ? "opacity-60 cursor-not-allowed" : ""
+      {/* STYLIZED INPUT AREA */}
+      <div className="w-full px-1 pb-6 z-20">
+        <div className="max-w-2xl mx-auto">
+          {/* Input Container */}
+          <div
+            className={`relative flex items-end gap-3 bg-muted/40 border rounded-[24px] transition-all duration-300 ${
+              isFocused
+                ? "ring-2 ring-primary/20 border-primary/50 shadow-lg shadow-primary/5"
+                : "border-border/50 shadow-sm hover:shadow-md hover:bg-muted/60"
             }`}
-            disabled={sendMessageMutation.isPending || !hasDocuments}
-          />
-          <Button
-            size="icon"
-            className="absolute right-2 rounded-full h-12 w-12 shadow-sm"
-            onClick={handleSend}
-            disabled={
-              !input.trim() || sendMessageMutation.isPending || !hasDocuments
-            }
           >
-            <Send className="h-5 w-5" />
-          </Button>
+            {/* Input Field */}
+            <div className="flex-1 relative">
+              <textarea
+                placeholder={
+                  hasDocuments
+                    ? "Chat with your collection..."
+                    : "Upload a document to start chatting..."
+                }
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                disabled={isPending || !hasDocuments}
+                rows={1}
+                className={`w-full px-5 py-3 text-base bg-transparent rounded-l-[24px] outline-none transition-all duration-200 text-foreground placeholder:text-muted-foreground resize-none overflow-y-auto ${
+                  !hasDocuments ? "opacity-50 cursor-not-allowed" : ""
+                }`}
+                style={{
+                  maxHeight: "360px", // 15 lines * 24px line height
+                  minHeight: "44px",
+                }}
+                onInput={(e) => {
+                  const target = e.target as HTMLTextAreaElement;
+                  target.style.height = "auto";
+                  target.style.height =
+                    Math.min(target.scrollHeight, 360) + "px";
+                }}
+              />
+            </div>
+
+            {/* Send Button */}
+            <div className="pr-2 pb-2">
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || isPending || !hasDocuments}
+                className={`group relative flex items-center justify-center w-10 h-10 rounded-full transition-all duration-300 ${
+                  !input.trim() || isPending || !hasDocuments
+                    ? "bg-muted text-muted-foreground cursor-not-allowed"
+                    : "bg-primary text-primary-foreground hover:scale-105 hover:shadow-lg hover:shadow-primary/25 active:scale-95"
+                }`}
+              >
+                {/* Glow effect on hover */}
+                {input.trim() && !isPending && hasDocuments && (
+                  <div className="absolute inset-0 rounded-full bg-primary blur-md opacity-0 group-hover:opacity-40 transition-opacity duration-300" />
+                )}
+
+                <CircleArrowUp
+                  className={`relative z-10 transition-all duration-300 ${
+                    !input.trim() || isPending || !hasDocuments
+                      ? "w-5 h-5"
+                      : "w-5 h-5 group-hover:scale-110"
+                  } ${isPending ? "animate-pulse" : ""}`}
+                />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

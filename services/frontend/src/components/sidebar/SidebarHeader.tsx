@@ -30,7 +30,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   return (
     <div
       className={cn(
-        "border-b bg-background flex shrink-0 transition-all",
+        "border-b bg-background/80 flex shrink-0 transition-all",
         isCollapsed
           ? "p-2 justify-center flex-col gap-2"
           : "p-4 flex-col gap-4",
@@ -94,7 +94,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
             className={cn(
               "text-sm font-medium py-1.5 rounded-md transition-all",
               mode === "collections"
-                ? "bg-background shadow-sm text-foreground"
+                ? "bg-background/80 shadow-sm text-foreground"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
@@ -105,7 +105,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
             className={cn(
               "text-sm font-medium py-1.5 rounded-md transition-all",
               mode === "groups"
-                ? "bg-background shadow-sm text-foreground"
+                ? "bg-background/80 shadow-sm text-foreground"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
