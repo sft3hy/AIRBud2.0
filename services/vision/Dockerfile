@@ -1,7 +1,6 @@
 FROM python:3.10-slim
 
-# Install system dependencies
-# libgl1 and libglib2.0-0 are required for OpenCV (often used by vision utils)
+# System dependencies for OpenCV and Audio
 RUN apt-get update && apt-get install -y \
     git \
     libgl1 \
@@ -11,18 +10,25 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy requirements
-COPY requirements.txt .
+# Environment variables for Offline Model Caching
+ENV HF_HOME=/app/model_cache/huggingface \
+    XDG_CACHE_HOME=/app/model_cache
 
-# Install Python dependencies
-# This pulls ~2GB+ of ML libraries, so caching this layer is important
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code
+# --- OFFLINE PRE-LOAD STEP ---
+# Create a temporary script to trigger downloads during build
+RUN python3 -c "import whisper; \
+    import os; \
+    from transformers import AutoModelForCausalLM, AutoTokenizer; \
+    print('Downloading Whisper Medium...'); \
+    whisper.load_model('medium'); \
+    print('Downloading Moondream2...'); \
+    AutoTokenizer.from_pretrained('vikhyatk/moondream2', revision='2025-06-21'); \
+    AutoModelForCausalLM.from_pretrained('vikhyatk/moondream2', revision='2025-06-21', trust_remote_code=True);"
+
 COPY . .
 
-# Expose port
 EXPOSE 8002
-
-# Run
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002", "--reload"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]

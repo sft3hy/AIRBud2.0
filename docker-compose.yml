@@ -3,7 +3,7 @@ services:
     image: alpine:latest
     container_name: smart_rag_init_fs
     # Create directories and force permissions to 777 so all containers (root or appuser) can RWX
-    command: sh -c "mkdir -p /data/uploads /data/charts /data/faiss_indexes /data/chunks /data/huggingface && chmod -R 777 /data"
+    command: sh -c "mkdir -p /data/uploads /data/charts /data/faiss_indexes /data/chunks /data/huggingface /data/previews && chmod -R 777 /data"
     volumes:
       - shared_data:/data
 
@@ -82,7 +82,9 @@ services:
 
   # 3. Parser
   parser:
-    build: ./services/parser
+    build:
+      context: ./services/parser
+      dockerfile: Dockerfile.test
     container_name: smart_rag_parser
     ports:
       - "8001:8001"
@@ -91,8 +93,9 @@ services:
     volumes:
       - shared_data:/data
       - ./services/parser:/app
-    # --- FIX: Add || true ---
-    command: /bin/sh -c "mkdir -p /data/charts && uvicorn main:app --host 0.0.0.0 --port 8001 --reload"
+    command: >
+      /bin/sh -c "mkdir -p /data/charts &&
+      uvicorn main:app --host 0.0.0.0 --port 8001 --reload"
 
   # 4. Vision
   vision:

@@ -1,54 +1,50 @@
-# STAGE 1: Builder (Compilers & Heavy Lifting)
+# STAGE 1: Builder
 FROM python:3.10-slim-bookworm AS builder
 
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential && rm -rf /var/lib/apt/lists/*
 
-# Install compilers (only needed for building, not running)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create a virtual environment to isolate dependencies
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# 1. Install PyTorch CPU first (Heaviest layer, rarely changes)
-# We do this BEFORE requirements.txt to maximize Docker caching
+# Install CPU Torch first for caching
 RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
-# 2. Install remaining dependencies (Faiss, etc.)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# STAGE 2: Runtime (Minimal Production Image)
+# --- OFFLINE PRE-LOAD STEP ---
+# Set cache dir in builder so we can copy it over
+ENV HF_HOME=/opt/model_cache
+RUN mkdir -p $HF_HOME && \
+    python3 -c "from sentence_transformers import SentenceTransformer; \
+    print('Downloading Embedding Model...'); \
+    SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', cache_folder='$HF_HOME')"
+
+# STAGE 2: Runtime
 FROM python:3.10-slim-bookworm
 
 WORKDIR /app
 
-# Set env vars for production
-# PATH: Ensures we use the copied venv by default
+# Runtime Environment
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PATH="/opt/venv/bin:$PATH"
+    PATH="/opt/venv/bin:$PATH" \
+    HF_HOME=/app/model_cache \
+    SENTENCE_TRANSFORMERS_HOME=/app/model_cache
 
-# Install ONLY runtime system libs
-# libgomp1 is strictly required for faiss-cpu/torch optimizations
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# Copy the pre-built virtual environment from the builder stage
+# Copy venv and cached models
 COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /opt/model_cache /app/model_cache
 
-# Copy application code
 COPY . .
 
-# Set permissions and switch user
+# Fix permissions
 RUN chown -R appuser:appuser /app
 USER appuser
 
-# --proxy-headers: Critical for running behind Nginx/AWS LB/K8s
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--reload"]
