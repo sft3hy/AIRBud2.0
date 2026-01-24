@@ -167,25 +167,25 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
 
       <Tabs defaultValue="docs" className="flex-1 flex flex-col min-h-0 w-full">
         {/* Navigation Tabs */}
-        <div className="px-4 py-2 border-b shrink-0">
-          <TabsList className="grid w-full grid-cols-3 h-9 bg-background/50 p-1">
+        <div className="px-2 py-1 border-b shrink-0">
+          <TabsList className="grid w-full grid-cols-3 h-8 bg-background/50 p-0.5">
             <TabsTrigger
               value="docs"
-              className="text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-2"
+              className="text-[10px] data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5"
             >
-              <FileText className="h-3.5 w-3.5" /> Files
+              <FileText className="h-3 w-3" /> Files
             </TabsTrigger>
             <TabsTrigger
               value="charts"
-              className="text-xs data-[state=active]:bg-blue-500/10 data-[state=active]:text-blue-600 gap-2"
+              className="text-[10px] data-[state=active]:bg-blue-500/10 data-[state=active]:text-blue-600 gap-1.5"
             >
-              <Image className="h-3.5 w-3.5" /> Images
+              <Image className="h-3 w-3" /> Images
             </TabsTrigger>
             <TabsTrigger
               value="graph"
-              className="text-xs data-[state=active]:bg-purple-500/10 data-[state=active]:text-purple-600 gap-2"
+              className="text-[10px] data-[state=active]:bg-purple-500/10 data-[state=active]:text-purple-600 gap-1.5"
             >
-              <SplinePointer className="h-3.5 w-3.5" /> Graph
+              <SplinePointer className="h-3 w-3" /> Graph
             </TabsTrigger>
           </TabsList>
         </div>
@@ -196,7 +196,7 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
           className="flex-1 flex flex-col min-h-0 mt-0 w-full relative"
         >
           <ScrollArea className="flex-1 w-full">
-            <div className="space-y-4 pt-4 border-t bg-gradient-to-t from-background/40 via-background/20 to-transparent px-4 pb-6">
+            <div className="space-y-3 pt-2 border-t bg-gradient-to-t from-background/40 via-background/20 to-transparent px-2 pb-2">
               <QueueStatus
                 queueLength={queueDisplay.length}
                 activeJobId={activeJobId}

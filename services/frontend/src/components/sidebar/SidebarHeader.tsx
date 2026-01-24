@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { ChevronsLeft, ChevronsRight, FolderOpen, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,18 +43,20 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
         )}
       >
         {!isCollapsed && (
-          <h2 className="text-lg font-bold flex items-center gap-2 truncate">
-            <img src={doggieSrc} alt="AIRBud 2.0" className="h-5 w-5" />
-            <span>AIRBud 2.0</span>
-            <div
-              className={cn(
-                "h-2.5 w-2.5 rounded-full shrink-0",
-                systemStatus?.online
-                  ? "bg-green-500"
-                  : "bg-red-500 animate-pulse",
-              )}
-            />
-          </h2>
+          <Link to="/">
+            <h2 className="text-lg font-bold flex items-center gap-2 truncate">
+              <img src={doggieSrc} alt="AIRBud 2.0" className="h-5 w-5" />
+              <span>AIRBud 2.0</span>
+              <div
+                className={cn(
+                  "h-2.5 w-2.5 rounded-full shrink-0",
+                  systemStatus?.online
+                    ? "bg-green-500"
+                    : "bg-red-500 animate-pulse",
+                )}
+              />
+            </h2>
+          </Link>
         )}
 
         <TooltipProvider>

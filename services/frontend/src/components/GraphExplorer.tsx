@@ -41,6 +41,24 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
   const [hoveredNode, setHoveredNode] = useState<any>(null);
   const [hoveredLink, setHoveredLink] = useState<any>(null);
 
+  // --- NEW: Handle ESC Key to exit full screen ---
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsFullScreen(false);
+      }
+    };
+
+    if (isFullScreen) {
+      window.addEventListener("keydown", handleKeyDown);
+    }
+
+    // Cleanup listener when unmounting or when isFullScreen becomes false
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isFullScreen]);
+
   // Data Query
   const {
     data: graphData,
@@ -152,7 +170,6 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
   const hasData = activeData?.nodes?.length > 0;
 
   // UPDATED: Styling for fullscreen vs normal
-  // We use z-[9999] to ensure it sits on top of everything when in Portal
   const containerClasses = isFullScreen
     ? "fixed inset-0 z-[9999] bg-slate-50 dark:bg-slate-950 flex flex-col"
     : "relative h-full w-full bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 flex flex-col";
@@ -178,7 +195,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
             width={dimensions.w}
             height={dimensions.h}
             graphData={activeData}
-            backgroundColor={isFullScreen ? undefined : "rgba(0,0,0,0)"} // Solid background in fullscreen handled by container
+            backgroundColor={isFullScreen ? undefined : "rgba(0,0,0,0)"}
             cooldownTicks={100}
             d3AlphaDecay={0.02}
             d3VelocityDecay={0.3}
@@ -202,7 +219,6 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
     </div>
   );
 
-  // UPDATED: Use Portal to break out of sidebar container
   if (isFullScreen) {
     return createPortal(content, document.body);
   }

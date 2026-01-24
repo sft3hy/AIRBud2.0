@@ -5,26 +5,64 @@ import {
   FileCode,
   FileImage,
   Film,
+  FileQuestion,
+  Presentation,
 } from "lucide-react";
 
 export const getFileIcon = (filename: string) => {
   const ext = filename.split(".").pop()?.toLowerCase();
-  const classes = "h-4 w-4 shrink-0";
+
+  // Standard Icon Props
+  const props = {
+    className: "h-4 w-4 shrink-0",
+    strokeWidth: 1.5, // Consistent thin stroke for professional look
+  };
+
   switch (ext) {
     case "pdf":
-      return <FileText className={`${classes} text-red-500`} />;
+      return (
+        <FileText {...props} className={`${props.className} text-red-400`} />
+      );
     case "xlsx":
     case "csv":
-      return <FileSpreadsheet className={`${classes} text-green-500`} />;
+      return (
+        <FileSpreadsheet
+          {...props}
+          className={`${props.className} text-emerald-400`}
+        />
+      );
     case "png":
     case "jpg":
     case "jpeg":
-      return <FileImage className={`${classes} text-blue-500`} />;
+    case "svg":
+      return (
+        <FileImage {...props} className={`${props.className} text-blue-400`} />
+      );
     case "mp4":
-      return <Film className={`${classes} text-purple-500`} />;
+    case "mov":
+      return (
+        <Film {...props} className={`${props.className} text-purple-400`} />
+      );
+    case "pptx":
+    case "ppt":
+      return (
+        <Presentation
+          {...props}
+          className={`${props.className} text-orange-400`}
+        />
+      );
     case "txt":
-      return <FileCode className={`${classes} text-slate-500`} />;
+    case "md":
+    case "json":
+      return (
+        <FileCode {...props} className={`${props.className} text-slate-400`} />
+      );
     default:
-      return <FileText className={`${classes} text-muted-foreground`} />;
+      return (
+        <FileQuestion
+          {...props}
+          className={`${props.className} text-muted-foreground`}
+        />
+      );
   }
 };

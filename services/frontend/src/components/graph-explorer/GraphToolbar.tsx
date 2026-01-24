@@ -17,6 +17,14 @@ export const GraphToolbar: React.FC<GraphToolbarProps> = ({
 }) => {
   return (
     <div className="absolute top-4 right-4 z-50 flex gap-2">
+      {isFullScreen ? (
+        <div className="pt-2 text-xs font-mono tracking-widest pointer-events-none select-none">
+          ESC TO CLOSE
+        </div>
+      ) : (
+        <></>
+      )}
+
       <Button
         variant="secondary"
         size="icon"
@@ -27,6 +35,7 @@ export const GraphToolbar: React.FC<GraphToolbarProps> = ({
           className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`}
         />
       </Button>
+
       <Button
         variant={isFullScreen ? "destructive" : "secondary"}
         size="icon"

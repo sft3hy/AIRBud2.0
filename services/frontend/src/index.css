@@ -24,6 +24,11 @@
     --input: 35 15% 82%;
     --ring: 199 97% 46%;
     --radius: 0.25rem;
+
+    /* Blob colors for light mode */
+    --blob-purple: 270 91% 65%;
+    --blob-blue: 199 97% 46%;
+    --blob-cyan: 184 91% 48%;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -48,6 +53,11 @@
       --border: 217 32% 20%;
       --input: 217 32% 20%;
       --ring: 210 80% 65%;
+
+      /* Blob colors for dark mode */
+      --blob-purple: 270 91% 65%;
+      --blob-blue: 217 91% 60%;
+      --blob-cyan: 189 94% 43%;
     }
   }
 
@@ -118,3 +128,31 @@
 }
 
 @plugin "tailwindcss-animate";
+
+/* Blob animation keyframes */
+@keyframes blob {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}

@@ -113,7 +113,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <div
       className={cn(
-        "flex flex-col h-full w-full bg-transparent transition-all duration-300 animate-in fade-in duration-500",
+        "flex flex-col h-full w-full",
+        "border-r border-white/10", // Stronger glass for sidebar
         className,
       )}
     >
@@ -124,7 +125,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         mode={mode}
       />
 
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        {" "}
         {isCollapsed ? (
           <div></div>
         ) : (

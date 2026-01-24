@@ -3,19 +3,24 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ChevronLeft,
   ChevronRight,
-  ImageIcon,
-  BarChart,
   Maximize2,
-  X,
-  ScanEye,
+  ImageIcon,
   FileText,
+  ScanEye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getCollectionCharts } from "../lib/api";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { getCollectionCharts } from "../lib/api";
+
+// Sub-components
+import {
+  NoCollectionState,
+  NoChartsState,
+} from "./chart-browser/ChartEmptyStates";
+import { ChartFullscreenModal } from "./chart-browser/ChartFullscreenModal";
 
 interface ChartBrowserProps {
   collectionId: string | null;
@@ -48,6 +53,7 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
   // Keyboard navigation & Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // If modal is open, let it handle close on ESC via its own logic or here
       if (e.key === "Escape") {
         setIsFullscreen(false);
         return;
@@ -60,34 +66,11 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [total, index]); // Added index dependency to ensure fresh closure if needed
+  }, [total, index]);
 
-  // --- Empty States ---
-  if (!collectionId) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-6 bg-muted/5 border-l">
-        <div className="h-16 w-16 bg-muted/20 rounded-full flex items-center justify-center mb-4">
-          <BarChart className="h-8 w-8 opacity-40" />
-        </div>
-        <span className="text-sm font-medium">
-          Select a collection to inspect visuals.
-        </span>
-      </div>
-    );
-  }
-
-  if (total === 0) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-6 bg-muted/5 border-l">
-        <div className="h-16 w-16 bg-muted/20 rounded-full flex items-center justify-center mb-4">
-          <ImageIcon className="h-8 w-8 opacity-40" />
-        </div>
-        <span className="text-sm font-medium">
-          No charts or figures detected.
-        </span>
-      </div>
-    );
-  }
+  // --- Render Conditionals ---
+  if (!collectionId) return <NoCollectionState />;
+  if (total === 0) return <NoChartsState />;
 
   return (
     <>
@@ -120,7 +103,7 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
           </Button>
         </div>
 
-        {/* Main Image Area */}
+        {/* Main Image Thumbnail Area */}
         <div className="h-[40%] shrink-0 p-2 flex items-center justify-center bg-muted/5 relative overflow-hidden group/container border-b border-border/50">
           {/* Background Grid Pattern */}
           <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[radial-gradient(#000_1px,transparent_1px)] dark:bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
@@ -155,7 +138,6 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
         </div>
 
         {/* Metadata Footer */}
-        {/* Added arbitrary group selector to force Radix viewport child to take full height */}
         <ScrollArea className="flex-1 min-h-0 bg-card/30 [&>[data-radix-scroll-area-viewport]>div]:min-h-full">
           <div className="p-5 space-y-4 min-h-full flex flex-col">
             {/* Header Info */}
@@ -168,7 +150,7 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
                   className="grid grid-cols-[1fr_auto] items-center text-xs px-3 py-2 bg-card rounded-md border shadow-sm gap-2 w-full"
                   title={currentChart?.doc_name}
                 >
-                  {currentChart?.doc_name}
+                  <span className="truncate">{currentChart?.doc_name}</span>
                 </span>
               </div>
               <Badge
@@ -210,42 +192,12 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
         </ScrollArea>
       </div>
 
-      {/* --- Fullscreen Modal Overlay --- */}
-      {isFullscreen && currentChart && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md animate-in fade-in duration-200">
-          {/* Close Button */}
-          <Button
-            size="icon"
-            onClick={() => setIsFullscreen(false)}
-            aria-label="Close Fullscreen"
-            className="
-              absolute top-6 right-6 z-50
-              h-12 w-12 rounded-full
-              bg-black/40 backdrop-blur
-              text-white
-              hover:bg-red-500/80
-              transition
-            "
-          >
-            <X className="h-6 w-6" />
-          </Button>
-
-          {/* Navigation Hints (Optional) */}
-          <div className="absolute bottom-8 text-white/40 text-xs font-mono tracking-widest pointer-events-none">
-            USE ARROW KEYS TO NAVIGATE • ESC TO CLOSE
-          </div>
-
-          {/* Large Image */}
-          <div className="relative w-2000 h-2000 p-12 flex items-center justify-center">
-            <img
-              src={currentChart.url}
-              alt="Fullscreen Chart"
-              className="object-contain shadow-2xl animate-in zoom-in-110 duration-300"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        </div>
-      )}
+      {/* --- Fullscreen Modal via Portal --- */}
+      <ChartFullscreenModal
+        isOpen={isFullscreen}
+        imageUrl={currentChart?.url}
+        onClose={() => setIsFullscreen(false)}
+      />
     </>
   );
 };

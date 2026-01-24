@@ -1,4 +1,5 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import { X, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,18 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
   content,
   onClose,
 }) => {
+  // Prevent scrolling on the body when modal is open
+  useEffect(() => {
+    if (content) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [content]);
+
   // Keyboard listener for Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -24,8 +37,9 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
 
   if (content === null) return null;
 
-  return (
-    <div className="fixed inset-0 z-[100] backdrop-blur-sm bg-black/50 flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-200">
+  // Render via Portal to document.body to ensure full-screen coverage
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] backdrop-blur-sm bg-black/50 flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-200">
       {/* Close Button */}
       <Button
         size="icon"
@@ -41,7 +55,7 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
         <div className="px-6 py-4 border-b bg-muted/20 flex items-center gap-2">
           <FileText className="h-5 w-5 text-primary" />
           <span className="font-semibold text-sm uppercase tracking-wide">
-            Document Preview
+            File Preview
           </span>
           <span className="ml-auto text-xs text-muted-foreground mr-12 hidden md:block">
             Press ESC to close
@@ -81,6 +95,7 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
           </div>
         </ScrollArea>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

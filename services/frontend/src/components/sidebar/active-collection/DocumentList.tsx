@@ -35,12 +35,12 @@ export const DocumentList: React.FC<DocumentListProps> = ({
   isOwner,
 }) => {
   return (
-    <div className="px-4 py-4 space-y-2 mb-6">
+    <div className="cursor-pointer px-4 py-4 space-y-2 mb-6">
       {documents.map((doc, index) => (
         <div
           key={doc.id}
           onClick={() => onPreview(doc.id)}
-          className="group grid grid-cols-[1fr_auto] items-center gap-3 w-full p-3 bg-card/60 hover:bg-muted/40 border rounded-lg text-xs transition-all duration-200 hover:shadow-sm hover:border-primary/20"
+          className="cursor-pointer group grid grid-cols-[1fr_auto] items-center gap-3 w-full p-3 hover:bg-muted/40 border rounded-lg text-xs transition-all duration-200 hover:shadow-sm hover:border-primary/20"
         >
           {/* Left side: Number, Icon, Filename, Model info */}
           <div className="flex flex-col min-w-0 overflow-hidden">
@@ -53,7 +53,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
               </div>
 
               {/* Filename with tooltip */}
-              <div className="min-w-0 overflow-hidden flex-1">
+              <div className="cursor-pointer min-w-0 overflow-hidden flex-1">
                 <TooltipProvider>
                   <Tooltip delayDuration={300}>
                     <TooltipTrigger asChild>
@@ -107,7 +107,9 @@ export const DocumentList: React.FC<DocumentListProps> = ({
 
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+                    <AlertDialogTitle className="bg-blur">
+                      Confirm Deletion
+                    </AlertDialogTitle>
                     <AlertDialogDescription>
                       Are you sure you want to delete{" "}
                       <span className="font-semibold text-foreground">

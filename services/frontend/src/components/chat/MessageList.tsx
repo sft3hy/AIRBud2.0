@@ -1,0 +1,61 @@
+import React, { useRef, useEffect } from "react";
+import { Loader2 } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { ChatMessage } from "../../types";
+import { ChatMessageBubble } from "./ChatMessageBubble";
+import doggieSrc from "../../assets/doggie.svg";
+
+interface MessageListProps {
+  chatHistory: ChatMessage[];
+  isPending: boolean;
+  queryStatus: string;
+}
+
+export const MessageList: React.FC<MessageListProps> = ({
+  chatHistory,
+  isPending,
+  queryStatus,
+}) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when history changes
+  useEffect(() => {
+    if (bottomRef.current) {
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      });
+    }
+  }, [chatHistory, isPending, queryStatus]);
+
+  return (
+    <div className="flex-1 overflow-auto relative bg-transparent animate-in fade-in duration-500">
+      <ScrollArea className="h-full md:px-10 py-0" ref={scrollRef}>
+        <div className="space-y-10 pb-4 max-w-2xl mx-auto min-h-[500px]">
+          {chatHistory.map((msg, idx) => (
+            <ChatMessageBubble key={idx} msg={msg} />
+          ))}
+
+          {isPending && (
+            <div className="flex gap-4">
+              <div className="h-12 w-12 rounded-full bg-card p-1.5 flex items-center justify-center shrink-0 border shadow-sm mt-1">
+                <img
+                  src={doggieSrc}
+                  alt="Bot"
+                  className="h-full w-full object-contain"
+                />
+              </div>
+              <div className="bg-card/90 backdrop-blur border px-1 py-5 rounded-3xl rounded-bl-sm text-base text-muted-foreground flex items-center gap-3 shadow-sm">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span className="italic font-medium animate-pulse">
+                  {queryStatus}
+                </span>
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+      </ScrollArea>
+    </div>
+  );
+};

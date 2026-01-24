@@ -153,17 +153,29 @@ const AppContent = () => {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      {/* --- UNIFIED COSMIC BACKGROUND START --- */}
-      {/* This sits at z-0. All content is z-10 or higher. */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute top-0 right-0 -mr-20 -mt-20 h-96 w-96 rounded-full bg-blue-500/10 blur-[100px]" />
-        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 h-96 w-96 rounded-full bg-purple-500/10 blur-[100px]" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:32px_32px]" />
-      </div>
-      {/* --- UNIFIED COSMIC BACKGROUND END --- */}
+      {/* --- LIQUID BACKGROUND START --- */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-background">
+        {/* Animated Blobs */}
+        <div
+          className="absolute top-0 -left-4 w-96 h-96 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-50 animate-blob"
+          style={{ backgroundColor: `hsl(var(--blob-purple) / 0.2)` }}
+        />
+        <div
+          className="absolute top-0 -right-4 w-96 h-96 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-50 animate-blob animation-delay-2000"
+          style={{ backgroundColor: `hsl(var(--blob-blue) / 0.2)` }}
+        />
+        <div
+          className="absolute -bottom-8 left-20 w-96 h-96 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-50 animate-blob animation-delay-4000"
+          style={{ backgroundColor: `hsl(var(--blob-cyan) / 0.2)` }}
+        />
 
-      {/* Main Content Wrapper - Ensures content sits ABOVE the background */}
-      <div className="relative z-10 w-full h-full">
+        {/* Grid Overlay */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--foreground)_/_0.04)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--foreground)_/_0.04)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:linear-gradient(to_bottom,transparent,black)]" />
+      </div>
+      {/* --- LIQUID BACKGROUND END --- */}
+
+      {/* Content Wrapper */}
+      <div className="relative z-10 w-full h-full text-foreground/90">
         <AppContent />
       </div>
 

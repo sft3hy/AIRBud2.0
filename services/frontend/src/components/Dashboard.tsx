@@ -1,14 +1,9 @@
-import { useState, useRef } from "react";
-import { useLocation, useParams } from "react-router-dom"; // Import Router hooks
+import React, { useState, useEffect } from "react";
+import { useLocation, useParams } from "react-router-dom";
 import { MainContent } from "../MainContent";
 import { Sidebar } from "./SideBar";
 import { GroupManager } from "./GroupManager";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-  ImperativePanelHandle,
-} from "@/components/ui/resizable";
+
 import { ClassificationBanner } from "./ClassificationBanner";
 
 export const Dashboard = () => {
@@ -22,75 +17,103 @@ export const Dashboard = () => {
   // Determine ID based on URL param (if active)
   const sessionId = params.id || null;
 
-  // --- JOB STATE (Still local/global) ---
+  // --- JOB STATE ---
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
   // --- LAYOUT LOGIC ---
-  const sidebarRef = useRef<ImperativePanelHandle>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(350);
+  const [isResizing, setIsResizing] = useState(false);
 
-  const toggleSidebar = () => {
-    const panel = sidebarRef.current;
-    if (panel) {
-      if (isCollapsed) {
-        panel.resize(25);
-        setIsCollapsed(false);
-      } else {
-        panel.resize(4);
-        setIsCollapsed(true);
+  const startResizing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  const stopResizing = () => {
+    setIsResizing(false);
+  };
+
+  const resize = (e: MouseEvent) => {
+    if (isResizing) {
+      const newWidth = e.clientX;
+      if (newWidth > 60 && newWidth < 800) {
+        setSidebarWidth(newWidth);
       }
     }
   };
 
+  // Add global event listeners for drag
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener("mousemove", resize);
+      window.addEventListener("mouseup", stopResizing);
+    } else {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    }
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [isResizing]);
+
+  const currentWidth = isCollapsed ? 60 : sidebarWidth;
+
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-transparent">
-      {/* 2. TOP BANNER: Frozen at the top, spans full width */}
-      <div className="flex-none z-50">
+    <div className="flex flex-col h-screen w-full overflow-hidden bg-transparent text-foreground relative">
+      {/* 1. TOP BANNER */}
+      <div className="flex-none z-50 relative shadow-md">
         <ClassificationBanner />
       </div>
-      <div className="flex flex-1 min-h-0 overflow-hidden relative">
-        <div className="h-full w-full overflow-hidden bg-transparent">
-          <ResizablePanelGroup direction="horizontal">
-            <ResizablePanel
-              ref={sidebarRef}
-              defaultSize={25}
-              minSize={6}
-              maxSize={40}
-              collapsedSize={6}
-              className="bg-background/40 backdrop-blur-md border-r border-border/50"
-              onResize={(size) => {
-                const collapsed = size < 10;
-                if (collapsed !== isCollapsed) setIsCollapsed(collapsed);
-              }}
-            >
-              <Sidebar
-                // Pass derived state instead of raw state setters
-                mode={isGroupMode ? "groups" : "collections"}
-                currentSessionId={sessionId}
-                // Pass job props
-                activeJobId={activeJobId}
-                setActiveJobId={setActiveJobId}
-                // Pass layout props
-                isCollapsed={isCollapsed}
-                toggleSidebar={toggleSidebar}
-              />
-            </ResizablePanel>
 
-            <ResizableHandle withHandle className="bg-border/20" />
+      {/* 2. MAIN CONTENT AREA */}
+      <div className="flex-1 min-h-0 relative z-0 w-full h-full flex">
+        {/* 
+           SIDEBAR (Fixed Left)
+        */}
+        <div
+          className="flex-none h-full z-40 relative flex"
+          style={{
+            width: currentWidth,
+            transition: isResizing ? "none" : "width 300ms ease-out",
+          }}
+        >
+          <div className="flex-1 h-full bg-background/60 backdrop-blur-xl border-r border-white/10 overflow-hidden relative">
+            <Sidebar
+              mode={isGroupMode ? "groups" : "collections"}
+              currentSessionId={sessionId}
+              activeJobId={activeJobId}
+              setActiveJobId={setActiveJobId}
+              isCollapsed={isCollapsed}
+              toggleSidebar={() => setIsCollapsed(!isCollapsed)}
+            />
+          </div>
 
-            <ResizablePanel defaultSize={75} className="bg-transparent">
-              {isGroupMode ? (
-                <GroupManager />
-              ) : (
-                <MainContent sessionId={sessionId} activeJobId={activeJobId} />
-              )}
-            </ResizablePanel>
-          </ResizablePanelGroup>
+          {/* Drag Handle */}
+          {!isCollapsed && (
+            <div
+              className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors z-50"
+              onMouseDown={startResizing}
+            />
+          )}
+        </div>
+
+        {/* 
+           MAIN CONTENT (Pushed Right)
+           - Flex-1 takes remaining space.
+        */}
+        <div className="flex-1 h-full overflow-hidden flex flex-col min-w-0">
+          {isGroupMode ? (
+            <GroupManager />
+          ) : (
+            <MainContent sessionId={sessionId} activeJobId={activeJobId} />
+          )}
         </div>
       </div>
 
-      {/* 4. BOTTOM BANNER: Frozen at the bottom */}
-      <div className="flex-none z-50">
+      {/* 3. BOTTOM BANNER */}
+      <div className="flex-none z-50 relative shadow-[0_-4px_10px_rgba(0,0,0,0.1)]">
         <ClassificationBanner />
       </div>
     </div>
