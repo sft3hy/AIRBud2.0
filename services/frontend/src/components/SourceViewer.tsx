@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useCallback, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import ForceGraph2D from "react-force-graph-2d";
+import { BookOpenText } from "lucide-react";
 import { SearchResult, SessionDocument } from "../types";
 import {
   Accordion,
@@ -72,18 +73,19 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({ sources }) => {
       const mermaidMatch = text.match(mermaidRegex);
 
       if (mermaidMatch) {
-        sourceId = mermaidMatch[1].trim();
-        label = mermaidMatch[2].trim();
-        targetId = mermaidMatch[3].trim();
+        sourceId = (mermaidMatch[1] || "").trim();
+        label = (mermaidMatch[2] || "").trim();
+        targetId = (mermaidMatch[3] || "").trim();
       } else {
         // Pattern 2: Standard style "A -> B [Label]" or "A -> B (Label)"
         // Regex: Capture (NodeA) -> (NodeB) [(Label)]?
-        const standardRegex = /(.+?)\s*->\s*(.+?)(?:\s*(?:\[|\()(.*?)(?:\]|\)))?$/m;
+        const standardRegex =
+          /(.+?)\s*->\s*(.+?)(?:\s*(?:\[|\()(.*?)(?:\]|\)))?$/m;
         const standardMatch = text.match(standardRegex);
 
         if (standardMatch) {
-          sourceId = standardMatch[1].trim();
-          targetId = standardMatch[2].trim();
+          sourceId = (standardMatch[1] || "").trim();
+          targetId = (standardMatch[2] || "").trim();
           label = standardMatch[3] ? standardMatch[3].trim() : "";
         }
       }
@@ -118,14 +120,14 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({ sources }) => {
       // Pass empty map for docLookup as we don't have file mapping here easily
       drawNode(node, ctx, globalScale, false, new Map(), isDark);
     },
-    [isDark]
+    [isDark],
   );
 
   const linkCanvasObject = useCallback(
     (link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       drawLink(link, ctx, globalScale, false, isDark);
     },
-    [isDark]
+    [isDark],
   );
 
   return (
@@ -138,12 +140,9 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({ sources }) => {
       >
         <AccordionItem value="context" className="border-none">
           <AccordionTrigger className="text-sm font-medium text-muted-foreground py-2 hover:no-underline hover:text-primary transition-colors bg-muted/30 px-3 rounded-md">
-            <span className="flex items-center gap-2">
-              📚 View Context
-            </span>
+            <span className="flex items-center gap-2"><BookOpenText /> View Context</span>
           </AccordionTrigger>
           <AccordionContent className="pt-3 pb-1 space-y-4">
-
             {/* 1. KNOWLEDGE GRAPH HITS (MINI GRAPH) */}
             {hasGraphData && isOpen && (
               <div className="space-y-2">
@@ -165,15 +164,23 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({ sources }) => {
                     linkCanvasObjectMode={() => "after"} // Draw label AFTER the link
                     linkDirectionalArrowLength={6}
                     linkDirectionalArrowRelPos={1}
-                    linkColor={() => isDark ? "rgba(148, 163, 184, 0.6)" : "rgba(71, 85, 105, 0.6)"}
-                    linkDirectionalArrowColor={() => isDark ? "rgba(148, 163, 184, 0.6)" : "rgba(71, 85, 105, 0.6)"}
+                    linkColor={() =>
+                      isDark
+                        ? "rgba(148, 163, 184, 0.6)"
+                        : "rgba(71, 85, 105, 0.6)"
+                    }
+                    linkDirectionalArrowColor={() =>
+                      isDark
+                        ? "rgba(148, 163, 184, 0.6)"
+                        : "rgba(71, 85, 105, 0.6)"
+                    }
                     cooldownTicks={100}
                     d3AlphaDecay={0.02}
                     d3VelocityDecay={0.3}
                   />
-                  <div className="absolute bottom-2 right-2 text-[10px] text-muted-foreground pointer-events-none">
+                  {/* <div className="absolute bottom-2 right-2 text-[10px] text-muted-foreground pointer-events-none">
                     Interactive Graph
-                  </div>
+                  </div> */}
                 </div>
               </div>
             )}
@@ -189,12 +196,15 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({ sources }) => {
                     const distance = src.score
                       ? parseFloat(src.score.toString())
                       : 0;
-                    const relevance = Math.max(0, (1 - distance / 2) * 100).toFixed(
+                    const relevance = Math.max(
                       0,
-                    );
+                      (1 - distance / 2) * 100,
+                    ).toFixed(0);
                     const filename = src.source.split("/").pop() || "Unknown";
                     const pageDisplay =
-                      src.page && src.page > 0 ? `Page ${src.page}` : "Page N/A";
+                      src.page && src.page > 0
+                        ? `Page ${src.page}`
+                        : "Page N/A";
 
                     return (
                       <Card

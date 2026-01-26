@@ -8,6 +8,7 @@ import React, {
 import { createPortal } from "react-dom";
 import ForceGraph2D from "react-force-graph-2d";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { getCollectionGraph } from "../lib/api";
 import { SessionDocument } from "../types";
 
@@ -26,6 +27,24 @@ interface GraphExplorerProps {
   documents: SessionDocument[];
 }
 
+// Local wrapper to handle ESC key for fullscreen portal
+const FullScreenGraphWrapper: React.FC<{
+  onClose: () => void;
+  children: React.ReactNode;
+}> = ({ onClose, children }) => {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return <>{children}</>;
+};
+
 export const GraphExplorer: React.FC<GraphExplorerProps> = ({
   collectionId,
   documents,
@@ -35,29 +54,24 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
 
   // Layout State
   const [dimensions, setDimensions] = useState({ w: 800, h: 600 });
-  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const isFullScreen = searchParams.get("fullscreen_graph") === "true";
+
+  const setIsFullScreen = (val: boolean) => {
+    setSearchParams((prev) => {
+      if (val) {
+        prev.set("fullscreen_graph", "true");
+      } else {
+        prev.delete("fullscreen_graph");
+      }
+      return prev;
+    });
+  };
 
   // Interaction State
   const [hoveredNode, setHoveredNode] = useState<any>(null);
   const [hoveredLink, setHoveredLink] = useState<any>(null);
 
-  // --- NEW: Handle ESC Key to exit full screen ---
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsFullScreen(false);
-      }
-    };
-
-    if (isFullScreen) {
-      window.addEventListener("keydown", handleKeyDown);
-    }
-
-    // Cleanup listener when unmounting or when isFullScreen becomes false
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isFullScreen]);
 
   // Data Query
   const {
@@ -78,6 +92,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
 
   useEffect(() => {
     if (graphData) {
+      // @ts-ignore
       setActiveData(graphData);
     }
   }, [graphData]);
@@ -151,6 +166,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
   // --- Canvas Callbacks ---
   const nodeCanvasObject = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+      // @ts-ignore
       drawNode(node, ctx, globalScale, hoveredNode?.id === node.id, docLookup);
     },
     [hoveredNode, docLookup],
@@ -158,6 +174,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
 
   const linkCanvasObject = useCallback(
     (link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+      // @ts-ignore
       drawLink(link, ctx, globalScale, hoveredLink === link);
     },
     [hoveredLink],
@@ -171,7 +188,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
 
   // UPDATED: Styling for fullscreen vs normal
   const containerClasses = isFullScreen
-    ? "fixed inset-0 z-[9999] bg-slate-50 dark:bg-slate-950 flex flex-col"
+    ? "fixed left-0 right-0 top-5 bottom-5 z-[9999] bg-slate-50 dark:bg-slate-950 flex flex-col"
     : "relative h-full w-full bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 flex flex-col";
 
   const content = (
@@ -196,9 +213,11 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
             height={dimensions.h}
             graphData={activeData}
             backgroundColor={isFullScreen ? undefined : "rgba(0,0,0,0)"}
-            cooldownTicks={100}
+            warmupTicks={100} // Pre-calculate layout before render
+            cooldownTicks={0} // Stop ticking immediately after warmup
             d3AlphaDecay={0.02}
             d3VelocityDecay={0.3}
+            // @ts-ignore
             linkDistance={120}
             chargeStrength={-300}
             linkColor={(link) => (hoveredLink === link ? "#64748b" : "#cbd5e1")}
@@ -220,7 +239,12 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
   );
 
   if (isFullScreen) {
-    return createPortal(content, document.body);
+    return createPortal(
+      <FullScreenGraphWrapper onClose={() => setIsFullScreen(false)}>
+        {content}
+      </FullScreenGraphWrapper>,
+      document.body,
+    );
   }
 
   return content;

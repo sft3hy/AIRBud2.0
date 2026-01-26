@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import {
   ChevronLeft,
   ChevronRight,
@@ -20,7 +21,7 @@ import {
   NoCollectionState,
   NoChartsState,
 } from "./chart-browser/ChartEmptyStates";
-import { ChartFullscreenModal } from "./chart-browser/ChartFullscreenModal";
+import { ChartFullscreenModal } from "./chart-browser/ChartFullScreenModal";
 
 interface ChartBrowserProps {
   collectionId: string | null;
@@ -28,7 +29,24 @@ interface ChartBrowserProps {
 
 export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
   const [index, setIndex] = useState(0);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedImage = searchParams.get("fullscreen_chart");
+  const prevCollectionId = useRef(collectionId);
+  const hasSyncedParam = useRef(false);
+
+  const openFullscreen = (url: string) => {
+    setSearchParams((prev) => {
+      prev.set("fullscreen_chart", url);
+      return prev;
+    });
+  };
+
+  const closeFullscreen = () => {
+    setSearchParams((prev) => {
+      prev.delete("fullscreen_chart");
+      return prev;
+    });
+  };
 
   const { data: allCharts = [] } = useQuery({
     queryKey: ["charts", collectionId],
@@ -36,11 +54,26 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
     enabled: !!collectionId,
   });
 
-  // Reset index when collection changes
+  // Reset index when collection changes (but not on mount if same ID)
   useEffect(() => {
-    setIndex(0);
-    setIsFullscreen(false);
+    if (prevCollectionId.current !== collectionId) {
+      setIndex(0);
+      closeFullscreen();
+      prevCollectionId.current = collectionId;
+      hasSyncedParam.current = false;
+    }
   }, [collectionId]);
+
+  // Initial Sync: If URL has fullscreen_chart, find its index
+  useEffect(() => {
+    if (allCharts.length > 0 && selectedImage && !hasSyncedParam.current) {
+      const foundIndex = allCharts.findIndex((c: any) => c.url === selectedImage);
+      if (foundIndex !== -1) {
+        setIndex(foundIndex);
+        hasSyncedParam.current = true;
+      }
+    }
+  }, [allCharts, selectedImage]);
 
   const total = allCharts.length;
   // Safety check for index out of bounds
@@ -50,17 +83,34 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
   const handleNext = () => setIndex((prev) => (prev + 1) % total);
   const handlePrev = () => setIndex((prev) => (prev - 1 + total) % total);
 
-  // Keyboard navigation & Shortcuts
+  // Sync fullscreen url if index changes while open
+  useEffect(() => {
+    if (selectedImage && currentChart?.url) {
+      // If URL param doesn't match current chart (based on index)
+      if (selectedImage !== currentChart.url) {
+
+        // If we haven't synced yet, and the mismatch exists, we might be in the race condition.
+        // If the URL param corresponds to a valid chart, we trust the URL (Initial Sync effect handles it)
+        const urlMatchExists = allCharts.some((c: any) => c.url === selectedImage);
+        if (urlMatchExists && !hasSyncedParam.current) {
+          return;
+        }
+
+        // If we have synced OR the URL is just wrong, we overwrite it.
+        setSearchParams((prev) => {
+          prev.set("fullscreen_chart", currentChart.url);
+          return prev;
+        });
+      }
+    }
+  }, [index, selectedImage, currentChart, allCharts]);
+
+  // Navigation Shortcuts (Arrows)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // If modal is open, let it handle close on ESC via its own logic or here
-      if (e.key === "Escape") {
-        setIsFullscreen(false);
-        return;
-      }
-
       if (total === 0) return;
-
+      // Only navigate if NOT fullscreen (or navigate in fullscreen too? usually yes)
+      // Assuming navigation works in both, but let's keep it simple.
       if (e.key === "ArrowRight") handleNext();
       if (e.key === "ArrowLeft") handlePrev();
     };
@@ -110,7 +160,9 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
 
           <Card
             className="relative group w-full h-full max-h-[400px] flex items-center justify-center bg-background/80/50 border-dashed border-2 overflow-hidden cursor-zoom-in transition-all duration-300 hover:border-primary/30 hover:shadow-lg"
-            onClick={() => setIsFullscreen(true)}
+            onClick={() =>
+              currentChart?.url && openFullscreen(currentChart.url)
+            }
           >
             {currentChart && currentChart.url ? (
               <>
@@ -194,9 +246,10 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
 
       {/* --- Fullscreen Modal via Portal --- */}
       <ChartFullscreenModal
-        isOpen={isFullscreen}
-        imageUrl={currentChart?.url}
-        onClose={() => setIsFullscreen(false)}
+        isOpen={!!selectedImage}
+        imageUrl={selectedImage || undefined}
+        description={currentChart?.description}
+        onClose={closeFullscreen}
       />
     </>
   );

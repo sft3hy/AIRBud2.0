@@ -1,8 +1,9 @@
 fastapi
 uvicorn
+gunicorn
 # ML Core
 torch
-transformers
+transformers<5.0.0
 accelerate
 # Image Processing
 pillow

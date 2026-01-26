@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getMyGroups,
@@ -184,7 +184,9 @@ export const GroupManager = () => {
                   <MyGroupCard
                     key={group.id}
                     group={group}
-                    currentUserId={currentUserId}
+                    currentUserId={
+                      currentUserId ? String(currentUserId) : undefined
+                    }
                     onCopyInvite={copyInvite}
                     onEdit={openEditModal}
                     onDelete={(id) => deleteMutation.mutate(id)}

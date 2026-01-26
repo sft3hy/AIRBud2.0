@@ -14,7 +14,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       <div className="flex items-center gap-2">
         <FolderOpen className="h-6 w-6 text-primary" />
         <p className="flex items-center text-lg font-semibold">
-          <span>Chatting with: {activeCollectionName}</span>
+          <span>{activeCollectionName}</span>
         </p>
       </div>
       <UserStatus />

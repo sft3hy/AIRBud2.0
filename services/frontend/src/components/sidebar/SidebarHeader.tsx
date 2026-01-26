@@ -125,7 +125,16 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
                 <Button
                   variant={mode === "collections" ? "secondary" : "ghost"}
                   size="icon"
-                  onClick={() => navigate("/collections")}
+                  onClick={() => {
+                    const lastCollectionId = localStorage.getItem(
+                      "lastActiveCollectionId",
+                    );
+                    if (lastCollectionId) {
+                      navigate(`/collections/${lastCollectionId}`);
+                    } else {
+                      navigate("/collections");
+                    }
+                  }}
                 >
                   <FolderOpen className="h-5 w-5" />
                 </Button>

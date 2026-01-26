@@ -47,4 +47,9 @@ COPY . .
 RUN chown -R appuser:appuser /app
 USER appuser
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--reload"]
+# Optimization for high concurrency
+ENV OMP_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1
+
+# Use Gunicorn for production
+CMD ["gunicorn", "main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "--threads", "2", "--timeout", "120"]

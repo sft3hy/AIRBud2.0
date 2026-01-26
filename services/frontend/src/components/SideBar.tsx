@@ -114,7 +114,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <div
       className={cn(
         "flex flex-col h-full w-full",
-        "border-r border-white/10", // Stronger glass for sidebar
+        "border-r border-border/60 bg-background/50 backdrop-blur-xl",
         className,
       )}
     >
@@ -139,7 +139,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <CollectionsView
                     collections={collections}
                     userGroups={userGroups}
-                    currentUserId={currentUserId}
+                    currentUserId={currentUserId ? String(currentUserId) : undefined}
                     currentSessionId={currentSessionId}
                   />
                 ) : (

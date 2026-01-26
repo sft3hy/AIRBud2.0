@@ -34,6 +34,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Vision Service", version=config.VERSION, lifespan=lifespan)
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
 # --- Routes ---
 
 @app.get("/health")
@@ -42,6 +45,7 @@ def health() -> Dict[str, Any]:
     Health check endpoint. 
     Quickly returns status without loading heavy models.
     """
+    # Peek at state (dirty read safe for monitoring)
     return {
         "status": "online",
         "service": config.SERVICE_NAME,
@@ -49,13 +53,13 @@ def health() -> Dict[str, Any]:
         "active_model": manager.active_model_name or "None",
         "gpu_available": torch.cuda.is_available(),
         "ollama_host": config.OLLAMA_BASE_URL,
+        "active_users": manager.active_users,
     }
 
 @app.post("/transcribe")
-def transcribe_audio(req: TranscribeRequest):
+async def transcribe_audio(req: TranscribeRequest):
     """
     Transcribes an audio file using OpenAI Whisper.
-    Blocking operation run in threadpool.
     """
     logger.info(f"Request: Transcribe audio -> {req.audio_path}")
     
@@ -63,21 +67,15 @@ def transcribe_audio(req: TranscribeRequest):
         logger.warning(f"Audio file not found: {req.audio_path}")
         raise HTTPException(status_code=404, detail="Audio file not found")
 
-    try:
-        # Get Model (Thread-safe, handles locking/swapping)
-        model = manager.get_whisper()
-        if not model:
-            raise HTTPException(status_code=500, detail="Failed to initialize Whisper model")
+    def _process():
+        # Blocks in thread until resources are available
+        with manager.use_whisper_model() as model:
+            # Inference (also blocking)
+            return model.transcribe(req.audio_path)
 
-        # Run Inference (Thread-safe)
-        text = model.transcribe(req.audio_path)
-        
-        # Immediate cleanup policy for Audio:
-        # Since audio is rare compared to vision, we offload immediately to free VRAM.
-        # This prevents the 1.5GB+ Whisper model from sitting idle in GPU memory.
-        manager.whisper_model = None
-        model.offload()
-        
+    try:
+        # Offload entire locking+inference block to thread
+        text = await asyncio.to_thread(_process)
         return {"text": text}
 
     except Exception as e:
@@ -86,39 +84,37 @@ def transcribe_audio(req: TranscribeRequest):
 
 
 @app.post("/describe")
-def describe_image(req: DescriptionRequest):
+async def describe_image(req: DescriptionRequest):
     """
     Generates a description for an image using a Vision-Language Model.
-    Blocking operation run in threadpool.
     """
     logger.info(f"Request: Describe image -> {req.model_name}")
 
-    # 1. Validate File
     if not os.path.exists(req.image_path):
         logger.warning(f"Image file not found: {req.image_path}")
         raise HTTPException(
             status_code=404, detail=f"Image file not found: {req.image_path}"
         )
 
-    # 2. Get Model (Auto-loads requested model, offloads others)
-    model = manager.get_model(req.model_name)
-    if not model:
-        logger.error(f"Model load failure: {req.model_name}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to load model: {req.model_name}"
-        )
+    def _process():
+        # Blocks in thread until resources are available
+        with manager.use_vision_model(req.model_name) as model:
+            # Inference
+            try:
+                try:
+                    image = Image.open(req.image_path).convert("RGB")
+                except UnidentifiedImageError:
+                    raise HTTPException(status_code=400, detail="Invalid image file format")
+                
+                return model.describe(image, req.prompt)
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise RuntimeError(f"Inner Inference Error: {e}")
 
-    # 3. Process Image
     try:
-        # Open image safely
-        try:
-            image = Image.open(req.image_path).convert("RGB")
-        except UnidentifiedImageError:
-            raise HTTPException(status_code=400, detail="Invalid image file format")
-
-        # Run Inference
-        description = model.describe(image, req.prompt)
-        
+        # Offload entire locking+inference block to thread
+        description = await asyncio.to_thread(_process)
         return {"description": description}
 
     except HTTPException:

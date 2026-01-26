@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
-import { FileText, SplinePointer, Image } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { FileText, Share2, Image } from "lucide-react";
 import {
   uploadAndProcessDocument,
   deleteDocument,
@@ -44,7 +44,42 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const [previewContent, setPreviewContent] = useState<string | null>(null);
+  // State for document preview
+  const [previewDocId, setPreviewDocId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Fetch document preview content
+  const { data: previewContent } = useQuery({
+    queryKey: ["documentPreview", previewDocId],
+    queryFn: () => getDocumentPreview(parseInt(previewDocId!)),
+    enabled: !!previewDocId,
+  });
+
+  // On mount, check if there's a preview_doc param
+  useEffect(() => {
+    const docId = searchParams.get("preview_doc");
+    if (docId) {
+      setPreviewDocId(docId);
+    }
+  }, [searchParams]);
+
+  const handlePreview = (id: number) => {
+    const docId = id.toString();
+    setPreviewDocId(docId);
+    setSearchParams((prev) => {
+      prev.set("preview_doc", docId);
+      return prev;
+    });
+  };
+
+  const closePreview = () => {
+    setPreviewDocId(null);
+    setSearchParams((prev) => {
+      prev.delete("preview_doc");
+      return prev;
+    });
+  };
+
   const [selectedModel, setSelectedModel] = useState<VisionModel>(
     "Ollama-Granite3.2-Vision",
   );
@@ -57,23 +92,6 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
   const queueRef = useRef<File[]>([]);
   const isProcessingRef = useRef(false);
 
-  // --- Handlers ---
-
-  const handlePreviewDoc = async (docId: number) => {
-    try {
-      const content = await getDocumentPreview(docId);
-      setPreviewContent(content);
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to load document preview.",
-      });
-    }
-  };
-
-  const handleClosePreview = () => setPreviewContent(null);
-
   // --- Queue Processor ---
   const processNextInQueue = useCallback(async () => {
     if (isProcessingRef.current) return;
@@ -84,6 +102,11 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
 
     isProcessingRef.current = true;
     const currentFile = queueRef.current[0];
+
+    if (!currentFile) {
+      isProcessingRef.current = false;
+      return;
+    }
 
     try {
       // 1. Optimistic Status Update
@@ -140,6 +163,41 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
     }
   }, [activeJobId, processNextInQueue]);
 
+  // --- PERSISTENCE LOGIC START ---
+  // 1. Save active collection ID whenever it changes
+  useEffect(() => {
+    if (currentSessionId) {
+      localStorage.setItem("lastActiveCollectionId", currentSessionId);
+    }
+  }, [currentSessionId]);
+
+  // 2. Tab State with Persistence
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = localStorage.getItem(`activeTab_${currentSessionId}`);
+    return saved || "docs";
+  });
+
+  const handleTabChange = (val: string) => {
+    setActiveTab(val);
+    localStorage.setItem(`activeTab_${currentSessionId}`, val);
+  };
+
+  // Switch tab automatically based on URL params (Persistence on Reload)
+  useEffect(() => {
+    const hasChart = searchParams.get("fullscreen_chart");
+    const hasGraph = searchParams.get("fullscreen_graph") === "true";
+    const hasDoc = searchParams.get("preview_doc");
+
+    if (hasChart) {
+      setActiveTab("charts");
+    } else if (hasGraph) {
+      setActiveTab("graph");
+    } else if (hasDoc) {
+      setActiveTab("docs");
+    }
+  }, [searchParams]);
+  // --- PERSISTENCE LOGIC END ---
+
   const handleStartProcessing = () => {
     queueRef.current = [...queueRef.current, ...stagedFiles];
     setQueueDisplay([...queueRef.current]);
@@ -165,7 +223,11 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
         onBack={() => navigate("/collections")}
       />
 
-      <Tabs defaultValue="docs" className="flex-1 flex flex-col min-h-0 w-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={handleTabChange}
+        className="flex-1 flex flex-col min-h-0 w-full"
+      >
         {/* Navigation Tabs */}
         <div className="px-2 py-1 border-b shrink-0">
           <TabsList className="grid w-full grid-cols-3 h-8 bg-background/50 p-0.5">
@@ -185,7 +247,7 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
               value="graph"
               className="text-[10px] data-[state=active]:bg-purple-500/10 data-[state=active]:text-purple-600 gap-1.5"
             >
-              <SplinePointer className="h-3 w-3" /> Graph
+              <Share2 className="h-3 w-3" /> Graph
             </TabsTrigger>
           </TabsList>
         </div>
@@ -215,9 +277,10 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
 
             <DocumentList
               documents={currentDocs}
-              onPreview={handlePreviewDoc}
+              onPreview={handlePreview}
               onDelete={handleDeleteDoc}
               isOwner={isOwner}
+              hasStagedFiles={stagedFiles.length > 0}
             />
           </ScrollArea>
         </TabsContent>
@@ -246,8 +309,8 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
       </Tabs>
 
       <DocumentPreviewModal
-        content={previewContent}
-        onClose={handleClosePreview}
+        content={previewContent || null}
+        onClose={closePreview}
       />
     </div>
   );

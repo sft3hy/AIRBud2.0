@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ShieldCheck,
@@ -66,7 +66,7 @@ export const LoginPage = () => {
 
               <div>
                 <h1 className="text-3xl font-extrabold tracking-tight flex justify-center items-center gap-2">
-                  AIRBud <span className="text-primary">Secure</span>
+                  AIRBud <span className="text-primary"></span>
                 </h1>
                 <p className="text-sm text-muted-foreground mt-2 max-w-[280px] mx-auto">
                   Automated Information Retriever Buddy

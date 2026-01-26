@@ -82,7 +82,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
             collections: [],
           };
         }
-        groups[c.group_id].collections.push(c);
+        groups[c.group_id]!.collections.push(c);
       }
     });
 

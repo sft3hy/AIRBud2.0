@@ -1,16 +1,19 @@
 services:
+  # 0. Init Filesystem (Utility Container)
   init_fs:
     image: alpine:latest
     container_name: smart_rag_init_fs
-    # Create directories and force permissions to 777 so all containers (root or appuser) can RWX
+    # Setup shared data directories with permissions
     command: sh -c "mkdir -p /data/uploads /data/charts /data/faiss_indexes /data/chunks /data/huggingface /data/previews && chmod -R 777 /data"
     volumes:
       - shared_data:/data
+    restart: "no" # Only runs once per deploy
 
   # --- Gateway ---
   nginx:
     image: nginx:alpine
     container_name: smart_rag_nginx
+    restart: always
     ports:
       - "80:80"
       - "443:443"
@@ -30,29 +33,34 @@ services:
 
   # 1. Frontend
   frontend:
+    # We keep the build context so you can run 'docker compose build'
     build:
       context: ./services/frontend
       dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://rag_core:8000
+        - VITE_NETWORK=LOW
+    image: smart_rag_frontend:latest
     container_name: smart_rag_frontend
+    restart: always
     ports:
       - "5173:5173"
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=http://rag_core:8000
       - VITE_NETWORK=LOW
-      - VITE_TEST_MODE=${TEST:-False}
-      - WATCHPACK_POLLING=true
-      - CHOKIDAR_USEPOLLING=true # Better for Docker file watching
-    volumes:
-      - ./services/frontend:/app
-      - /app/node_modules
-    command: sh -c "npm install && npm run dev -- --host" # Run install on startup
+    # Assuming your Dockerfile CMD handles the static serve (e.g., serve -s dist)
     depends_on:
       - rag_core
+    volumes:
+      # Only mount node_modules if strictly necessary, otherwise remove this line for pure immutable images
+      - /app/node_modules
 
   # 2. RAG Core
   rag_core:
     build: ./services/rag_core
+    image: smart_rag_core:latest
     container_name: smart_rag_core
+    restart: always
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - SANCTUARY_API_KEY=${SANCTUARY_API_KEY}
@@ -68,7 +76,6 @@ services:
       - HF_HOME=/data/huggingface
     volumes:
       - shared_data:/data
-      - ./services/rag_core:/app
     depends_on:
       parser:
         condition: service_started
@@ -76,46 +83,44 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
-    # --- FIX: Add ( ... || true) to ignore permission errors on existing files ---
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload --proxy-headers
-    # ----------------------------------------------------------------------------
+    # Command removed: Using CMD from Dockerfile (Gunicorn)
 
-  # 3. Parser
+    # 3. Parser
   parser:
     build:
       context: ./services/parser
-      dockerfile: Dockerfile.test
+      dockerfile: Dockerfile.test # Switched from Dockerfile.test to standard
+    image: smart_rag_parser:latest
     container_name: smart_rag_parser
+    restart: always
     ports:
       - "8001:8001"
     environment:
       - PYTHONUNBUFFERED=1
     volumes:
       - shared_data:/data
-      - ./services/parser:/app
-    command: >
-      /bin/sh -c "mkdir -p /data/charts &&
-      uvicorn main:app --host 0.0.0.0 --port 8001 --reload"
+    # Command removed: Using CMD from Dockerfile (Gunicorn)
 
-  # 4. Vision
+    # 4. Vision
   vision:
     build: ./services/vision
+    image: smart_rag_vision:latest
     container_name: smart_rag_vision
+    restart: always
     ports:
       - "8002:8002"
     environment:
       - PYTHONUNBUFFERED=1
+      # Ensure this points to your external Ollama instance
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
     volumes:
       - shared_data:/data
       - huggingface_cache:/root/.cache/huggingface
-      - ./services/vision:/app
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # --- FIX: Add || true ---
-    command: /bin/sh -c "mkdir -p /data/charts && (chmod -R 777 /data/charts || true) && uvicorn main:app --host 0.0.0.0 --port 8002 --reload"
+    # Command removed: Using CMD from Dockerfile (Gunicorn)
 
-  # 5. Postgres
+    # 5. Postgres
   postgres:
     image: postgres:15-alpine
     container_name: smart_rag_postgres
@@ -129,27 +134,26 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rag_user -d rag_db"]
+      test: [ "CMD-SHELL", "pg_isready -U rag_user -d rag_db" ]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  # 6. PGAdmin
+  # 6. PGAdmin (Optional for Prod - Consider removing if not strictly needed)
   pgadmin:
     image: dpage/pgadmin4
     container_name: pgadmin
+    restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@example.com
       PGADMIN_DEFAULT_PASSWORD: admin
-      PGADMIN_CONFIG_CONSOLE_LOG_LEVEL: 50
-      PGADMIN_CONFIG_FILE_LOG_LEVEL: 50
+      PGADMIN_CONFIG_CONSOLE_LOG_LEVEL: 10 # Reduced log level
     ports:
       - "5050:80"
     depends_on:
       - postgres
     volumes:
       - pgadmin_data:/var/lib/pgadmin
-      - /dev/null:/var/log/pgadmin
     logging:
       driver: "json-file"
       options:
@@ -159,7 +163,9 @@ services:
   # 7. KG Service
   kg_service:
     build: ./services/kg_service
+    image: smart_rag_kg:latest
     container_name: smart_rag_kg
+    restart: always
     ports:
       - "8003:8003"
     environment:
@@ -170,32 +176,28 @@ services:
       - SANCTUARY_API_KEY=${SANCTUARY_API_KEY}
       - TEST=False
       - PYTHONUNBUFFERED=1
-    volumes:
-      - ./services/kg_service:/app
     depends_on:
       neo4j:
         condition: service_healthy
-    command: uvicorn main:app --host 0.0.0.0 --port 8003 --reload
+    # Removed --reload, kept uvicorn. If you have a Gunicorn Dockerfile here too, remove this command line.
+    command: uvicorn main:app --host 0.0.0.0 --port 8003
 
   # 8. Neo4j
   neo4j:
     image: neo4j:5.15-community
     container_name: smart_rag_neo4j
+    restart: always
     ports:
       - "7474:7474"
       - "7687:7687"
     environment:
       - NEO4J_AUTH=neo4j/smartrag_password
-      - NEO4J_dbms_memory_heap_initial__size=512m
-      - NEO4J_dbms_memory_heap_max__size=1G
+      - NEO4J_dbms_memory_heap_initial__size=1G
+      - NEO4J_dbms_memory_heap_max__size=2G
     volumes:
       - neo4j_data:/data
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "wget --no-verbose --tries=1 --spider localhost:7474 || exit 1",
-        ]
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider localhost:7474 || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -204,6 +206,7 @@ services:
   influxdb:
     image: influxdb:2.7
     container_name: smart_rag_influxdb
+    restart: always
     ports:
       - "8086:8086"
     volumes:
@@ -215,7 +218,6 @@ services:
       - DOCKER_INFLUXDB_INIT_ORG=smartrag_org
       - DOCKER_INFLUXDB_INIT_BUCKET=glances
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=smartrag-admin-token
-    # --- FIX 1: Add Healthcheck ---
     healthcheck:
       test: "curl -f http://localhost:8086/health || exit 1"
       interval: 5s
@@ -227,25 +229,25 @@ services:
   glances:
     image: nicolargo/glances:latest-full
     container_name: smart_rag_monitor
+    restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./monitoring/glances/glances.conf:/glances/conf/glances.conf:ro # Standard path
+      - ./monitoring/glances/glances.conf:/glances/conf/glances.conf:ro
     environment:
       - DOCKER_HOST=unix://var/run/docker.sock
-      - PYTHONUNBUFFERED=1 # Force logs to appear immediately
-    # --- FIX: Explicit Command (Debug mode, specific config, export) ---
-    command: /bin/sh -c "glances -C /glances/conf/glances.conf -q --export influxdb2 --debug"
-    # -------------------------------------------------------------------
+      - PYTHONUNBUFFERED=1
+    command: /bin/sh -c "glances -C /glances/conf/glances.conf -q --export influxdb2"
     privileged: true
     pid: host
     depends_on:
       influxdb:
         condition: service_healthy
 
-  # 11. Monitoring: Grafana (The Dashboard)
+  # 11. Monitoring: Grafana
   grafana:
     image: grafana/grafana:latest
     container_name: smart_rag_grafana
+    restart: always
     ports:
       - "3000:3000"
     environment:
@@ -259,22 +261,22 @@ services:
   # 12. Backup service
   backups:
     build: ./services/backup
+    image: smart_rag_backups:latest
     container_name: smart_rag_backups
+    restart: unless-stopped
     environment:
       - TZ=America/New_York
-      - BACKUP_SCHEDULE=0 0 * * 3 # Wednesday at Midnight
+      - BACKUP_SCHEDULE=0 0 * * 3
       - POSTGRES_SERVER=postgres
       - POSTGRES_USER=rag_user
       - POSTGRES_PASSWORD=rag_password
       - POSTGRES_DB=rag_db
     volumes:
-      # Use /var/run/docker.sock to allow this container to stop/start Neo4j
       - /var/run/docker.sock:/var/run/docker.sock
-      # Mount shared volumes to backup
       - shared_data:/shared_data:ro
-      - shared_data:/backups # Write backups here (inside /data/backups)
+      - shared_data:/backups
       - neo4j_data:/neo4j_data:ro
-      - ./services/rag_core:/source_code:ro
+      # Removed source code mount, not needed for backups usually
     depends_on:
       - postgres
       - neo4j

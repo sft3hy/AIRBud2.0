@@ -27,11 +27,13 @@ export const Dashboard = () => {
 
   const startResizing = (e: React.MouseEvent) => {
     e.preventDefault();
+    if (isCollapsed) setSidebarWidth(60);
     setIsResizing(true);
   };
 
   const stopResizing = () => {
     setIsResizing(false);
+    if (isCollapsed) setSidebarWidth(250); // Reset to usable width to prevent glitch on toggle
   };
 
   const resize = (e: MouseEvent) => {
@@ -39,6 +41,10 @@ export const Dashboard = () => {
       const newWidth = e.clientX;
       if (newWidth > 60 && newWidth < 800) {
         setSidebarWidth(newWidth);
+        // Auto-expand if dragging out from collapsed state
+        if (isCollapsed && newWidth > 100) {
+          setIsCollapsed(false);
+        }
       }
     }
   };
@@ -56,7 +62,18 @@ export const Dashboard = () => {
       window.removeEventListener("mousemove", resize);
       window.removeEventListener("mouseup", stopResizing);
     };
-  }, [isResizing]);
+  }, [isResizing, isCollapsed]); // Added isCollapsed dependency for the resize logic
+
+  // Auto-shrink logic: check whenever sidebarWidth changes
+  useEffect(() => {
+    if (!isCollapsed && sidebarWidth < 100) {
+      setIsCollapsed(true);
+      // We don't reset sidebarWidth here immediately if resizing, 
+      // because the user might drag it back out. 
+      // We handle the reset in stopResizing.
+      if (!isResizing) setSidebarWidth(250);
+    }
+  }, [sidebarWidth, isCollapsed, isResizing]);
 
   const currentWidth = isCollapsed ? 60 : sidebarWidth;
 
@@ -79,7 +96,10 @@ export const Dashboard = () => {
             transition: isResizing ? "none" : "width 300ms ease-out",
           }}
         >
-          <div className="flex-1 h-full bg-background/60 backdrop-blur-xl border-r border-white/10 overflow-hidden relative">
+          <div className="flex-1 h-full bg-background/60 backdrop-blur-xl border-r border-border/50 overflow-hidden relative group/sidebar">
+            {/* Cool Background Effect */}
+            <div className="absolute inset-0 pointer-events-none z-0 bg-[radial-gradient(circle_at_top_left,rgba(100,100,255,0.08),transparent_50%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(100,100,255,0.15),transparent_50%)]" />
+
             <Sidebar
               mode={isGroupMode ? "groups" : "collections"}
               currentSessionId={sessionId}
@@ -91,12 +111,10 @@ export const Dashboard = () => {
           </div>
 
           {/* Drag Handle */}
-          {!isCollapsed && (
-            <div
-              className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors z-50"
-              onMouseDown={startResizing}
-            />
-          )}
+          <div
+            className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors z-50"
+            onMouseDown={startResizing}
+          />
         </div>
 
         {/* 

@@ -18,6 +18,7 @@ from src.core.llm import get_llm_client, BaseLLMClient
 from src.core.data_models import Chunk
 from src.utils.logger import logger
 
+
 # --- Singleton Embedding Model ---
 # Loading the model is expensive (RAM & CPU). We must do it once.
 _embedding_model: Optional[SentenceTransformer] = None
@@ -41,6 +42,33 @@ def get_embedding_model() -> SentenceTransformer:
                 )
                 logger.info("Embedding Model loaded successfully.")
     return _embedding_model
+
+# --- LRU Cache for FAISS Index & Chunks ---
+# Avoiding repeated disk I/O on every query is critical for performance.
+from collections import OrderedDict
+
+# Cache structure: { faiss_path: (index, child_chunks, parent_map) }
+_index_cache = OrderedDict()
+_cache_lock = Lock()
+CACHE_CAPACITY = 500
+
+def get_cached_state(faiss_path: str):
+    with _cache_lock:
+        if faiss_path in _index_cache:
+            # Move to end (most recently used)
+            _index_cache.move_to_end(faiss_path)
+            return _index_cache[faiss_path]
+    return None
+
+def put_cached_state(faiss_path: str, data: Tuple):
+    with _cache_lock:
+        if faiss_path in _index_cache:
+            _index_cache.move_to_end(faiss_path)
+        _index_cache[faiss_path] = data
+        
+        # Evict oldest
+        if len(_index_cache) > CACHE_CAPACITY:
+            _index_cache.popitem(last=False)
 
 
 class SmartRAG:
@@ -170,12 +198,21 @@ class SmartRAG:
 
     async def load_state(self, faiss_path: str, chunks_path: str):
         """
-        Loads FAISS index and chunk data from disk.
+        Loads FAISS index and chunk data from disk or cache.
         """
+        # 1. Check Cache
+        cached = get_cached_state(faiss_path)
+        if cached:
+            self.index, self.child_chunks, self.parent_map = cached
+            return
+
+        # 2. Check Disk
         if not os.path.exists(faiss_path) or not os.path.exists(chunks_path):
             raise FileNotFoundError(f"Index files missing: {faiss_path} or {chunks_path}")
             
+        # 3. Load & Cache
         await asyncio.to_thread(self._load_state_sync, faiss_path, chunks_path)
+        put_cached_state(faiss_path, (self.index, self.child_chunks, self.parent_map))
 
     def _load_state_sync(self, faiss_path: str, chunks_path: str):
         """Helper for synchronous file reading."""

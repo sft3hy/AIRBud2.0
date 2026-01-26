@@ -1,11 +1,10 @@
 import React, { memo } from "react";
 import ReactMarkdown from "react-markdown";
-import { Bot, User, Copy, Check } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 import { ChatMessage } from "../../types";
 import { SourceViewer } from "../SourceViewer";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import doggieSrc from "../../assets/doggie.svg";
 
 interface ChatMessageBubbleProps {
   msg: ChatMessage;
@@ -26,24 +25,11 @@ export const ChatMessageBubble = memo(({ msg }: ChatMessageBubbleProps) => {
   return (
     <div
       className={`
-        group flex gap-4 w-full mb-6 px-2
+        group flex gap-4 w-full mb-6 px-2 pt-3
         ${isUser ? "justify-end" : "justify-start"} 
         animate-in fade-in slide-in-from-bottom-2 duration-300
       `}
     >
-      {/* AI Avatar (Left) */}
-      {/* {!isUser && (
-        <div className="flex-shrink-0 flex flex-col justify-end">
-          <div className="h-8 w-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shadow-lg backdrop-blur-md overflow-hidden">
-            <img
-              src={doggieSrc}
-              alt="AI"
-              className="h-5 w-5 object-contain opacity-90"
-            />
-          </div>
-        </div>
-      )} */}
-
       <div
         className={`
           relative flex flex-col max-w-[85%] lg:max-w-[75%] 

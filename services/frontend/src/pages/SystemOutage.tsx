@@ -2,7 +2,6 @@ import React from "react";
 import {
   AlertTriangle,
   RefreshCw,
-  CheckCircle2,
   XCircle,
   Activity,
   AlertOctagon,
@@ -103,11 +102,10 @@ export const SystemOutage: React.FC<SystemOutageProps> = ({
 
                       <div className="flex items-center gap-3">
                         <span
-                          className={`text-xs font-bold tracking-wide ${
-                            svc.status === "online"
+                          className={`text-xs font-bold tracking-wide ${svc.status === "online"
                               ? "text-green-600 dark:text-green-400"
                               : "text-red-600 dark:text-red-400"
-                          }`}
+                            }`}
                         >
                           {svc.status.toUpperCase()}
                         </span>

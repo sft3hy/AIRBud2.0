@@ -19,22 +19,22 @@ export const VISION_MODELS: {
   label: string;
   desc: string;
 }[] = [
-  {
-    value: "Ollama-Granite3.2-Vision",
-    label: "Granite 3.2 (2B)",
-    desc: "Enterprise Vision",
-  },
-  {
-    value: "Moondream2",
-    label: "Moondream2 (1.6B)",
-    desc: "Fast",
-  },
-  {
-    value: "Ollama-Gemma3",
-    label: "Gemma 3 (4B)",
-    desc: "Strong Reasoning",
-  },
-];
+    {
+      value: "Ollama-Granite3.2-Vision",
+      label: "Granite 3.2 (2B)",
+      desc: "Enterprise Vision",
+    },
+    {
+      value: "Moondream2",
+      label: "Moondream2 (1.6B)",
+      desc: "Fast",
+    },
+    {
+      value: "Ollama-Gemma3",
+      label: "Gemma 3 (4B)",
+      desc: "Strong Reasoning",
+    },
+  ];
 
 interface UploadSectionProps {
   selectedModel: VisionModel;
@@ -102,11 +102,10 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
       {/* Drag and Drop Area */}
       <div
         className={`
-          group relative w-full rounded-xl border-2 border-dashed transition-all duration-300
-          ${
-            isQueueActive
-              ? "opacity-60 cursor-not-allowed border-muted bg-muted/10"
-              : "cursor-pointer border-muted-foreground/20 hover:border-primary/50 hover:bg-primary/5 "
+          group relative w-full rounded-xl border-2 border-dashed transition-colors duration-200
+          ${isQueueActive
+            ? "opacity-60 cursor-not-allowed border-muted bg-muted/10"
+            : "cursor-pointer border-muted-foreground/20 hover:border-primary/50 hover:bg-primary/5 "
           }
         `}
       >
@@ -142,7 +141,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
           <Separator />
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-              <span>Uploaded ({stagedFiles.length})</span>
+              <span>Selected ({stagedFiles.length})</span>
               <Button
                 variant="link"
                 size="sm"

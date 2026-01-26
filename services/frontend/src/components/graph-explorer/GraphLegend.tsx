@@ -12,7 +12,7 @@ interface GraphLegendProps {
 
 export const GraphLegend: React.FC<GraphLegendProps> = ({ legendData }) => {
   return (
-    <Card className="absolute top-4 left-4 z-10 p-3 bg-background/80/90 dark:bg-background/80/80 backdrop-blur-md border shadow-lg max-w-[250px] max-h-[40%] overflow-y-auto">
+    <Card className="absolute top-4 left-4 z-10 p-3 bg-background/20 backdrop-blur-xl border shadow-lg max-w-[250px] max-h-[40%] overflow-y-auto">
       <div className="font-semibold mb-2 flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
         <FileText className="h-3 w-3" /> Sources
       </div>
@@ -20,7 +20,7 @@ export const GraphLegend: React.FC<GraphLegendProps> = ({ legendData }) => {
       <div className="space-y-1.5">
         {/* Multi-source Indicator */}
         {legendData.hasMultiSource && (
-          <div className="flex items-center gap-2 text-xs pb-2 mb-2 border-b border-border/50">
+          <div className="flex items-center gap-2 text-xs pb-2 mb-2 border-b border-border/80">
             <div
               className="w-3 h-3 rounded-full shrink-0 border-2 border-slate-300 shadow-sm"
               style={{

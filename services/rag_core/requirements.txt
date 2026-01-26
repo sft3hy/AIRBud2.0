@@ -9,3 +9,4 @@ requests
 numpy
 python-multipart
 psycopg2-binary
+gunicorn

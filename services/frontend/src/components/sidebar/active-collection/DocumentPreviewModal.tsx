@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import { X, FileText } from "lucide-react";
@@ -39,7 +39,10 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
 
   // Render via Portal to document.body to ensure full-screen coverage
   return createPortal(
-    <div className="fixed inset-0 z-[9999] backdrop-blur-sm bg-black/50 flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-200">
+    <div
+      className="fixed left-0 right-0 top-5 bottom-5 z-[9999] backdrop-blur-sm bg-black/50 flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-200"
+      onClick={onClose}
+    >
       {/* Close Button */}
       <Button
         size="icon"
@@ -50,14 +53,17 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
       </Button>
 
       {/* Content Container */}
-      <div className="w-full h-full max-w-5xl bg-card border shadow-2xl rounded-xl overflow-hidden flex flex-col relative">
+      <div
+        className="w-full h-full max-w-5xl bg-card border shadow-2xl rounded-xl overflow-hidden flex flex-col relative"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="px-6 py-4 border-b bg-muted/20 flex items-center gap-2">
           <FileText className="h-5 w-5 text-primary" />
           <span className="font-semibold text-sm uppercase tracking-wide">
             File Preview
           </span>
-          <span className="ml-auto text-xs text-muted-foreground mr-12 hidden md:block">
+          <span className="ml-auto text-xs mr-12 hidden md:block">
             Press ESC to close
           </span>
         </div>

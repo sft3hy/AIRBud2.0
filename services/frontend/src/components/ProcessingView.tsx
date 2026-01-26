@@ -141,18 +141,16 @@ const SuccessAnim = () => (
 
 const PipelineStep = ({ label, active, completed, icon: Icon }: any) => (
   <div
-    className={`flex flex-col items-center gap-2 transition-all duration-500 relative z-10 ${
-      active ? "scale-110 opacity-100" : "opacity-50"
-    } ${completed ? "text-primary opacity-80" : ""}`}
+    className={`flex flex-col items-center gap-2 transition-all duration-500 relative z-10 ${active ? "scale-110 opacity-100" : "opacity-50"
+      } ${completed ? "text-primary opacity-80" : ""}`}
   >
     <div
-      className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors bg-background/80 ${
-        active
+      className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors bg-background/80 ${active
           ? "border-primary bg-primary/20 text-primary shadow-[0_0_20px_rgba(59,130,246,0.5)]"
           : completed
             ? "border-primary bg-primary text-primary-foreground"
             : "border-muted text-muted-foreground"
-      }`}
+        }`}
     >
       {completed ? (
         <CheckCircle2 className="w-5 h-5" />
@@ -192,7 +190,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
   };
 
   const getStageIndex = () => {
-    const order = ["parsing", "vision", "indexing", "graph" | "done"];
+    const order = ["parsing", "vision", "indexing", "graph", "done"];
     return order.indexOf(stage);
   };
 

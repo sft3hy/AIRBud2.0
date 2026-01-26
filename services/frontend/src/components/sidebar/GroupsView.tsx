@@ -22,7 +22,7 @@ interface GroupsViewProps {
   userGroups: any[];
 }
 
-export const GroupsView: React.FC<GroupsViewProps> = ({ userGroups }) => {
+export const GroupsView: React.FC<GroupsViewProps> = ({ userGroups: _userGroups }) => {
   const queryClient = useQueryClient();
 
   // Create Group State

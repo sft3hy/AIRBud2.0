@@ -16,20 +16,6 @@ import { Loader2 } from "lucide-react";
 import { Toaster } from "@/components/ui/toaster";
 
 const queryClient = new QueryClient();
-const AppLayout = ({ children }: { children: React.ReactNode }) => {
-  return (
-    // <div className="flex flex-col h-screen w-screen bg-background/80">
-    // {/* Top Banner */}
-    // <ClassificationBanner />
-
-    // {/* Main Content Area - Grows to fill space, handles its own scrolling */}
-    <div className="flex-1 min-h-0 relative flex flex-col">{children}</div>
-
-    // {/* Bottom Banner */}
-    // <ClassificationBanner />
-    // </div>
-  );
-};
 
 const AppContent = () => {
   const {
@@ -154,24 +140,15 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       {/* --- LIQUID BACKGROUND START --- */}
+      {/* --- LIQUID BACKGROUND START --- */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-background">
-        {/* Animated Blobs */}
-        <div
-          className="absolute top-0 -left-4 w-96 h-96 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-50 animate-blob"
-          style={{ backgroundColor: `hsl(var(--blob-purple) / 0.2)` }}
-        />
-        <div
-          className="absolute top-0 -right-4 w-96 h-96 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-50 animate-blob animation-delay-2000"
-          style={{ backgroundColor: `hsl(var(--blob-blue) / 0.2)` }}
-        />
-        <div
-          className="absolute -bottom-8 left-20 w-96 h-96 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-50 animate-blob animation-delay-4000"
-          style={{ backgroundColor: `hsl(var(--blob-cyan) / 0.2)` }}
-        />
+        {/* Simple Gradient instead of heavy blobs */}
+        <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/5 to-background" />
 
         {/* Grid Overlay */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--foreground)_/_0.04)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--foreground)_/_0.04)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:linear-gradient(to_bottom,transparent,black)]" />
       </div>
+      {/* --- LIQUID BACKGROUND END --- */}
       {/* --- LIQUID BACKGROUND END --- */}
 
       {/* Content Wrapper */}
