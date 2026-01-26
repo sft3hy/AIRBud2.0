@@ -53,4 +53,5 @@ ENTRYPOINT ["dumb-init", "--"]
 
 # Serve the built application
 # You'll need a serve package or use a proper web server
+# CMD ["npm", "run", "dev"]
 CMD ["npx", "serve", "-s", "dist", "-l", "5173"]

@@ -188,11 +188,14 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
 
   // UPDATED: Styling for fullscreen vs normal
   const containerClasses = isFullScreen
-    ? "fixed left-0 right-0 top-5 bottom-5 z-[9999] bg-slate-50 dark:bg-slate-950 flex flex-col"
-    : "relative h-full w-full bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 flex flex-col";
+    ? "fixed left-0 right-0 top-5 bottom-5 z-[9999] bg-background/95 backdrop-blur-md flex flex-col border border-border/50 shadow-2xl rounded-lg overflow-hidden"
+    : "relative h-full w-full bg-background/50 flex flex-col overflow-hidden";
 
   const content = (
     <div className={containerClasses} ref={containerRef}>
+      {/* Grid Pattern */}
+      <div className="absolute inset-0 z-0 pointer-events-none bg-[linear-gradient(to_right,hsl(var(--foreground)_/_0.04)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--foreground)_/_0.04)_1px,transparent_1px)] bg-[size:40px_40px]" />
+
       <GraphToolbar
         onRefresh={() => refetch()}
         isRefetching={isRefetching}
@@ -203,7 +206,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
       <GraphLegend legendData={legendData} />
 
       <div
-        className="flex-1 w-full h-full"
+        className="flex-1 w-full h-full relative z-10"
         style={{ cursor: hoveredNode ? "pointer" : "grab" }}
       >
         {hasData ? (
@@ -212,7 +215,7 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({
             width={dimensions.w}
             height={dimensions.h}
             graphData={activeData}
-            backgroundColor={isFullScreen ? undefined : "rgba(0,0,0,0)"}
+            backgroundColor="rgba(0,0,0,0)"
             warmupTicks={100} // Pre-calculate layout before render
             cooldownTicks={0} // Stop ticking immediately after warmup
             d3AlphaDecay={0.02}

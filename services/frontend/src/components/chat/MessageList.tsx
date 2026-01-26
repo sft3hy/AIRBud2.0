@@ -31,7 +31,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   return (
     <div className="flex-1 overflow-auto relative bg-transparent animate-in fade-in duration-500">
       <ScrollArea className="h-full md:px-10 py-0" ref={scrollRef}>
-        <div className="space-y-10 pb-4 max-w-2xl mx-auto min-h-[500px]">
+        <div className="space-y-10 pb-4 max-w-5xl mx-auto min-h-[500px]">
           {chatHistory.map((msg, idx) => (
             <ChatMessageBubble key={idx} msg={msg} />
           ))}

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Share2, Image } from "lucide-react";
+import { FileText, Share2, Image, ChevronLeft } from "lucide-react";
 import {
   uploadAndProcessDocument,
   deleteDocument,
@@ -17,11 +17,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 
 // Sub Components
-import { CollectionHeader } from "./active-collection/CollectionHeader";
 import { UploadSection } from "./active-collection/UploadSection";
 import { QueueStatus } from "./active-collection/QueueStatus";
 import { DocumentList } from "./active-collection/DocumentList";
 import { DocumentPreviewModal } from "./active-collection/DocumentPreviewModal";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface ActiveCollectionViewProps {
   currentSessionId: string;
@@ -34,7 +39,6 @@ interface ActiveCollectionViewProps {
 
 export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
   currentSessionId,
-  activeCollectionName,
   currentDocs,
   activeJobId,
   setActiveJobId,
@@ -218,36 +222,53 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-transparent overflow-hidden relative">
-      <CollectionHeader
-        activeCollectionName={activeCollectionName}
-        onBack={() => navigate("/collections")}
-      />
-
       <Tabs
         value={activeTab}
         onValueChange={handleTabChange}
         className="flex-1 flex flex-col min-h-0 w-full"
       >
-        {/* Navigation Tabs */}
-        <div className="px-2 py-1 border-b shrink-0">
-          <TabsList className="grid w-full grid-cols-3 h-8 bg-background/50 p-0.5">
+        {/* Navigation Tabs with Compact Header */}
+        <div className="flex items-center px-2 py-1 border-b shrink-0 gap-2">
+          {/* Back Button */}
+          <TooltipProvider>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => navigate("/collections")}
+                  className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded-md transition-colors"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+
+              </TooltipTrigger>
+              <TooltipContent
+                side="bottom"
+                className="bg-primary text-background font-medium"
+              >
+                <p>Back to Collections</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+
+          <TabsList className="grid flex-1 grid-cols-3 h-10 bg-background/50 p-0.5">
             <TabsTrigger
               value="docs"
-              className="text-[10px] data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5"
+              className="text-[13px] data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5"
             >
-              <FileText className="h-3 w-3" /> Files
+              <FileText className="h-4 w-4" /> Files
             </TabsTrigger>
             <TabsTrigger
               value="charts"
-              className="text-[10px] data-[state=active]:bg-blue-500/10 data-[state=active]:text-blue-600 gap-1.5"
+              className="text-[13px] data-[state=active]:bg-blue-500/10 data-[state=active]:text-blue-600 gap-1.5"
             >
-              <Image className="h-3 w-3" /> Images
+              <Image className="h-4 w-4" /> Images
             </TabsTrigger>
             <TabsTrigger
               value="graph"
-              className="text-[10px] data-[state=active]:bg-purple-500/10 data-[state=active]:text-purple-600 gap-1.5"
+              className="text-[13px] data-[state=active]:bg-purple-500/10 data-[state=active]:text-purple-600 gap-1.5"
             >
-              <Share2 className="h-3 w-3" /> Graph
+              <Share2 className="h-4 w-4" /> Graph
             </TabsTrigger>
           </TabsList>
         </div>

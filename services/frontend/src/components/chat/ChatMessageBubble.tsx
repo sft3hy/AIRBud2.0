@@ -45,10 +45,9 @@ export const ChatMessageBubble = memo(({ msg }: ChatMessageBubbleProps) => {
         <div
           className={`
             relative px-4 py-3.5 text-sm md:text-base shadow-sm border
-            ${
-              isUser
-                ? "bg-primary/80 text-primary-foreground rounded-2xl border-primary/20"
-                : "text-foreground rounded-2xl border-white/10"
+            ${isUser
+              ? "bg-primary/80 text-primary-foreground rounded-2xl border-primary/20"
+              : "text-foreground rounded-2xl border-white/10"
             }
           `}
         >
@@ -115,7 +114,7 @@ export const ChatMessageBubble = memo(({ msg }: ChatMessageBubbleProps) => {
 
         {/* Source Viewer (Attached below AI responses) */}
         {msg.role === "assistant" && msg.sources && msg.sources.length > 0 && (
-          <div className="mt-2 w-full max-w-xl animate-in fade-in duration-500 delay-150">
+          <div className="mt-2 w-full max-w-5xl animate-in fade-in duration-500 delay-150">
             <SourceViewer sources={msg.sources} documents={[]} />
           </div>
         )}

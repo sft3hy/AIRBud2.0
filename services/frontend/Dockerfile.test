@@ -1,0 +1,31 @@
+# Test/Development Dockerfile
+FROM node:20-alpine AS test
+
+# Set working directory
+WORKDIR /app
+
+# Install testing utilities
+RUN apk add --no-cache git curl
+
+# Set build arguments with test defaults
+ARG VITE_API_URL=http://localhost:3000
+ARG VITE_NETWORK=testnet
+
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_NETWORK=$VITE_NETWORK
+ENV NODE_ENV=development
+
+# Copy package files
+COPY package*.json ./
+
+# Install ALL dependencies (remove --only=production flag)
+RUN npm ci
+
+# Copy application source
+COPY . .
+
+# Expose port for testing
+EXPOSE 5173
+
+# Run dev server
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

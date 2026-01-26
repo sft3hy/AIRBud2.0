@@ -92,7 +92,7 @@ export const ChartFullscreenModal: React.FC<ChartFullscreenModalProps> = ({
 
         {/* Navigation Hints - Moved if description exists or kept absolute */}
         {!description && (
-          <div className="absolute bottom-8 text-white/40 text-xs font-mono tracking-widest pointer-events-none select-none">
+          <div className="absolute bottom-8 text-white/80 text-xs font-mono tracking-widest pointer-events-none select-none">
             USE ARROW KEYS TO NAVIGATE • ESC TO CLOSE
           </div>
         )}

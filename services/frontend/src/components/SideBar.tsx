@@ -113,51 +113,56 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <div
       className={cn(
-        "flex flex-col h-full w-full",
+        "flex flex-col h-full w-full relative overflow-hidden",
         "border-r border-border/60 bg-background/50 backdrop-blur-xl",
         className,
       )}
     >
-      <SidebarHeader
-        isCollapsed={isCollapsed}
-        toggleSidebar={toggleSidebar}
-        systemStatus={systemStatus}
-        mode={mode}
-      />
+      {/* Grid Pattern */}
+      <div className="absolute inset-0 z-0 pointer-events-none bg-[linear-gradient(to_right,hsl(var(--foreground)_/_0.04)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--foreground)_/_0.04)_1px,transparent_1px)] bg-[size:40px_40px]" />
 
-      <div className="h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      <div className="flex flex-col h-full w-full relative z-10">
+        <SidebarHeader
+          isCollapsed={isCollapsed}
+          toggleSidebar={toggleSidebar}
+          systemStatus={systemStatus}
+          mode={mode}
+        />
 
-      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-        {" "}
-        {isCollapsed ? (
-          <div></div>
-        ) : (
-          <>
-            {mode === "collections" && (
-              <>
-                {!currentSessionId ? (
-                  <CollectionsView
-                    collections={collections}
-                    userGroups={userGroups}
-                    currentUserId={currentUserId ? String(currentUserId) : undefined}
-                    currentSessionId={currentSessionId}
-                  />
-                ) : (
-                  <ActiveCollectionView
-                    currentSessionId={currentSessionId}
-                    activeCollectionName={activeCollectionName}
-                    currentDocs={currentDocs}
-                    activeJobId={activeJobId}
-                    setActiveJobId={setActiveJobId}
-                    isOwner={isCollectionOwner}
-                  />
-                )}
-              </>
-            )}
+        <div className="h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
-            {mode === "groups" && <GroupsView userGroups={userGroups} />}
-          </>
-        )}
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          {" "}
+          {isCollapsed ? (
+            <div></div>
+          ) : (
+            <>
+              {mode === "collections" && (
+                <>
+                  {!currentSessionId ? (
+                    <CollectionsView
+                      collections={collections}
+                      userGroups={userGroups}
+                      currentUserId={currentUserId ? String(currentUserId) : undefined}
+                      currentSessionId={currentSessionId}
+                    />
+                  ) : (
+                    <ActiveCollectionView
+                      currentSessionId={currentSessionId}
+                      activeCollectionName={activeCollectionName}
+                      currentDocs={currentDocs}
+                      activeJobId={activeJobId}
+                      setActiveJobId={setActiveJobId}
+                      isOwner={isCollectionOwner}
+                    />
+                  )}
+                </>
+              )}
+
+              {mode === "groups" && <GroupsView userGroups={userGroups} />}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

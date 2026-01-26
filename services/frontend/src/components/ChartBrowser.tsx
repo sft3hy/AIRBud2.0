@@ -6,14 +6,12 @@ import {
   ChevronRight,
   Maximize2,
   ImageIcon,
-  FileText,
   ScanEye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { getCollectionCharts } from "../lib/api";
 
 // Sub-components
@@ -126,28 +124,45 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
     <>
       <div className="flex flex-col h-full bg-background/80 border-l border-border/60">
         {/* Header / Navigation */}
-        <div className="flex items-center justify-between p-3 border-b bg-card/50 backdrop-blur-sm shrink-0">
+        <div className="flex items-center justify-between p-3 border-b bg-card/50 backdrop-blur-sm shrink-0 gap-4">
           <Button
             variant="ghost"
             size="icon"
             onClick={handlePrev}
-            className="h-8 w-8 rounded-full hover:bg-primary/10 hover:text-primary transition-colors"
+            className="h-8 w-8 rounded-full hover:bg-primary/10 hover:text-primary transition-colors shrink-0"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
 
-          <div className="flex flex-col items-center">
-            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground/80">
+          <div className="flex flex-col items-center min-w-0 flex-1">
+            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground/80 mb-0.5">
               Figure {safeIndex + 1}{" "}
               <span className="text-muted-foreground/40 mx-1">/</span> {total}
             </span>
+            {/* Moved Metadata to Header */}
+            {currentChart && (
+              <div className="flex items-center justify-center gap-2 max-w-full">
+                <span
+                  className="text-[12px] text-foreground/70 truncate max-w-[120px] md:max-w-[200px]"
+                  title={currentChart.doc_name}
+                >
+                  {currentChart.doc_name}
+                </span>
+                <Badge
+                  variant="outline"
+                  className="text-[8px] font-mono shrink-0 h-4 px-1"
+                >
+                  p.{currentChart.page}
+                </Badge>
+              </div>
+            )}
           </div>
 
           <Button
             variant="ghost"
             size="icon"
             onClick={handleNext}
-            className="h-8 w-8 rounded-full hover:bg-primary/10 hover:text-primary transition-colors"
+            className="h-8 w-8 rounded-full hover:bg-primary/10 hover:text-primary transition-colors shrink-0"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -192,29 +207,6 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
         {/* Metadata Footer */}
         <ScrollArea className="flex-1 min-h-0 bg-card/30 [&>[data-radix-scroll-area-viewport]>div]:min-h-full">
           <div className="p-5 space-y-4 min-h-full flex flex-col">
-            {/* Header Info */}
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-2 overflow-hidden">
-                <div className="p-1.5 bg-blue-500/10 rounded-md text-blue-600 dark:text-blue-400 shrink-0">
-                  <FileText className="h-4 w-4" />
-                </div>
-                <span
-                  className="grid grid-cols-[1fr_auto] items-center text-xs px-3 py-2 bg-card rounded-md border shadow-sm gap-2 w-full"
-                  title={currentChart?.doc_name}
-                >
-                  <span className="truncate">{currentChart?.doc_name}</span>
-                </span>
-              </div>
-              <Badge
-                variant="secondary"
-                className="text-[10px] font-mono shrink-0"
-              >
-                page {currentChart?.page}
-              </Badge>
-            </div>
-
-            <Separator className="bg-border/50" />
-
             {/* AI Analysis Block */}
             <div className="space-y-2 flex-1 flex flex-col">
               <div className="flex items-center gap-2 shrink-0">

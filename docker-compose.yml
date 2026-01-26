@@ -36,7 +36,7 @@ services:
     # We keep the build context so you can run 'docker compose build'
     build:
       context: ./services/frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.test
       args:
         - VITE_API_URL=http://rag_core:8000
         - VITE_NETWORK=LOW
@@ -52,7 +52,7 @@ services:
     depends_on:
       - rag_core
     volumes:
-      # Only mount node_modules if strictly necessary, otherwise remove this line for pure immutable images
+      - ./services/frontend:/app
       - /app/node_modules
 
   # 2. RAG Core
