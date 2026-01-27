@@ -52,39 +52,54 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ userGroups: _userGroups 
   return (
     <>
       <ScrollArea className="flex-1 px-4 py-4">
-        <Card className="p-4 bg-background/80 border-dashed mb-6">
-          <h3 className="text-xs font-bold uppercase text-muted-foreground mb-3 flex items-center gap-2">
-            <Users className="h-4 w-4" /> Create Group
-          </h3>
-          <div className="space-y-3">
-            <Input
-              className="h-8 text-sm"
-              placeholder="Group Name..."
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-            />
-            <Input
-              className="h-8 text-sm"
-              placeholder="Description (Optional)"
-              value={newGroupDesc}
-              onChange={(e) => setNewGroupDesc(e.target.value)}
-            />
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Public?</span>
-              <Switch
-                checked={newGroupPublic}
-                onCheckedChange={setNewGroupPublic}
-                className="scale-75 origin-right"
-              />
+        <Card className="group relative overflow-hidden border-dashed border-2 mb-6 transition-all duration-300 hover:border-solid hover:border-primary/20 hover:shadow-lg bg-card/50">
+          <div className="relative p-5">
+            <div className="flex flex-col items-center justify-center gap-3 mb-5">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary group-hover:scale-110 transition-transform duration-300">
+                <Users className="h-5 w-5" />
+              </div>
+              <div className="text-center">
+                <h3 className="text-sm font-semibold tracking-wide text-foreground">
+                  Create Group
+                </h3>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
+                  Collaborate with your team
+                </p>
+              </div>
             </div>
-            <Button
-              size="sm"
-              onClick={handleCreateGroup}
-              disabled={!newGroupName.trim()}
-              className="w-full h-8"
-            >
-              Create
-            </Button>
+
+            <div className="space-y-4">
+              <Input
+                className="h-9 text-sm bg-background/50 focus:bg-background transition-colors"
+                placeholder="Group Name..."
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+              />
+              <Input
+                className="h-9 text-sm bg-background/50 focus:bg-background transition-colors"
+                placeholder="Description (Optional)"
+                value={newGroupDesc}
+                onChange={(e) => setNewGroupDesc(e.target.value)}
+              />
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs text-muted-foreground font-medium">
+                  Make it Public?
+                </span>
+                <Switch
+                  checked={newGroupPublic}
+                  onCheckedChange={setNewGroupPublic}
+                  className="scale-90"
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={handleCreateGroup}
+                disabled={!newGroupName.trim()}
+                className="w-full h-9 font-medium shadow-sm transition-all duration-200"
+              >
+                Create
+              </Button>
+            </div>
           </div>
         </Card>
 
