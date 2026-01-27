@@ -38,7 +38,8 @@ export const MyGroupCard: React.FC<MyGroupCardProps> = ({
   onDelete,
   onLeave,
 }) => {
-  const isOwner = currentUserId === group.owner_id;
+  // Ensure type-safe comparison (API returns number, prop is string)
+  const isOwner = String(group.owner_id) === currentUserId;
 
   return (
     <Card className="bg-card/60 backdrop-blur-sm hover:shadow-lg transition-all border-primary/10">
