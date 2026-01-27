@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
+import json
 
 from src.core.parser import DocumentParser
 from src.core.detector import ChartDetector
@@ -39,32 +41,32 @@ def health_check():
     }
 
 
+def stream_parsing_results(parser: DocumentParser, file_path: str):
+    """
+    Generator that runs the parser and yields NDJSON lines.
+    """
+    try:
+        # parser.parse is now a generator we can iterate
+        for update in parser.parse(file_path):
+            yield json.dumps(update) + "\n"
+    except Exception as e:
+        logger.error("Streaming error", exc_info=True)
+        yield json.dumps({"status": "error", "error": str(e)}) + "\n"
+
+
 @app.post("/parse")
 def parse_document(req: ParseRequest):
     logger.info(f"Received parse request for: {req.file_path}")
 
-    # Initialize Parser with the singleton detector
+    # Initialize Parser
     parser = DocumentParser(detector=detector, output_dir=req.output_dir)
 
-    try:
-        result = parser.parse(req.file_path)
-        return {
-            "status": "success",
-            "text": result["text"],
-            "images": result["images"],
-            "audio_path": result.get("audio_path"), # Pass this through
-            "metrics": {"images_found": len(result["images"])},
-        }
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="File not found")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error("Unexpected error during parsing", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    return StreamingResponse(
+        stream_parsing_results(parser, req.file_path),
+        media_type="application/x-ndjson"
+    )
 
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host=config.HOST, port=config.PORT)
