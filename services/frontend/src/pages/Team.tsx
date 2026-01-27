@@ -95,9 +95,9 @@ export const Team = () => {
                       </div>
 
                       <div className="px-6 relative">
-                        <div className="absolute -top-14 left-6 h-28 w-28 rounded-2xl bg-background border-[6px] border-background shadow-2xl flex items-center justify-center overflow-hidden">
-                          <div className="h-full w-full bg-gradient-to-tr from-slate-100 to-slate-300 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center text-3xl font-bold text-muted-foreground tracking-tighter">
-                            ST
+                        <div className="absolute -top-14 left-6 h-28 w-28 rounded-2xl bg-gradient-to-tr from-violet-500 via-purple-500 to-fuchsia-500 border-[6px] border-background shadow-2xl flex items-center justify-center overflow-hidden">
+                          <div className="rounded-5xl h-full w-full backdrop-blur-sm bg-white/10 flex items-center justify-center">
+                            <Code2 className="rounded-full h-14 w-14 text-white drop-shadow-lg" strokeWidth={2.5} />
                           </div>
                         </div>
                       </div>
@@ -106,7 +106,7 @@ export const Team = () => {
                         <div>
                           <h2 className="text-2xl font-bold">Sam Townsend</h2>
                           <p className="text-sm font-medium text-primary flex items-center gap-2">
-                            <Code2 className="h-3 w-3" /> Lead Software Engineer
+                            Lead Software Engineer
                           </p>
                         </div>
 
