@@ -106,7 +106,7 @@ class SmartRAG:
         # 1. Parse Layout (Blocking IO)
         # We assume ExternalServices are synchronous requests, so we offload them.
         data = await asyncio.to_thread(
-            ExternalServices.parse_document, file_path_str, self.output_dir
+            ExternalServices.parse_document, file_path_str, self.output_dir, status_callback
         )
         
         markdown_text = data.get("text", "")
@@ -115,12 +115,20 @@ class SmartRAG:
 
         # 2. Vision Analysis (Screenshots) - Parallelizable potentially, but kept serial for safety
         if image_paths:
-            logger.info(f"Analyzing {len(image_paths)} images...")
-            if status_callback: status_callback("vision", "Analyzing Images...", 20)
+            total_images = len(image_paths)
+            logger.info(f"Analyzing {total_images} images...")
             
-            for img_path in image_paths:
+            for i, img_path in enumerate(image_paths):
                 fname = os.path.basename(img_path)
                 
+                # Granular Status Update
+                if status_callback: 
+                    # Calculate progress: Vision takes 20% -> 40% (20 points total)
+                    # Base: 20
+                    # Step: (i / total) * 20
+                    current_progress_increment = int((i / total_images) * 20)
+                    status_callback("vision", f"Analyzing Image {i+1}/{total_images}", 20 + current_progress_increment)
+
                 # Offload vision API call
                 desc = await asyncio.to_thread(
                     ExternalServices.analyze_image, img_path, self.vision_model_name
