@@ -5,7 +5,7 @@ import {
     Database,
     Network,
     Sparkles,
-    Search,
+
     Loader2,
     ScanLine,
 } from "lucide-react";

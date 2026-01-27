@@ -209,29 +209,79 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({ sources, documents }
                     }
 
                     // --- IMAGE VISUALIZATION LOGIC ---
-                    let imageUrl = null;
+                    let imageUrl: string | null = null;
+                    let visualDescription: string | null = null;
+                    let displayContent = src.text;
                     const cleanFilename = filename;
 
-                    // 1. Find matching document from props
-                    const matchingDoc = documents?.find(d =>
-                      d.original_filename === cleanFilename ||
-                      d.original_filename === src.source.split('/').pop() // Handling path vs name
-                    );
+                    // 1. Find matching document from props (Robust Match)
+                    const matchingDoc = documents?.find(d => {
+                      if (!d.original_filename) return false;
+                      const docName = d.original_filename.toLowerCase();
+                      const sourceName = src.source.toLowerCase();
+                      // Check exact match or if source path contains the filename
+                      return sourceName.includes(docName) || docName === cleanFilename.toLowerCase();
+                    });
 
                     // 2. Extract UUID from chart_dir if available
-                    // chart_dir is like "/data/charts/UUID_filename"
-                    // URL endpoint: /static/charts/UUID_filename/IMAGE_NAME
                     if (matchingDoc && matchingDoc.chart_dir) {
-                      const chartDirName = matchingDoc.chart_dir.split('/').pop(); // Extract "UUID_filename"
+                      // Handle potential trailing slash or mixed separators
+                      const parts = matchingDoc.chart_dir.replace(/\\/g, '/').replace(/\/$/, '').split('/');
+                      const chartDirName = parts.pop();
+
                       if (chartDirName) {
                         // 3. Search text for visual pattern
                         // Regex matches "Visual Scene Analysis (filename.png):"
-                        const visualMatch = src.text.match(/Visual Scene Analysis \((.+?)\):/);
+                        const visualMatch = src.text.match(/Visual Scene Analysis \((.+?)\):/i);
                         if (visualMatch && visualMatch[1]) {
-                          const imageFilename = visualMatch[1];
-                          // Construct URL
-                          // Assuming /static maps to /data, and Charts is /data/charts
-                          imageUrl = `/static/charts/${chartDirName}/${imageFilename}`;
+                          const imageFilename = visualMatch[1].trim();
+
+                          // Fix: The backend creates a sub-folder with the filename (no ext) inside the chart_dir
+                          // We need to reconstruct this path.
+                          // assumption: chartDirName is like "UUID_Filename.ext"
+                          // subDir is likely "Filename" (without .ext)
+
+                          // Safely extract the UUID-less part if possible, or just use the logic we see in the FS
+                          // FS shows: /data/charts/{UUID}_{Filename.ext}/{Filename_No_Ext}/{Image}
+
+                          // Actually, we can just use the matchingDoc.original_filename if available
+                          let subDirName = "";
+                          if (matchingDoc.original_filename) {
+                            // Remove extension
+                            subDirName = matchingDoc.original_filename.replace(/\.[^/.]+$/, "");
+                          } else {
+                            // Fallback: try to guess from chartDirName if it follows UUID_Filename pattern
+                            // removing the UUID prefix is risky if format changes, but let's try to just strip extension from the chartDirName's suffix
+                            // But actually, seeing the FS: 
+                            // Parent: 417e...Activity Report.pdf
+                            // Child: Activity Report
+
+                            // Let's assume the child folder matches the filename without extension.
+                            // We can try to derive it from the cleanFilename (which comes from src.source)
+                            subDirName = cleanFilename.replace(/\.[^/.]+$/, "");
+                          }
+
+                          // Construct URL with proper encoding
+                          // encodeURIComponent is CRITICAL for filenames with spaces/commas
+                          imageUrl = `/static/charts/${encodeURIComponent(chartDirName)}/${encodeURIComponent(subDirName)}/${encodeURIComponent(imageFilename)}`;
+
+                          // Extract description
+                          // The regex found the start. Let's capture the description following it.
+                          // We want to remove the entire "Visual Scene Analysis (...): Description" block from main text
+                          // and put the "Description" into visualDescription.
+
+                          // Improved Regex to capture the whole block
+                          const fullBlockRegex = /Visual Scene Analysis \((.+?)\):([\s\S]*?)(?=(?:Visual Scene Analysis|$))/i;
+                          const blockMatch = src.text.match(fullBlockRegex);
+
+                          if (blockMatch) {
+                            // blockMatch[0] is the whole block "Visual ... : Description"
+                            // blockMatch[2] is the description part
+                            visualDescription = blockMatch[2].trim();
+
+                            // Remove from display content
+                            displayContent = displayContent.replace(blockMatch[0], "").trim();
+                          }
                         }
                       }
                     }
@@ -264,24 +314,38 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({ sources, documents }
                         <div className="p-3 text-xs text-muted-foreground leading-relaxed">
 
                           {/* INLINE IMAGE DISPLAY */}
-                          {imageUrl && (
-                            <div className="mb-3 rounded-md overflow-hidden border border-border/50 relative group/img">
-                              <div className="absolute top-2 left-2 bg-black/60 backdrop-blur text-white text-[10px] px-2 py-0.5 rounded">
+                          {imageUrl ? (
+                            <div className="mb-3 rounded-md overflow-hidden border border-border/50 relative group/img bg-black/5 min-h-[100px] flex flex-col items-center justify-center">
+                              <div className="absolute top-2 left-2 bg-black/60 backdrop-blur text-white text-[10px] px-2 py-0.5 rounded z-10">
                                 Visual Analysis
                               </div>
                               <img
                                 src={imageUrl}
                                 alt="Visual Context"
-                                className="w-full h-auto max-h-60 object-contain bg-black/5"
+                                className="w-full h-auto max-h-60 object-contain p-1"
                                 onError={(e) => {
-                                  (e.target as HTMLImageElement).style.display = 'none';
+                                  // Fallback to error message
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = 'none';
+                                  const parent = target.parentElement;
+                                  if (parent) {
+                                    const errDisplay = document.createElement('div');
+                                    errDisplay.className = "flex flex-col items-center justify-center p-4 text-xs text-muted-foreground gap-1 text-center w-full";
+                                    errDisplay.innerHTML = `<span class="mb-1">Image Unavailable</span><span class="opacity-40 text-[9px] font-mono break-all px-2">${imageUrl}</span>`;
+                                    parent.appendChild(errDisplay);
+                                  }
                                 }}
                               />
+                              {visualDescription && (
+                                <div className="w-full bg-muted/50 p-2 text-[12px] text-muted-foreground border-t border-border/30 italic">
+                                  {visualDescription}
+                                </div>
+                              )}
                             </div>
-                          )}
+                          ) : null}
 
                           <ReactMarkdown className="prose prose-xs dark:prose-invert max-w-none">
-                            {src.text}
+                            {displayContent}
                           </ReactMarkdown>
                         </div>
                       </Card>

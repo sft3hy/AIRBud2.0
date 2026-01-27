@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useCallback, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
 import { uploadFile, startJob, api } from '../lib/api';
 import { useToast } from "@/components/ui/use-toast";
 import { VisionModel } from '../types';
@@ -86,13 +86,14 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     // --- 2. PROCESSING LOOP ---
     // Single loop that checks the head of the queue
+    // --- 2. PROCESSING LOOP ---
+    // Single loop that checks the head of the queue
     useEffect(() => {
-        let interval: NodeJS.Timeout;
-
         const processLoop = async () => {
             if (queue.length === 0) return;
 
             const head = queue[0];
+            if (!head) return;
 
             // If head is still uploading, we wait.
             if (head.status === 'pending_upload' || head.status === 'uploading') return;
@@ -153,7 +154,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         <QueueContext.Provider value={{
             queue,
             addToQueue,
-            isProcessing: queue.length > 0 && queue[0].status === 'processing',
+            isProcessing: queue.length > 0 && queue[0]?.status === 'processing',
             activeJobId,
             setActiveJobId
         }}>
