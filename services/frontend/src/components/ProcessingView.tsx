@@ -146,10 +146,10 @@ const PipelineStep = ({ label, active, completed, icon: Icon }: any) => (
   >
     <div
       className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors bg-background/80 ${active
-          ? "border-primary bg-primary/20 text-primary shadow-[0_0_20px_rgba(59,130,246,0.5)]"
-          : completed
-            ? "border-primary bg-primary text-primary-foreground"
-            : "border-muted text-muted-foreground"
+        ? "border-primary bg-primary/20 text-primary shadow-[0_0_20px_rgba(59,130,246,0.5)]"
+        : completed
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-muted text-muted-foreground"
         }`}
     >
       {completed ? (
@@ -299,6 +299,40 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
           </div>
           <Progress value={progress} className="h-2 bg-muted/30" />
         </div>
+
+        {/* QUEUE DISPLAY */}
+        <QueueDisplay />
+      </div>
+    </div>
+  );
+};
+
+// Subcomponent for Queue
+import { useQueue } from "../context/QueueContext";
+import { Paperclip, Loader2 } from "lucide-react";
+
+const QueueDisplay = () => {
+  const { queue } = useQueue();
+
+  if (queue.length === 0) return null;
+
+  return (
+    <div className="mt-8 w-full bg-black/10 rounded-lg p-4 border border-white/5 backdrop-blur-md">
+      <div className="flex items-center gap-2 mb-3 text-sm font-medium text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        <span>Up Next ({queue.length})</span>
+      </div>
+      <div className="space-y-2 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+        {queue.map((item, i) => (
+          <div key={item.id} className="flex items-center gap-3 text-xs bg-black/20 p-2 rounded border border-white/5">
+            <span className="text-muted-foreground font-mono opacity-50">#{i + 1}</span>
+            <Paperclip className="h-3 w-3 text-muted-foreground" />
+            <span className="truncate flex-1 text-foreground/80">{item.file.name}</span>
+            <span className="text-[10px] uppercase tracking-wider bg-white/5 py-0.5 px-1.5 rounded text-muted-foreground">
+              {item.status}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
