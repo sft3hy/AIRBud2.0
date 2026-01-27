@@ -5,6 +5,7 @@ import { Sidebar } from "./SideBar";
 import { GroupManager } from "./GroupManager";
 
 import { ClassificationBanner } from "./ClassificationBanner";
+import { QueueProvider } from "../context/QueueContext";
 
 export const Dashboard = () => {
   // --- ROUTER STATE ---
@@ -78,62 +79,64 @@ export const Dashboard = () => {
   const currentWidth = isCollapsed ? 60 : sidebarWidth;
 
   return (
-    <div className="flex flex-col h-screen w-full overflow-hidden bg-transparent text-foreground relative">
-      {/* 1. TOP BANNER */}
-      <div className="flex-none z-50 relative shadow-md">
-        <ClassificationBanner />
-      </div>
+    <QueueProvider onJobStarted={setActiveJobId}>
+      <div className="flex flex-col h-screen w-full overflow-hidden bg-transparent text-foreground relative">
+        {/* 1. TOP BANNER */}
+        <div className="flex-none z-50 relative shadow-md">
+          <ClassificationBanner />
+        </div>
 
-      {/* 2. MAIN CONTENT AREA */}
-      <div className="flex-1 min-h-0 relative z-0 w-full h-full flex">
-        {/* 
-           SIDEBAR (Fixed Left)
-        */}
-        <div
-          className="flex-none h-full z-40 relative flex"
-          style={{
-            width: currentWidth,
-            transition: isResizing ? "none" : "width 300ms ease-out",
-          }}
-        >
-          <div className="flex-1 h-full bg-background/60 backdrop-blur-xl border-r border-border/50 overflow-hidden relative group/sidebar">
-            {/* Cool Background Effect */}
-            <div className="absolute inset-0 pointer-events-none z-0 bg-[radial-gradient(circle_at_top_left,rgba(100,100,255,0.08),transparent_50%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(100,100,255,0.15),transparent_50%)]" />
+        {/* 2. MAIN CONTENT AREA */}
+        <div className="flex-1 min-h-0 relative z-0 w-full h-full flex">
+          {/* 
+             SIDEBAR (Fixed Left)
+          */}
+          <div
+            className="flex-none h-full z-40 relative flex"
+            style={{
+              width: currentWidth,
+              transition: isResizing ? "none" : "width 300ms ease-out",
+            }}
+          >
+            <div className="flex-1 h-full bg-background/60 backdrop-blur-xl border-r border-border/50 overflow-hidden relative group/sidebar">
+              {/* Cool Background Effect */}
+              <div className="absolute inset-0 pointer-events-none z-0 bg-[radial-gradient(circle_at_top_left,rgba(100,100,255,0.08),transparent_50%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(100,100,255,0.15),transparent_50%)]" />
 
-            <Sidebar
-              mode={isGroupMode ? "groups" : "collections"}
-              currentSessionId={sessionId}
-              activeJobId={activeJobId}
-              setActiveJobId={setActiveJobId}
-              isCollapsed={isCollapsed}
-              toggleSidebar={() => setIsCollapsed(!isCollapsed)}
+              <Sidebar
+                mode={isGroupMode ? "groups" : "collections"}
+                currentSessionId={sessionId}
+                activeJobId={activeJobId}
+                setActiveJobId={setActiveJobId}
+                isCollapsed={isCollapsed}
+                toggleSidebar={() => setIsCollapsed(!isCollapsed)}
+              />
+            </div>
+
+            {/* Drag Handle */}
+            <div
+              className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors z-50"
+              onMouseDown={startResizing}
             />
           </div>
 
-          {/* Drag Handle */}
-          <div
-            className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors z-50"
-            onMouseDown={startResizing}
-          />
+          {/* 
+             MAIN CONTENT (Pushed Right)
+             - Flex-1 takes remaining space.
+          */}
+          <div className="flex-1 h-full overflow-hidden flex flex-col min-w-0">
+            {isGroupMode ? (
+              <GroupManager />
+            ) : (
+              <MainContent sessionId={sessionId} activeJobId={activeJobId} />
+            )}
+          </div>
         </div>
 
-        {/* 
-           MAIN CONTENT (Pushed Right)
-           - Flex-1 takes remaining space.
-        */}
-        <div className="flex-1 h-full overflow-hidden flex flex-col min-w-0">
-          {isGroupMode ? (
-            <GroupManager />
-          ) : (
-            <MainContent sessionId={sessionId} activeJobId={activeJobId} />
-          )}
+        {/* 3. BOTTOM BANNER */}
+        <div className="flex-none z-50 relative shadow-[0_-4px_10px_rgba(0,0,0,0.1)]">
+          <ClassificationBanner />
         </div>
       </div>
-
-      {/* 3. BOTTOM BANNER */}
-      <div className="flex-none z-50 relative shadow-[0_-4px_10px_rgba(0,0,0,0.1)]">
-        <ClassificationBanner />
-      </div>
-    </div>
+    </QueueProvider>
   );
 };
