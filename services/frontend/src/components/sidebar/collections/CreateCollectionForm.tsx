@@ -33,7 +33,7 @@ export const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({
   return (
     <Card className="group relative overflow-hidden border-dashed mb-6 transition-all duration-300 hover:border-solid hover:shadow-md">
       {/* Subtle gradient overlay on hover */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+      {/* <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" /> */}
 
       <div className="relative p-5">
         <div className="flex items-center justify-center gap-2.5 mb-4">
