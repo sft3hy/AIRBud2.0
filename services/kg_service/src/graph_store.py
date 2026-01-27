@@ -74,37 +74,48 @@ class Neo4jStore:
             return []
 
     def delete_collection(self, collection_id):
+        # 1. Delete all documents in collection
         query = """
         MATCH (d:Document {collection_id: $cid})
+        OPTIONAL MATCH (d)<-[:MENTIONED_IN]-(e:Entity)
+        WITH d, collect(e) as candidates
         DETACH DELETE d
+        
+        WITH candidates
+        UNWIND candidates as e
+        MATCH (e)
+        WHERE NOT (e)-[:MENTIONED_IN]->(:Document)
+        DETACH DELETE e
         """
         try:
             with self.driver.session() as session:
                 session.run(query, cid=collection_id)
         except Exception as e:
-            print(f"Neo4j Delete Error: {e}")
+            print(f"Neo4j Delete Collection Error: {e}")
+
     def delete_document(self, doc_id):
         """
         Deletes the Document node and any Entities that are no longer 
         connected to any other documents (orphans).
+        Uses targeted candidate selection for performance.
         """
-        # 1. Detach and delete the Document node
-        query_doc = """
+        query = """
         MATCH (d:Document {id: $doc_id})
+        OPTIONAL MATCH (d)<-[:MENTIONED_IN]-(e:Entity)
+        WITH d, collect(e) as candidates
         DETACH DELETE d
-        """
         
-        # 2. Cleanup Orphans: Find Entities with NO relationships
-        # (Since we just deleted the links to the Document, unique entities become isolated)
-        query_orphans = """
-        MATCH (e:Entity)
-        WHERE NOT (e)--()
-        DELETE e
+        WITH candidates
+        UNWIND candidates as e
+        MATCH (e)
+        WHERE NOT (e)-[:MENTIONED_IN]->(:Document)
+        DETACH DELETE e
         """
         
         try:
             with self.driver.session() as session:
-                session.run(query_doc, doc_id=doc_id)
-                session.run(query_orphans)
+                session.run(query, doc_id=doc_id)
+        except Exception as e:
+            print(f"Neo4j Document Delete Error: {e}")
         except Exception as e:
             print(f"Neo4j Document Delete Error: {e}")
