@@ -155,21 +155,29 @@ class AuthHandler:
         cn = cn_match.group(1).strip() if cn_match else "Unknown User"
         org = org_match.group(1).strip() if org_match else "Unknown Org"
 
-        # Extract PIV ID (Digits at the end of the CN)
-        # Format: LAST.FIRST.MIDDLE.1234567890
+        # Strategy: The PIV/DOD ID is the single source of truth.
+        # 99% of CACs have a 10-digit EDIPI.
+        
         piv_id = "0"
-        if '.' in cn:
+
+        # Priority 1: Search for 10-digit sequence in CN
+        cn_digit_search = re.search(r'\d{10}', cn)
+        if cn_digit_search:
+            piv_id = cn_digit_search.group(0)
+        
+        # Priority 2: Search for 10-digit sequence in entire DN (e.g. if in UID= attribute)
+        if piv_id == "0":
+            dn_digit_search = re.search(r'\d{10}', dn)
+            if dn_digit_search:
+                piv_id = dn_digit_search.group(0)
+
+        # Priority 3: Fallback for non-standard IDs (e.g. test cards with 5 digits)
+        # strictly looks at the last component if it is numeric
+        if piv_id == "0" and '.' in cn:
             parts = cn.split('.')
             if parts[-1].isdigit():
                 piv_id = parts[-1]
         
-        # Fallback if PIV ID not found in CN, use whole CN as ID reference (unlikely but safe)
-        if piv_id == "0" and cn != "Unknown User":
-            # Try to find any sequence of 10 digits in the CN
-            digit_search = re.search(r'\d{10}', cn)
-            if digit_search:
-                piv_id = digit_search.group(0)
-
         return {
             "piv_id": piv_id,
             "cn": cn,
