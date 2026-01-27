@@ -119,7 +119,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
     >
       {/* Grid Pattern */}
-      <div className="absolute inset-0 z-0 pointer-events-none bg-[linear-gradient(to_right,hsl(var(--foreground)_/_0.04)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--foreground)_/_0.04)_1px,transparent_1px)] bg-[size:40px_40px]" />
+      <div className="absolute inset-0 z-0 pointer-events-none bg-[linear-gradient(to_right,hsl(var(--foreground)_/_0.04)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--foreground)_/_0.04)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:linear-gradient(to_bottom,transparent,black)]" />
 
       <div className="flex flex-col h-full w-full relative z-10">
         <SidebarHeader

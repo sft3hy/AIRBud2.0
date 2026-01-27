@@ -51,6 +51,11 @@ export const getFileIcon = (filename: string) => {
           className={`${props.className} text-orange-400`}
         />
       );
+    case "docx":
+    case "doc":
+      return (
+        <FileText {...props} className={`${props.className} text-blue-400`} />
+      );
     case "txt":
     case "md":
     case "json":

@@ -1,142 +1,161 @@
 import React, { createContext, useContext, useState, useRef, useCallback, ReactNode, useEffect } from 'react';
-import { useQueryClient } from "@tanstack/react-query";
-import { uploadAndProcessDocument } from '../lib/api';
+import { uploadFile, startJob, api } from '../lib/api';
 import { useToast } from "@/components/ui/use-toast";
 import { VisionModel } from '../types';
 
 export interface QueueItem {
     id: string;
-    file: File;
+    filename: string;
     sessionId: string;
     model: VisionModel;
-    status: 'pending' | 'uploading' | 'processing' | 'error' | 'completed';
+    status: 'pending_upload' | 'uploading' | 'uploaded' | 'processing' | 'error' | 'completed';
+    // We keep the file object only for the initial session. 
+    // If restored from localStorage, 'file' will be missing, but 'filename' allows us to proceed if already uploaded.
+    file?: File;
 }
 
 interface QueueContextType {
     queue: QueueItem[];
     addToQueue: (files: File[], sessionId: string, model: VisionModel) => void;
     isProcessing: boolean;
-    activeFileId: string | null;
-    currentFile: QueueItem | null;
+    activeJobId: string | null;
+    setActiveJobId: (id: string | null) => void;
 }
 
 const QueueContext = createContext<QueueContextType | undefined>(undefined);
 
-export const QueueProvider: React.FC<{ children: ReactNode; onJobStarted?: (jobId: string) => void }> = ({ children, onJobStarted }) => {
-    const [queue, setQueue] = useState<QueueItem[]>([]);
-    const [activeFileId, setActiveFileId] = useState<string | null>(null);
+const LS_KEY = 'processing_queue_v1';
 
-    // Refs for async stability
-    const queueRef = useRef<QueueItem[]>([]);
-    const isProcessingRef = useRef(false);
+export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+    // Initialize from localStorage if available
+    const [queue, setQueue] = useState<QueueItem[]>(() => {
+        try {
+            const saved = localStorage.getItem(LS_KEY);
+            return saved ? JSON.parse(saved) : [];
+        } catch {
+            return [];
+        }
+    });
 
-    const queryClient = useQueryClient();
+    const [activeJobId, setActiveJobId] = useState<string | null>(null);
     const { toast } = useToast();
 
-    const updateQueue = (newQueue: QueueItem[]) => {
-        setQueue(newQueue);
-        queueRef.current = newQueue;
-    };
+    // Persist queue changes
+    useEffect(() => {
+        localStorage.setItem(LS_KEY, JSON.stringify(queue));
+    }, [queue]);
 
-    const addToQueue = (files: File[], sessionId: string, model: VisionModel) => {
+    // --- 1. ADD & UPLOAD LOGIC ---
+    const addToQueue = useCallback(async (files: File[], sessionId: string, model: VisionModel) => {
         const newItems: QueueItem[] = files.map(f => ({
             id: Math.random().toString(36).substring(7),
-            file: f,
+            filename: f.name,
             sessionId,
             model,
-            status: 'pending' as const
+            status: 'pending_upload',
+            file: f
         }));
 
-        // Append to queue
-        const nextQueue = [...queueRef.current, ...newItems];
-        updateQueue(nextQueue);
+        setQueue(prev => [...prev, ...newItems]);
 
-        // Trigger processing if idle
-        if (!isProcessingRef.current) {
-            processNext();
-        }
-    };
+        // Fire & Forget Uploads (Parallel)
+        newItems.forEach(async (item) => {
+            try {
+                // Update to uploading
+                setQueue(q => q.map(i => i.id === item.id ? { ...i, status: 'uploading' } : i));
 
-    const processNext = useCallback(async () => {
-        // Access ref directly to avoid closure staleness
-        if (isProcessingRef.current) return;
-        if (queueRef.current.length === 0) return;
+                if (!item.file) throw new Error("File missing");
 
-        isProcessingRef.current = true;
-        const currentItem = queueRef.current[0];
+                await uploadFile(item.file);
 
-        if (!currentItem) {
-            isProcessingRef.current = false;
-            return;
-        }
+                // Mark as ready for processing
+                setQueue(q => q.map(i => i.id === item.id ? { ...i, status: 'uploaded' } : i));
 
-        setActiveFileId(currentItem.id);
+            } catch (e) {
+                console.error("Upload failed", e);
+                toast({
+                    variant: "destructive",
+                    title: "Upload Failed",
+                    description: `Failed to upload ${item.filename}`
+                });
+                // Remove failed
+                setQueue(q => q.filter(i => i.id !== item.id));
+            }
+        });
+    }, [toast]);
 
-        // Update item status to uploading
-        const updatedQueue = [...queueRef.current];
-        updatedQueue[0] = { ...currentItem, status: 'uploading' };
-        updateQueue(updatedQueue);
+    // --- 2. PROCESSING LOOP ---
+    // Single loop that checks the head of the queue
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
 
-        try {
-            // 1. Upload
-            // Note: We don't need to await the *entire* processing if the backend returns early.
-            // But our current api.ts awaits response.
-            const response = await uploadAndProcessDocument(
-                currentItem.sessionId,
-                currentItem.file,
-                currentItem.model
-            );
+        const processLoop = async () => {
+            if (queue.length === 0) return;
 
-            if (response.status === "already_queued") {
-                if (onJobStarted) onJobStarted(currentItem.sessionId);
-            } else {
-                // Success
-                if (onJobStarted) onJobStarted(currentItem.sessionId);
+            const head = queue[0];
+
+            // If head is still uploading, we wait.
+            if (head.status === 'pending_upload' || head.status === 'uploading') return;
+
+            // If head is 'uploaded', we try to start the job
+            if (head.status === 'uploaded') {
+                try {
+                    // Check if backend is busy first? 
+                    // Assume 'startJob' handles queueing or rejection.
+                    // If backend is busy with THIS collection, we should get 'already_queued'.
+
+                    const res = await startJob(head.sessionId, head.filename, head.model);
+
+                    if (res.status === 'queued' || res.status === 'processing' || res.status === 'already_queued') {
+                        // Mark as processing
+                        setQueue(q => q.map(i => i.id === head.id ? { ...i, status: 'processing' } : i));
+                        setActiveJobId(head.sessionId);
+                    }
+                } catch (e) {
+                    console.error("Start job failed", e);
+                    // If status 400 (already running), we might want to just set status='processing' and wait?
+                    // For now, retry in next loop or mark error?
+                    // Let's assume transient error and wait, or remove if fatal.
+                }
+                return;
             }
 
-            // 2. Mark as completed/popped
-            // Remove the processed item
-            updateQueue(queueRef.current.slice(1));
+            // If head is 'processing', we poll for status
+            if (head.status === 'processing') {
+                try {
+                    const res = await api.get(`/collections/${head.sessionId}/status`);
+                    const status = res.data;
 
-        } catch (e) {
-            console.error("Upload failed", e);
-            toast({
-                variant: "destructive",
-                title: "Upload Failed",
-                description: `Could not process ${currentItem.file.name}.`,
-            });
-
-            // Remove failed item
-            updateQueue(queueRef.current.slice(1));
-        } finally {
-            isProcessingRef.current = false;
-            setActiveFileId(null);
-
-            // Trigger next
-            // We use a timeout to allow state updates to settle if needed, or just recursion
-            setTimeout(() => {
-                // Check ref again
-                if (queueRef.current.length > 0) {
-                    processNext();
+                    if (status.status === 'completed') {
+                        toast({ title: "Processing Complete", description: `${head.filename} is ready for querying.` });
+                        // Remove from queue
+                        setQueue(q => q.slice(1));
+                        setActiveJobId(null);
+                    } else if (status.status === 'error') {
+                        toast({ variant: "destructive", title: "Error", description: status.step || "Processing failed" });
+                        setQueue(q => q.slice(1));
+                        setActiveJobId(null);
+                    } else {
+                        // Still processing, ensure activeJobId is set
+                        if (activeJobId !== head.sessionId) setActiveJobId(head.sessionId);
+                    }
+                } catch (e) {
+                    // Poll failed
                 }
-            }, 100);
-        }
-    }, [onJobStarted, toast]);
+            }
+        };
 
-    // Watcher to trigger process if queue has items and we are idle (double safety)
-    useEffect(() => {
-        if (queue.length > 0 && !isProcessingRef.current) {
-            processNext();
-        }
-    }, [queue, processNext]);
+        const timer = setInterval(processLoop, 2000); // Check every 2s
+        return () => clearInterval(timer);
+    }, [queue, activeJobId, toast]);
 
     return (
         <QueueContext.Provider value={{
             queue,
             addToQueue,
-            isProcessing: isProcessingRef.current,
-            activeFileId,
-            currentFile: queue[0] || null
+            isProcessing: queue.length > 0 && queue[0].status === 'processing',
+            activeJobId,
+            setActiveJobId
         }}>
             {children}
         </QueueContext.Provider>

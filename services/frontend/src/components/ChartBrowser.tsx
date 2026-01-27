@@ -122,7 +122,7 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
 
   return (
     <>
-      <div className="flex flex-col h-full bg-background/80 border-l border-border/60">
+      <div className="flex flex-col h-full border-l border-border/60">
         {/* Header / Navigation */}
         <div className="flex items-center justify-between p-3 border-b bg-card/50 backdrop-blur-sm shrink-0 gap-4">
           <Button
@@ -143,7 +143,7 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
             {currentChart && (
               <div className="flex items-center justify-center gap-2 max-w-full">
                 <span
-                  className="text-[12px] text-foreground/70 truncate max-w-[120px] md:max-w-[200px]"
+                  className="text-[12px] text-foreground/70 truncate"
                   title={currentChart.doc_name}
                 >
                   {currentChart.doc_name}

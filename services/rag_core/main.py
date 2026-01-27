@@ -26,7 +26,8 @@ from src.core.auth import auth_handler
 KG_SERVICE_URL = "http://kg_service:8003"
 
 # Global Job Status Tracker
-job_status: Dict[str, Dict] = {}
+# Global Job Status Tracker - MOVED TO DB
+# job_status: Dict[str, Dict] = {}
 
 # DB Instance
 db = DatabaseManager()
@@ -94,13 +95,36 @@ async def run_pipeline_task(collection_id: int, filename: str, vision_model: str
     cid = str(collection_id)
     is_video = filename.lower().endswith('.mp4')
 
-    def update_status(stage: str, step: str, progress: int):
-        job_status[cid] = {
-            "status": "processing",
-            "stage": stage,
-            "step": step,
-            "progress": progress
-        }
+    from datetime import datetime
+
+    def update_status(stage: str, step: str, progress: int, details: Optional[Dict] = None):
+        # Fetch current logs to append (Read-Modify-Write pattern isn't atomic here but acceptable for logs)
+        # Ideally, we'd just push to a list in DB, but JSONB append is tricky in standard SQL without logic.
+        # For simplicity, we fetch mostly for the logs.
+        current = db.get_job_status(collection_id) or {}
+        current_details = current.get("details") or {}
+        logs = current_details.get("logs") or []
+        
+        new_details = current_details.copy()
+        if details:
+            if "log" in details:
+                ts = datetime.now().strftime("%H:%M:%S")
+                logs.append(f"[{ts}] {details['log']}")
+            new_details.update(details)
+        
+        # Always inject current filename context
+        new_details["current_file"] = filename
+        
+        new_details["logs"] = logs
+
+        db.upsert_job_status(
+            collection_id,
+            "processing",
+            stage,
+            step,
+            progress,
+            new_details
+        )
 
     try:
         init_step = f"Extracting Media ({filename})..." if is_video else f"Analyzing Layout ({filename})..."
@@ -155,26 +179,32 @@ async def run_pipeline_task(collection_id: int, filename: str, vision_model: str
         await asyncio.to_thread(db.update_document_paths, doc_id, faiss_path, chunks_path)
 
         # Mark as completed
-        job_status[cid] = {
-            "status": "completed",
-            "stage": "done",
-            "step": "Processing Complete!",
-            "progress": 100
-        }
+        db.upsert_job_status(
+            collection_id,
+            "completed",
+            "done",
+            "Processing Complete!",
+            100,
+            {"logs": ["Processing Finished Successfully."]}
+        )
         
         # Cleanup status after delay (allow frontend to poll 'completed')
         await asyncio.sleep(30) 
-        if job_status.get(cid, {}).get("status") == "completed":
-            del job_status[cid]
+        # Check if still completed (hasn't been overwritten by new job)
+        final_check = db.get_job_status(collection_id)
+        if final_check and final_check.get("status") == "completed":
+            db.delete_job_status(collection_id)
 
     except Exception as e:
         logger.error(f"Pipeline failed for collection {cid}: {e}", exc_info=True)
-        job_status[cid] = {
-            "status": "error", 
-            "stage": "error", 
-            "step": str(e), 
-            "progress": 0
-        }
+        db.upsert_job_status(
+            collection_id,
+            "error",
+            "error",
+            str(e),
+            0,
+            {"error": str(e)}
+        )
 
 # --- Service Health Check ---
 
@@ -294,23 +324,39 @@ def process_document(req: ProcessRequest, background_tasks: BackgroundTasks, use
     
     # Check if job already running
     # If status is "completed" or "error", we ALLOW overwrite
-    current_job = job_status.get(cid_str)
+    # Query DB instead of memory
+    current_job = db.get_job_status(req.collection_id)
+    
     if current_job:
         status = current_job.get("status")
-        # --- FIX: Explicitly allow overwriting if previous job is done ---
         if status in ["queued", "processing"]:
             logger.warning(f"Rejected double process request for {cid_str} (Status: {status})")
             return {"status": "already_queued", "message": "Job running"}
 
-    # Initialize status
-    job_status[cid_str] = {"status": "queued", "step": "Initializing...", "progress": 5}
+    # Initialize status in DB
+    db.upsert_job_status(
+        req.collection_id, 
+        "queued", 
+        "Initializing...", 
+        "Initiating Pipeline", 
+        5, 
+        {"logs": []}
+    )
     
     background_tasks.add_task(run_pipeline_task, req.collection_id, req.filename, req.vision_model)
     return {"status": "queued"}
 
 @app.get("/collections/{cid}/status")
 def get_status(cid: str, user: Dict = Depends(auth_handler.require_user)):
-    return job_status.get(str(cid), {"status": "idle", "step": "", "progress": 0})
+    try:
+        collection_id = int(cid)
+        # Fetch from DB
+        status = db.get_job_status(collection_id)
+        if status:
+            return status
+        return {"status": "idle", "step": "", "progress": 0}
+    except ValueError:
+        return {"status": "error", "step": "Invalid ID", "progress": 0}
 
 # --- Query System ---
 

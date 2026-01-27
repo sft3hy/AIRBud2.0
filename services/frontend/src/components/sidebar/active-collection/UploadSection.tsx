@@ -126,7 +126,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
           </div>
           <div className="space-y-0.5">
             <span className="text-xs font-semibold text-foreground block">
-              Click to Upload or Drag and Drop
+              Upload or Drag and Drop
             </span>
             <span className="text-[10px] text-muted-foreground block">
               PDF, Word, Excel, Video, Text

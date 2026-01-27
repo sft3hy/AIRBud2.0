@@ -60,8 +60,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         {/* Input Container */}
         <div
           className={`relative flex items-end gap-3 bg-muted/40 border rounded-[24px] transition-all duration-300 ${isFocused
-              ? "ring-2 ring-primary/20 border-primary/50 shadow-lg shadow-primary/5"
-              : "border-border/50 shadow-sm hover:shadow-md hover:bg-muted/60"
+            ? "ring-2 ring-primary/20 border-primary/50 shadow-lg shadow-primary/5"
+            : "border-border/50 shadow-sm hover:shadow-md hover:bg-muted/60"
             }`}
         >
           {/* Input Field */}
@@ -70,7 +70,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               ref={textareaRef}
               placeholder={
                 hasDocuments
-                  ? "Chat with your collection..."
+                  ? "Query your collection..."
                   : "Upload a document to start chatting..."
               }
               value={input}
@@ -104,8 +104,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               onClick={handleSend}
               disabled={!input.trim() || isPending || !hasDocuments}
               className={`group relative flex items-center justify-center w-10 h-10 rounded-full transition-all duration-300 ${!input.trim() || isPending || !hasDocuments
-                  ? "bg-muted text-muted-foreground cursor-not-allowed"
-                  : "bg-primary text-primary-foreground hover:scale-105 hover:shadow-lg hover:shadow-primary/25 active:scale-95"
+                ? "bg-muted text-muted-foreground cursor-not-allowed"
+                : "bg-primary text-primary-foreground hover:scale-105 hover:shadow-lg hover:shadow-primary/25 active:scale-95"
                 }`}
             >
               {input.trim() && !isPending && hasDocuments && (
@@ -113,8 +113,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               )}
               <CircleArrowUp
                 className={`relative z-10 transition-all duration-300 ${!input.trim() || isPending || !hasDocuments
-                    ? "w-5 h-5"
-                    : "w-5 h-5 group-hover:scale-110"
+                  ? "w-5 h-5"
+                  : "w-5 h-5 group-hover:scale-110"
                   } ${isPending ? "animate-pulse" : ""}`}
               />
             </button>

@@ -35,6 +35,7 @@ class DocumentParser:
 
         file_ext = os.path.splitext(file_path)[1].lower()
         file_name = os.path.splitext(os.path.basename(file_path))[0]
+        self.current_file_name = file_name
 
         # Create a specific folder for this file's assets
         self.file_output_dir = os.path.join(self.output_dir, file_name)
@@ -145,7 +146,9 @@ class DocumentParser:
             img = Image.open(io.BytesIO(pix.tobytes("png")))
 
             # 3. Detect & Crop
-            crops = self._process_visuals(img, f"page{i+1}")
+            # We need the filename base. Since parse() calls this, we can store it on self or pass it.
+            # Let's assume we update parse() to set self.current_file_name
+            crops = self._process_visuals(img, f"page{i+1}", getattr(self, "current_file_name", "doc"))
             extracted_images.extend(crops)
 
             # 4. Insert Placeholders
@@ -182,7 +185,9 @@ class DocumentParser:
                     img = Image.open(io.BytesIO(img_data))
                     if img.width > 200 and img.height > 200:
                         count += 1
-                        fname = f"docx_visual_{count}.png"
+                        clean_name = "".join(x for x in self.current_file_name if x.isalnum() or x in ('-', '_'))
+                        truncated = clean_name[:15] if clean_name else "doc"
+                        fname = f"{truncated}_visual_{count}.png"
                         save_path = os.path.join(self.file_output_dir, fname)
                         img.save(save_path)
                         extracted_images.append(save_path)
@@ -212,7 +217,7 @@ class DocumentParser:
                     full_text.append(shape.text)
 
             if i < len(slide_images):
-                crops = self._process_visuals(slide_images[i], f"slide{i+1}")
+                crops = self._process_visuals(slide_images[i], f"slide{i+1}", getattr(self, "current_file_name", "doc"))
                 extracted_images.extend(crops)
 
                 for crop_path in crops:
@@ -296,13 +301,21 @@ class DocumentParser:
         
         return "\n".join(full_text), images, audio_path
 
-    def _process_visuals(self, page_image: Image.Image, prefix: str) -> List[str]:
+    def _process_visuals(self, page_image: Image.Image, prefix: str, file_name_base: str = "") -> List[str]:
         bboxes = self.detector.detect(page_image)
         saved_paths = []
+        
+        # Sanitization and Truncation
+        # Remove spaces and non-alphanumeric chars for safety
+        clean_name = "".join(x for x in file_name_base if x.isalnum() or x in ('-', '_'))
+        truncated_name = clean_name[:15] if clean_name else "doc"
+
         for i, (x1, y1, x2, y2) in enumerate(bboxes):
             try:
                 crop = page_image.crop((x1, y1, x2, y2))
-                fname = f"{prefix}_visual_{i+1}.png"
+                # New Format: {truncated_name}_{prefix}_visual_{i+1}.png
+                # e.g. "quarterly rep_page1_visual_1.png"
+                fname = f"{truncated_name}_{prefix}_visual_{i+1}.png"
                 path = os.path.join(self.file_output_dir, fname)
                 crop.save(path)
                 saved_paths.append(path)

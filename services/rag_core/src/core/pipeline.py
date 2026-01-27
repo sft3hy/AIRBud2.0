@@ -1,4 +1,5 @@
 import os
+import time
 import pickle
 import asyncio
 import logging
@@ -124,15 +125,36 @@ class SmartRAG:
                 # Granular Status Update
                 if status_callback: 
                     # Calculate progress: Vision takes 20% -> 40% (20 points total)
-                    # Base: 20
-                    # Step: (i / total) * 20
                     current_progress_increment = int((i / total_images) * 20)
-                    status_callback("vision", f"Analyzing Image {i+1}/{total_images}", 20 + current_progress_increment)
+                    status_callback(
+                        "vision", 
+                        f"Analyzing Image {i+1}/{total_images}", 
+                        20 + current_progress_increment,
+                        details={
+                            "current_file": fname,
+                            "current_image_idx": i + 1,
+                            "total_images": total_images
+                        }
+                    )
 
                 # Offload vision API call
+                start_time = time.time()
                 desc = await asyncio.to_thread(
                     ExternalServices.analyze_image, img_path, self.vision_model_name
                 )
+                duration = time.time() - start_time
+                
+                # Log completion
+                if status_callback:
+                    status_callback(
+                        "vision", 
+                        f"Analyzing Image {i+1}/{total_images}", 
+                        20 + current_progress_increment,
+                        details={
+                            "log": f"Analyzed {fname} in {duration:.2f}s"
+                        }
+                    )
+
                 self.chart_descriptions[fname] = desc
                 
                 # Visual context injection

@@ -106,4 +106,10 @@ export interface JobStatus {
     stage: 'parsing' | 'vision' | 'indexing' | 'graph' | 'done' | 'error'; // NEW
     step: string;
     progress: number;
+    details?: {
+        logs?: string[];
+        current_file?: string;
+        current_image_idx?: number;
+        total_images?: number;
+    };
 }

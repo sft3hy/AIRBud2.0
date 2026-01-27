@@ -16,6 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Sub Components
 import { UploadSection } from "./active-collection/UploadSection";
+import { QueueDisplay } from "../QueueDisplay";
+import { JobStatusWidget } from "./JobStatusWidget"; // IMPORT
 import { DocumentList } from "./active-collection/DocumentList";
 import { DocumentPreviewModal } from "./active-collection/DocumentPreviewModal";
 import {
@@ -190,10 +192,11 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
         {/* --- FILES TAB --- */}
         <TabsContent
           value="docs"
-          className="flex-1 flex flex-col min-h-0 mt-0 w-full relative"
+          className="flex-1 flex flex-col min-h-0 mt-0 w-full relative h-full"
         >
-          <ScrollArea className="flex-1 w-full">
-            <div className="space-y-3 pt-2 border-t bg-gradient-to-t from-background/40 via-background/20 to-transparent px-2 pb-2">
+          {/* FIXED HEADER SECTION */}
+          <div className="shrink-0 w-full z-10 bg-background/50 backdrop-blur-md border-b">
+            <div className="p-3 pb-0">
               <UploadSection
                 selectedModel={selectedModel}
                 onModelChange={setSelectedModel}
@@ -203,14 +206,23 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
                 onStartProcessing={handleStartProcessing}
               />
             </div>
+            <div className="px-3 pb-3">
+              <JobStatusWidget collectionId={currentSessionId} />
+              <QueueDisplay collectionId={currentSessionId} />
+            </div>
+          </div>
 
-            <DocumentList
-              documents={currentDocs}
-              onPreview={handlePreview}
-              onDelete={handleDeleteDoc}
-              isOwner={isOwner}
-              hasStagedFiles={stagedFiles.length > 0}
-            />
+          {/* SCROLLABLE DOCUMENT LIST */}
+          <ScrollArea className="flex-1 w-full bg-transparent">
+            <div className="p-0"> {/* Removed extraneous padding/gradients since header covers it */}
+              <DocumentList
+                documents={currentDocs}
+                onPreview={handlePreview}
+                onDelete={handleDeleteDoc}
+                isOwner={isOwner}
+                hasStagedFiles={stagedFiles.length > 0}
+              />
+            </div>
           </ScrollArea>
         </TabsContent>
 

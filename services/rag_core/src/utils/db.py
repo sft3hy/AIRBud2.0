@@ -180,6 +180,56 @@ class DatabaseManager:
             # Migration for queries
             cur.execute("ALTER TABLE queries ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)")
 
+            # 7. Processing Jobs (Async Job Status)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS processing_jobs (
+                    collection_id INTEGER PRIMARY KEY,
+                    status TEXT,
+                    stage TEXT,
+                    step TEXT,
+                    progress INTEGER,
+                    details JSONB,
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+
+    # --- Job Status Operations ---
+    def upsert_job_status(self, collection_id: int, status: str, stage: str, step: str, progress: int, details: Dict = None):
+        """
+        Updates the job status for a collection. (Upsert)
+        """
+        details_json = json.dumps(details) if details else "{}"
+        with self.get_cursor(commit=True) as cur:
+            cur.execute("""
+                INSERT INTO processing_jobs (collection_id, status, stage, step, progress, details, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (collection_id) 
+                DO UPDATE SET 
+                    status = EXCLUDED.status,
+                    stage = EXCLUDED.stage,
+                    step = EXCLUDED.step,
+                    progress = EXCLUDED.progress,
+                    details = EXCLUDED.details,
+                    updated_at = NOW()
+            """, (collection_id, status, stage, step, progress, details_json))
+
+    def get_job_status(self, collection_id: int) -> Optional[Dict]:
+        with self.get_cursor() as cur:
+            cur.execute("SELECT * FROM processing_jobs WHERE collection_id = %s", (collection_id,))
+            row = cur.fetchone()
+            if row:
+                if isinstance(row['details'], str):
+                    try:
+                        row['details'] = json.loads(row['details'])
+                    except:
+                        row['details'] = {}
+                return row
+            return None
+
+    def delete_job_status(self, collection_id: int):
+        with self.get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM processing_jobs WHERE collection_id = %s", (collection_id,))
+
     # --- User Operations ---
     def upsert_user(self, piv_id: str, display_name: str, organization: str, email: str = "") -> int:
         """

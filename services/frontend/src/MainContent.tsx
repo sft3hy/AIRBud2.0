@@ -108,9 +108,8 @@ export const MainContent: React.FC<MainContentProps> = ({
         ...prev,
         {
           role: "assistant",
-          content: `Error: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`,
+          content: `Error: ${error instanceof Error ? error.message : "Unknown error"
+            }`,
         },
       ]);
     },
@@ -123,14 +122,28 @@ export const MainContent: React.FC<MainContentProps> = ({
 
   // --- Render Logic ---
 
+  const [minimizedProcessing, setMinimizedProcessing] = useState(false);
+
   const showProcessing =
+    !minimizedProcessing &&
+    !forceViewChat &&
+    !minimizedProcessing &&
     !forceViewChat &&
     activeJobId &&
+    activeJobId === sessionId && // STRICTLY SCOPE TO CURRENT COLLECTION
     jobStatus &&
     jobStatus.status !== "idle" &&
     jobStatus.status !== "completed" &&
     jobStatus.status !== "error" &&
     jobStatus.stage !== "done";
+
+  // If job completes, we automatically go to chat
+  useEffect(() => {
+    if (jobStatus?.status === 'completed') {
+      setForceViewChat(true);
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+    }
+  }, [jobStatus]);
 
   if (showProcessing) {
     return (
@@ -140,6 +153,9 @@ export const MainContent: React.FC<MainContentProps> = ({
           setForceViewChat(true);
           queryClient.invalidateQueries({ queryKey: ["documents"] });
         }}
+        // Add props for minimizing
+        canMinimize={hasDocuments} // Only allow minimizing if there are docs to chat with
+        onMinimize={() => setMinimizedProcessing(true)}
       />
     );
   }
