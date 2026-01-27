@@ -14,6 +14,7 @@ import { InviteHandler } from "./components/GroupManager";
 import { fetchSystemStatus } from "./lib/api";
 import { Loader2 } from "lucide-react";
 import { Toaster } from "@/components/ui/toaster";
+import { QueueProvider } from "./context/QueueContext";
 
 const queryClient = new QueryClient();
 
@@ -139,24 +140,26 @@ const AppContent = () => {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      {/* --- LIQUID BACKGROUND START --- */}
-      {/* --- LIQUID BACKGROUND START --- */}
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-background">
-        {/* Simple Gradient instead of heavy blobs */}
-        <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/5 to-background" />
+      <QueueProvider>
+        {/* --- LIQUID BACKGROUND START --- */}
+        {/* --- LIQUID BACKGROUND START --- */}
+        <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-background">
+          {/* Simple Gradient instead of heavy blobs */}
+          <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/5 to-background" />
 
-        {/* Grid Overlay */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--foreground)_/_0.04)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--foreground)_/_0.04)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:linear-gradient(to_bottom,transparent,black)]" />
-      </div>
-      {/* --- LIQUID BACKGROUND END --- */}
-      {/* --- LIQUID BACKGROUND END --- */}
+          {/* Grid Overlay */}
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--foreground)_/_0.04)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--foreground)_/_0.04)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:linear-gradient(to_bottom,transparent,black)]" />
+        </div>
+        {/* --- LIQUID BACKGROUND END --- */}
+        {/* --- LIQUID BACKGROUND END --- */}
 
-      {/* Content Wrapper */}
-      <div className="relative z-10 w-full h-full text-foreground/90">
-        <AppContent />
-      </div>
+        {/* Content Wrapper */}
+        <div className="relative z-10 w-full h-full text-foreground/90">
+          <AppContent />
+        </div>
 
-      <Toaster />
+        <Toaster />
+      </QueueProvider>
     </QueryClientProvider>
   );
 }
