@@ -2,6 +2,7 @@ import os
 import glob
 import re
 import requests
+import json
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from typing import List, Dict, Optional
@@ -50,21 +51,56 @@ class ExternalServices:
     """
 
     @staticmethod
-    def parse_document(file_path: str, output_dir: str) -> Dict:
+    def parse_document(file_path: str, output_dir: str, progress_callback=None) -> Dict:
         """
         Calls the Parser Service to extract text and layout.
+        Consumes streaming NDJSON response to provide progress updates.
         """
         url = f"{settings.PARSER_API_URL}/parse"
         payload = {"file_path": str(file_path), "output_dir": str(output_dir)}
         
+        last_result = {}
+
         try:
             # High timeout because parsing PDFs/PPTX is CPU intensive
-            resp = _http_session.post(url, json=payload, timeout=300)
-            resp.raise_for_status()
-            return resp.json()
+            with _http_session.post(url, json=payload, timeout=300, stream=True) as resp:
+                resp.raise_for_status()
+                
+                for line in resp.iter_lines():
+                    if not line: continue
+                    
+                    try:
+                        data = resp.json() if not isinstance(line, bytes) else json.loads(line)
+                        
+                        if data.get("status") == "processing":
+                            if progress_callback:
+                                # Format a detailed step string: "Page 5/10 (Img: 3, 4.2s)"
+                                step_msg = data.get("step", "Processing...")
+                                if "current_images" in data:
+                                    step_msg += f" [Img: {data['current_images']}]"
+                                if "elapsed" in data:
+                                    step_msg += f" [{data['elapsed']:.1f}s]"
+                                    
+                                progress = int(data.get("progress", 0) * 100)
+                                progress_callback("parsing", step_msg, progress)
+                        
+                        elif data.get("status") == "completed":
+                            last_result = data.get("result", {})
+                            # Also return checking metrics if needed
+                            
+                        elif data.get("status") == "error":
+                            raise RuntimeError(f"Parser Error: {data.get('error')}")
+                            
+                    except json.JSONDecodeError:
+                        pass
+                        
+            if not last_result:
+                raise RuntimeError("Parser stream ended without result")
+                
+            return last_result
+
         except requests.exceptions.RequestException as e:
             logger.error(f"Parser Service failed for {file_path}: {str(e)}")
-            # Return empty structure to allow pipeline to fail gracefully or retry
             raise RuntimeError(f"Parser Service Unreachable or Error: {e}")
 
     @staticmethod
