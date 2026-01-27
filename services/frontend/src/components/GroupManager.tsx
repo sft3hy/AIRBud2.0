@@ -168,7 +168,7 @@ export const GroupManager = () => {
               <GroupSearchBar
                 value={myGroupsSearchQuery}
                 onChange={setMyGroupsSearchQuery}
-                placeholder="Search your groups..."
+                placeholder="Search groups..."
               />
 
               {filteredMyGroups.length === 0 && (
