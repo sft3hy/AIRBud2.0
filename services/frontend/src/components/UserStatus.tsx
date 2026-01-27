@@ -21,10 +21,10 @@ export const UserStatus = () => {
   return (
     <div className="flex items-center gap-2 text-right">
       <div className="flex flex-col leading-tight">
-        <span className="max-w-[160px] truncate text-sm font-medium">
+        <span className="truncate text-lg font-medium">
           {systemStatus.user.cn}
         </span>
-        <span className="max-w-[11rem] truncate text-xs text-muted-foreground">
+        <span className="truncate text-sm text-muted-foreground">
           {systemStatus.user.org}
         </span>
       </div>
