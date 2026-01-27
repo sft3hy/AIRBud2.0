@@ -174,6 +174,7 @@ export const MainContent: React.FC<MainContentProps> = ({
         chatHistory={chatHistory}
         isPending={sendMessageMutation.isPending}
         queryStatus={queryStatus}
+        documents={documents}
       />
 
       <ChatInput

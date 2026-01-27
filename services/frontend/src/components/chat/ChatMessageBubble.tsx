@@ -8,9 +8,10 @@ import { useToast } from "@/components/ui/use-toast";
 
 interface ChatMessageBubbleProps {
   msg: ChatMessage;
+  documents: any[];
 }
 
-export const ChatMessageBubble = memo(({ msg }: ChatMessageBubbleProps) => {
+export const ChatMessageBubble = memo(({ msg, documents }: ChatMessageBubbleProps) => {
   const isUser = msg.role === "user";
   const { toast } = useToast();
   const [copied, setCopied] = React.useState(false);
@@ -115,7 +116,7 @@ export const ChatMessageBubble = memo(({ msg }: ChatMessageBubbleProps) => {
         {/* Source Viewer (Attached below AI responses) */}
         {msg.role === "assistant" && msg.sources && msg.sources.length > 0 && (
           <div className="mt-2 w-full max-w-5xl animate-in fade-in duration-500 delay-150">
-            <SourceViewer sources={msg.sources} documents={[]} />
+            <SourceViewer sources={msg.sources} documents={documents} />
           </div>
         )}
       </div>

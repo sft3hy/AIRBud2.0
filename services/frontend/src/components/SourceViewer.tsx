@@ -19,7 +19,7 @@ interface SourceViewerProps {
   documents?: SessionDocument[];
 }
 
-export const SourceViewer: React.FC<SourceViewerProps> = ({ sources }) => {
+export const SourceViewer: React.FC<SourceViewerProps> = ({ sources, documents }) => {
   if (!sources || sources.length === 0) return null;
 
   const vectorSources = sources.filter((s) => s.type === "text" || !s.type);
@@ -201,10 +201,40 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({ sources }) => {
                       (1 - distance / 2) * 100,
                     ).toFixed(0);
                     const filename = src.source.split("/").pop() || "Unknown";
-                    const pageDisplay =
-                      src.page && src.page > 0
-                        ? `Page ${src.page}`
-                        : "Page N/A";
+
+                    // Improved Page Logic
+                    let pageDisplay = "Page 1";
+                    if (src.page && src.page > 0) {
+                      pageDisplay = `Page ${src.page}`;
+                    }
+
+                    // --- IMAGE VISUALIZATION LOGIC ---
+                    let imageUrl = null;
+                    const cleanFilename = filename;
+
+                    // 1. Find matching document from props
+                    const matchingDoc = documents?.find(d =>
+                      d.original_filename === cleanFilename ||
+                      d.original_filename === src.source.split('/').pop() // Handling path vs name
+                    );
+
+                    // 2. Extract UUID from chart_dir if available
+                    // chart_dir is like "/data/charts/UUID_filename"
+                    // URL endpoint: /static/charts/UUID_filename/IMAGE_NAME
+                    if (matchingDoc && matchingDoc.chart_dir) {
+                      const chartDirName = matchingDoc.chart_dir.split('/').pop(); // Extract "UUID_filename"
+                      if (chartDirName) {
+                        // 3. Search text for visual pattern
+                        // Regex matches "Visual Scene Analysis (filename.png):"
+                        const visualMatch = src.text.match(/Visual Scene Analysis \((.+?)\):/);
+                        if (visualMatch && visualMatch[1]) {
+                          const imageFilename = visualMatch[1];
+                          // Construct URL
+                          // Assuming /static maps to /data, and Charts is /data/charts
+                          imageUrl = `/static/charts/${chartDirName}/${imageFilename}`;
+                        }
+                      }
+                    }
 
                     return (
                       <Card
@@ -221,14 +251,35 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({ sources }) => {
                               • {pageDisplay}
                             </span>
                           </div>
+
+                          {/* Improved Badge Style */}
                           <Badge
-                            variant="outline"
-                            className="text-[10px] h-5 px-1.5 bg-background/50 text-muted-foreground group-hover:text-primary group-hover:border-primary/30 transition-colors"
+                            variant="secondary"
+                            className="text-[10px] h-5 px-2 bg-primary/10 text-primary border border-primary/20 round-full shadow-none hover:bg-primary/20 transition-colors"
                           >
                             {relevance}% Match
                           </Badge>
                         </div>
+
                         <div className="p-3 text-xs text-muted-foreground leading-relaxed">
+
+                          {/* INLINE IMAGE DISPLAY */}
+                          {imageUrl && (
+                            <div className="mb-3 rounded-md overflow-hidden border border-border/50 relative group/img">
+                              <div className="absolute top-2 left-2 bg-black/60 backdrop-blur text-white text-[10px] px-2 py-0.5 rounded">
+                                Visual Analysis
+                              </div>
+                              <img
+                                src={imageUrl}
+                                alt="Visual Context"
+                                className="w-full h-auto max-h-60 object-contain bg-black/5"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            </div>
+                          )}
+
                           <ReactMarkdown className="prose prose-xs dark:prose-invert max-w-none">
                             {src.text}
                           </ReactMarkdown>
