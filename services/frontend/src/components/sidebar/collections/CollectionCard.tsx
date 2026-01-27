@@ -31,7 +31,8 @@ export const CollectionCard: React.FC<CollectionCardProps> = ({
   onRenameInit,
   onDelete,
 }) => {
-  const isOwner = currentUserId === collection.owner_id;
+  // Ensure type-safe comparison
+  const isOwner = String(collection.owner_id) === currentUserId;
   const isSelected = String(collection.id) === currentSessionId;
 
   return (
