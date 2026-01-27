@@ -31,40 +31,42 @@ export const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({
   onCreate,
 }) => {
   return (
-    <Card className="group relative overflow-hidden border-dashed mb-6 transition-all duration-300 hover:border-solid hover:shadow-md">
-      {/* Subtle gradient overlay on hover */}
-      {/* <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" /> */}
-
+    <Card className="group relative overflow-hidden border-dashed border-2 mb-6 transition-all duration-300 hover:border-solid hover:border-primary/20 hover:shadow-lg bg-card/50">
       <div className="relative p-5">
-        <div className="flex items-center justify-center gap-2.5 mb-4">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 group-hover:bg-primary/15 transition-colors duration-300">
-            <FolderPlus className="h-4 w-4 text-primary" />
+        <div className="flex flex-col items-center justify-center gap-3 mb-5">
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary group-hover:scale-110 transition-transform duration-300">
+            <FolderPlus className="h-5 w-5" />
           </div>
-          <h3 className="text-sm font-semibold tracking-wide text-foreground">
-            New Collection
-          </h3>
+          <div className="text-center">
+            <h3 className="text-sm font-semibold tracking-wide text-foreground">
+              New Collection
+            </h3>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
+              Create a space for your documents
+            </p>
+          </div>
         </div>
 
-        <div className="space-y-3 flex flex-col items-center">
+        <div className="space-y-4">
           <Input
-            className="h-10 text-sm transition-all duration-200 focus:ring-2 focus:ring-primary/20 text-left w-full"
+            className="h-9 text-sm bg-background/50 focus:bg-background transition-colors"
             placeholder="Collection name..."
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
           {userGroups.length > 0 && (
             <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
-              <SelectTrigger className="h-10 text-sm transition-all duration-200 hover:bg-accent/50 w-full">
-                <SelectValue placeholder="Personal or Group" />
+              <SelectTrigger className="h-9 text-sm bg-background/50 focus:bg-background transition-colors w-full">
+                <SelectValue placeholder="Assign to Group" />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectLabel className="text-xs font-semibold">
-                    Collection Group
+                  <SelectLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5">
+                    Group
                   </SelectLabel>
-                  <SelectItem value="personal" className="text-sm">
+                  <SelectItem value="personal" className="text-sm cursor-pointer">
                     <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-primary/60" />
+                      <div className="w-2 h-2 rounded-full bg-red-500" />
                       Personal (Private)
                     </div>
                   </SelectItem>
@@ -72,11 +74,11 @@ export const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({
                     <SelectItem
                       key={g.id}
                       value={String(g.id)}
-                      className="text-sm"
+                      className="text-sm cursor-pointer"
                     >
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-primary/40" />
-                        Group: {g.name}
+                        <div className="w-2 h-2 rounded-full bg-green-500" />
+                        {g.name}
                       </div>
                     </SelectItem>
                   ))}
@@ -88,7 +90,7 @@ export const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({
             size="sm"
             onClick={onCreate}
             disabled={!name.trim()}
-            className="w-full h-10 font-medium shadow-sm hover:shadow transition-all duration-200"
+            className="w-full h-9 font-medium shadow-sm transition-all duration-200"
           >
             Create Collection
           </Button>
