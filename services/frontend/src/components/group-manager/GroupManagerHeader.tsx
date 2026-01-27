@@ -9,9 +9,9 @@ export const GroupManagerHeader = () => {
         <Users className="h-6 w-6 text-primary" />
         <div>
           <h1 className="text-lg font-semibold leading-none">
-            Group Management
+            Groups
           </h1>
-          <p className="text-xs text-muted-foreground mt-1 leading-none">
+          <p className="text-s text-muted-foreground mt-1 leading-none">
             Manage teams & discover public groups
           </p>
         </div>
