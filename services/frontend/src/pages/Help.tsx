@@ -112,6 +112,7 @@ export const Help = () => {
                             type="single"
                             collapsible
                             className="w-full bg-background/50 rounded-lg border border-border/50"
+                            defaultValue="file-types"
                           >
                             <AccordionItem
                               value="file-types"
@@ -436,6 +437,8 @@ export const Help = () => {
                     </div>
                   </div>
                 </section>
+                <Separator className="bg-border/60" />
+
 
                 {/* Section 4: Workflow Summary */}
                 <section className="space-y-6 pb-12">
