@@ -12,7 +12,7 @@ interface GraphLegendProps {
 
 export const GraphLegend: React.FC<GraphLegendProps> = ({ legendData }) => {
   return (
-    <Card className="absolute top-4 left-4 z-10 p-3 bg-background/20 backdrop-blur-xl border shadow-lg max-w-[250px] max-h-[40%] overflow-y-auto">
+    <Card className="absolute top-4 left-4 z-11 p-3 bg-background/20 backdrop-blur-xl border shadow-lg max-w-[250px] max-h-[40%] overflow-y-auto">
       <div className="font-semibold mb-2 flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
         <FileText className="h-3 w-3" /> Sources
       </div>
