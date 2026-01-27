@@ -25,10 +25,10 @@ export const QueueStatus: React.FC<QueueStatusProps> = ({
             <Loader2 className="h-3 w-3 animate-spin" />
             System Processing
           </span>
-          <span>Queue: {queueLength}</span>
+          <span className="flex-shrink-0">Queue: {queueLength}</span>
         </div>
 
-        <div className="font-mono text-xs text-slate-300 truncate">
+        <div className="font-mono text-xs text-slate-300 overflow-hidden text-ellipsis whitespace-nowrap">
           {queueLength > 0
             ? `> Uploading: ${currentFileName || "file"}`
             : "> Ingesting data ..."}

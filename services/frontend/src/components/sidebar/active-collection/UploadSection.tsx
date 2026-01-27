@@ -181,7 +181,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
                 Processing Queue...
               </>
             ) : (
-              `Let's go!`
+              `Upload and Process`
             )}
           </Button>
         </div>
