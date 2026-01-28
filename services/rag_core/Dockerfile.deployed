@@ -1,0 +1,63 @@
+# STAGE 1: Builder
+FROM nvidia/cuda:12.1.0-base-ubuntu22.04 AS builder
+
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-dev \
+    python3-pip \
+    python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install GPU Torch
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# --- OFFLINE PRE-LOAD STEP ---
+ENV HF_HOME=/opt/model_cache
+RUN mkdir -p $HF_HOME && \
+    python3 -c "from sentence_transformers import SentenceTransformer; \
+    print('Downloading Embedding Model...'); \
+    SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', cache_folder='$HF_HOME')"
+
+# STAGE 2: Runtime
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+
+WORKDIR /app
+
+# Runtime Environment
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    HF_HOME=/app/model_cache \
+    SENTENCE_TRANSFORMERS_HOME=/app/model_cache
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Copy venv and cached models
+COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /opt/model_cache /app/model_cache
+
+COPY . .
+
+# Fix permissions
+RUN chown -R appuser:appuser /app
+USER appuser
+
+# Optimization for high concurrency
+ENV OMP_NUM_THREADS=4 \
+    MKL_NUM_THREADS=4
+
+# Use Gunicorn for production
+CMD ["gunicorn", "main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "--threads", "2", "--timeout", "120"]

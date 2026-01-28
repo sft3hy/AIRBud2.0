@@ -41,7 +41,7 @@ services:
     # We keep the build context so you can run 'docker compose build'
     build:
       context: ./services/frontend
-      dockerfile: Dockerfile.test
+      dockerfile: Dockerfile.local
       args:
         - VITE_API_URL=http://rag_core:8000
         - VITE_NETWORK=LOW
@@ -64,7 +64,9 @@ services:
 
   # 2. RAG Core
   rag_core:
-    build: ./services/rag_core
+    build:
+      context: ./services/rag_core
+      dockerfile: Dockerfile.local
     image: smart_rag_core:latest
     container_name: smart_rag_core
     restart: always
@@ -98,7 +100,7 @@ services:
   parser:
     build:
       context: ./services/parser
-      dockerfile: Dockerfile.test # Switched from Dockerfile.test to standard
+      dockerfile: Dockerfile.local
     image: smart_rag_parser:latest
     container_name: smart_rag_parser
     restart: always
@@ -114,7 +116,9 @@ services:
 
     # 4. Vision
   vision:
-    build: ./services/vision
+    build:
+      context: ./services/vision
+      dockerfile: Dockerfile.local
     image: smart_rag_vision:latest
     container_name: smart_rag_vision
     restart: always
@@ -179,7 +183,9 @@ services:
 
   # 7. KG Service
   kg_service:
-    build: ./services/kg_service
+    build:
+      context: ./services/kg_service
+      dockerfile: Dockerfile.local
     image: smart_rag_kg:latest
     container_name: smart_rag_kg
     restart: always
@@ -287,7 +293,9 @@ services:
 
   # 12. Backup service
   backups:
-    build: ./services/backup
+    build:
+      context: ./services/backup
+      dockerfile: Dockerfile.local
     image: smart_rag_backups:latest
     container_name: smart_rag_backups
     restart: unless-stopped

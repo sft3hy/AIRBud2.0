@@ -101,20 +101,38 @@ We use a **Parent-Child** retrieval strategy:
 
 ## ⚡️ Quick Start
 
-1.  **Configure `.env`**:
+### 1. Configure `.env`:
 
-    ```ini
-    GROQ_API_KEY=your_key
-    SANCTUARY_API_KEY=your_key
-    TEST=True  # True = Mac/Local (CPU), False = Prod (GPU)
-    ```
+```ini
+GROQ_API_KEY=your_key
+SANCTUARY_API_KEY=your_key
+```
 
-2.  **Start Services**:
+### 2. Choose Your Deployment Mode:
 
-    ```bash
-    docker-compose up -d --build
-    ```
+The system supports two primary modes of operation controlled by separate Docker Compose files.
 
-3.  **Access the App**:
-    - **Frontend:** [http://localhost:5173](http://localhost:5173)
-    - **Neo4j Browser:** [http://localhost:7474](http://localhost:7474) (User: `neo4j`, Pass: `smartrag_password`)
+#### A. Local Development (Mac/CPU + CAC Auth)
+Use this mode for running on a MacBook or local environment. It includes **CAC Certificate Authentication** in Nginx.
+
+```bash
+docker-compose up -d --build
+```
+- **Auth:** Requires a client certificate (CAC).
+- **GPU:** Uses CPU for inference.
+- **Port:** [https://localhost](https://localhost) (Self-signed cert).
+
+#### B. Deployed Mode (Linux + GPU + Non-CAC)
+Use this mode for deployment on a Linux server with an NVIDIA GPU (e.g., Tesla T4). It **disables CAC logic** for easier access and enables CUDA acceleration.
+
+```bash
+docker-compose -f docker-compose.deployed.yml up -d --build
+```
+- **Auth:** Standard HTTPS (CAC verification disabled).
+- **GPU:** Utilizes NVIDIA CUDA for `vision` and `rag_core`.
+- **Port:** [https://localhost](https://localhost).
+
+### 3. Access the App:
+- **Frontend:** [https://localhost](https://localhost)
+- **Neo4j Browser:** [http://localhost:7474](http://localhost:7474) (User: `neo4j`, Pass: `smartrag_password`)
+

@@ -36,8 +36,8 @@ export const VISION_MODELS: {
     },
     {
       value: "Ollama-Ministral-3-3B",
-      label: "Ministral 3.3B (12B)",
-      desc: "Lightweight",
+      label: "Ministral 3B",
+      desc: "Lightweight & Efficient",
     },
   ];
 
