@@ -220,7 +220,8 @@ async def check_http_service(name: str, url: str) -> str:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(url)
             return "online" if resp.status_code == 200 else "degraded"
-    except Exception:
+    except Exception as e:
+        logger.error(f"Health check failed for {name} at {url}: {e}")
         return "offline"
 
 @app.get("/")
