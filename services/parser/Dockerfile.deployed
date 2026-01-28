@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     wget \
+    file \
     ninja-build \
     libgl1 \
     libglib2.0-0 \
@@ -55,7 +56,8 @@ RUN git clone --depth 1 https://github.com/facebookresearch/detectron2.git /tmp/
 
 # 4. Download model weights
 RUN mkdir -p "$MODEL_DIR" && \
-    curl -L -o "$MODEL_DIR/publaynet_faster_rcnn_R_50_FPN_3x.pth" "$MODEL_URL"
+    curl -f -L -o "$MODEL_DIR/publaynet_faster_rcnn_R_50_FPN_3x.pth" "$MODEL_URL" && \
+    (file "$MODEL_DIR/publaynet_faster_rcnn_R_50_FPN_3x.pth" | grep -qv "HTML") || (echo "ERROR: Downloaded weights are HTML, likely a redirect or block page." && exit 1)
 
 # 5. Install remaining Python requirements
 COPY requirements.txt .

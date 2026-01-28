@@ -5,7 +5,7 @@ python-multipart
 requests
 # Image Processing
 opencv-python-headless
-numpy
+numpy<2.0.0
 pillow
 # Document Formats
 pdf2image
