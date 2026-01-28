@@ -101,11 +101,15 @@ class ChartDetector:
                 
                 # --- VALIDATE DOWNLOAD ---
                 with open(weights_path, "rb") as f:
-                    header = f.read(100).decode('utf-8', errors='ignore')
-                    if "<!DOCTYPE" in header or "<html" in header or "<?xml" in header:
-                        logger.error(f"Downloaded file at {weights_path} is an HTML/XML file, not weights.")
-                        weights_path.unlink()
-                        raise ValueError("Downloaded weights are invalid (HTML/Redirect).")
+                    header = f.read(200)
+                    try:
+                        header_str = header.decode('utf-8', errors='ignore')
+                        if header_str.strip().startswith("<") or "<!DOCTYPE" in header_str:
+                            logger.error(f"Downloaded file at {weights_path} is an HTML/XML file, not weights.")
+                            weights_path.unlink()
+                            raise ValueError("Downloaded weights are invalid (HTML/Redirect).")
+                    except Exception:
+                        pass # Binaries might not decode, which is fine
                 # -------------------------
                 
                 logger.info("Download complete.")

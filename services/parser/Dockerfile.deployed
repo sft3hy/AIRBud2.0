@@ -53,11 +53,14 @@ RUN git clone --depth 1 https://github.com/facebookresearch/detectron2.git /tmp/
     rm -rf /tmp/detectron2
 
 # 4. Download model weights
-# Using a more direct HuggingFace resolve URL
+# PubLayNet Faster RCNN weights are ~330MB. 
 RUN mkdir -p "$MODEL_DIR" && \
-    curl -L -o "$MODEL_DIR/publaynet_faster_rcnn_R_50_FPN_3x.pth" "https://huggingface.co/nlpconnect/PubLayNet-faster_rcnn_R_50_FPN_3x/resolve/main/model_final.pth?download=true" && \
-    if grep -q "<!DOCTYPE html>" "$MODEL_DIR/publaynet_faster_rcnn_R_50_FPN_3x.pth"; then \
-    echo "ERROR: Downloaded weights are HTML!" && exit 1; \
+    wget -L -O "$MODEL_DIR/publaynet_faster_rcnn_R_50_FPN_3x.pth" "https://huggingface.co/nlpconnect/PubLayNet-faster_rcnn_R_50_FPN_3x/resolve/main/model_final.pth?download=true" && \
+    FILE_SIZE=$(stat -c%s "$MODEL_DIR/publaynet_faster_rcnn_R_50_FPN_3x.pth") && \
+    if [ "$FILE_SIZE" -lt 100000000 ]; then \
+    echo "ERROR: Downloaded weights file is too small ($FILE_SIZE bytes). It is likely an HTML error page." && \
+    cat "$MODEL_DIR/publaynet_faster_rcnn_R_50_FPN_3x.pth" && \
+    exit 1; \
     fi
 
 # 5. Install remaining Python requirements
