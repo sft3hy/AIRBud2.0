@@ -236,18 +236,26 @@ async def health_check(request: Request):
     except Exception:
         pass
 
-    results = await asyncio.gather(
-        check_http_service("KG", f"{KG_SERVICE_URL}/health"),
+    checks = [
         check_http_service("Parser", f"{settings.PARSER_API_URL}/health"),
         check_http_service("Vision", f"{settings.VISION_API_URL}/health")
-    )
+    ]
+    
+    if not settings.EPHEMERAL_MODE:
+        checks.insert(0, check_http_service("KG", f"{KG_SERVICE_URL}/health"))
+        
+    results = await asyncio.gather(*checks)
+    
+    kg_idx = 0 if not settings.EPHEMERAL_MODE else -1
+    parser_idx = 1 if not settings.EPHEMERAL_MODE else 0
+    vision_idx = 2 if not settings.EPHEMERAL_MODE else 1
 
     services = {
         "Rag Core (API)": "online",
         "PostgreSQL": postgres_status if not settings.EPHEMERAL_MODE else "online (N/A)",
-        "Knowledge Graph": results[0] if not settings.EPHEMERAL_MODE else "online (N/A)",
-        "Parser (Layout)": results[1],
-        "Vision (AI)": results[2],
+        "Knowledge Graph": results[kg_idx] if not settings.EPHEMERAL_MODE else "online (N/A)",
+        "Parser (Layout)": results[parser_idx],
+        "Vision (AI)": results[vision_idx],
     }
     
     system_healthy = all("online" in s for s in services.values())
