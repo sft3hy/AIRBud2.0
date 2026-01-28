@@ -161,19 +161,22 @@ async def run_pipeline_task(collection_id: int, filename: str, vision_model: str
 
         )
         
-        try:
-            update_status("graph", "Extracting Entities...", 90)
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                await client.post(
-                    f"{KG_SERVICE_URL}/ingest",
-                    json={
-                        "text": markdown_text[:100000],
-                        "doc_id": doc_id,
-                        "collection_id": collection_id
-                    }
-                )
-        except Exception as e:
-            logger.error(f"Failed to trigger KG ingest: {e}")
+        if not settings.EPHEMERAL_MODE:
+            try:
+                update_status("graph", "Extracting Entities...", 90)
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    await client.post(
+                        f"{KG_SERVICE_URL}/ingest",
+                        json={
+                            "text": markdown_text[:100000],
+                            "doc_id": doc_id,
+                            "collection_id": collection_id
+                        }
+                    )
+            except Exception as e:
+                logger.error(f"Failed to trigger KG ingest: {e}")
+        else:
+            logger.info("Skipping KG Ingestion (Ephemeral Mode)")
 
         faiss_path, chunks_path = await rag.save_state(doc_id)
         await asyncio.to_thread(db.update_document_paths, doc_id, faiss_path, chunks_path)
@@ -236,13 +239,13 @@ async def health_check(request: Request):
 
     services = {
         "Rag Core (API)": "online",
-        "PostgreSQL": postgres_status,
-        "Knowledge Graph": results[0],
+        "PostgreSQL": postgres_status if not settings.EPHEMERAL_MODE else "online (N/A)",
+        "Knowledge Graph": results[0] if not settings.EPHEMERAL_MODE else "online (N/A)",
         "Parser (Layout)": results[1],
         "Vision (AI)": results[2],
     }
     
-    system_healthy = all(s == "online" for s in services.values())
+    system_healthy = all(s in ["online", "online (N/A)"] for s in services.values())
     
     return {
         "status": "online" if system_healthy else "outage",
@@ -409,22 +412,25 @@ async def query_collection(req: QueryRequest, user: Dict = Depends(auth_handler.
             all_results.sort(key=lambda x: x[1])
             top_results = all_results[:5]
 
-            yield json.dumps({"step": "Consulting Knowledge Graph..."}) + "\n"
             graph_context = ""
             graph_results_raw = []
             
-            try:
-                async with httpx.AsyncClient(timeout=4.0) as client:
-                    kg_resp = await client.post(
-                        f"{KG_SERVICE_URL}/search",
-                        json={"query": search_query, "collection_id": req.collection_id}
-                    )
-                    if kg_resp.status_code == 200:
-                        data = kg_resp.json()
-                        graph_context = data.get("context", "")
-                        graph_results_raw = data.get("raw", [])
-            except Exception as e:
-                logger.error(f"KG Search failed: {e}")
+            if not settings.EPHEMERAL_MODE:
+                yield json.dumps({"step": "Consulting Knowledge Graph..."}) + "\n"
+                try:
+                    async with httpx.AsyncClient(timeout=4.0) as client:
+                        kg_resp = await client.post(
+                            f"{KG_SERVICE_URL}/search",
+                            json={"query": search_query, "collection_id": req.collection_id}
+                        )
+                        if kg_resp.status_code == 200:
+                            data = kg_resp.json()
+                            graph_context = data.get("context", "")
+                            graph_results_raw = data.get("raw", [])
+                except Exception as e:
+                    logger.error(f"KG Search failed: {e}")
+            else:
+                logger.debug("Skipping KG Search (Ephemeral Mode)")
 
             yield json.dumps({"step": "Synthesizing Answer..."}) + "\n"
             

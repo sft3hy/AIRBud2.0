@@ -8,6 +8,7 @@ class Config:
     
     # Environment Logic
     TEST_MODE = os.getenv("TEST", "False").lower() == "true"
+    EPHEMERAL_MODE = os.getenv("EPHEMERAL_MODE", "False").lower() == "true"
     
     # Paths
     BASE_DIR = Path("/app")
