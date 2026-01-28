@@ -277,7 +277,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({ sources, documents }
                           if (blockMatch) {
                             // blockMatch[0] is the whole block "Visual ... : Description"
                             // blockMatch[2] is the description part
-                            visualDescription = blockMatch[2].trim();
+                            visualDescription = blockMatch[2]?.trim() || "";
 
                             // Remove from display content
                             displayContent = displayContent.replace(blockMatch[0], "").trim();
