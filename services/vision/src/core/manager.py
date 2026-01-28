@@ -170,13 +170,21 @@ class ModelManager:
             if name == "Moondream2":
                 return Moondream2Model()
             
+            # Explicit Mappings for Common Models
+            if name == "Ollama-Granite3.2-Vision":
+                 return OllamaVisionModel("granite3.2-vision")
+            
+            if name == "Ollama-Ministral-3-3B":
+                 return OllamaVisionModel("ministral-3:3b")
+
+            if name == "Ollama-Gemma3":
+                 return OllamaVisionModel("gemma3")
+            
+            # Fallback: Generic Ollama handler
             if name.startswith("Ollama-"):
                 clean_name = name.replace("Ollama-", "").lower()
                 return OllamaVisionModel(clean_name)
             
-            if name == "Ollama-Granite3.2-Vision":
-                 return OllamaVisionModel("granite3.2-vision")
-                 
             return None
         except Exception as e:
             logger.error(f"Factory instantiation error for {name}: {e}")
