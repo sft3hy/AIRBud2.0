@@ -217,7 +217,7 @@ def health_check_simple():
 
 async def check_http_service(name: str, url: str) -> str:
     try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(url)
             return "online" if resp.status_code == 200 else "degraded"
     except Exception:
@@ -249,7 +249,7 @@ async def health_check(request: Request):
         "Vision (AI)": results[2],
     }
     
-    system_healthy = all(s in ["online", "online (N/A)"] for s in services.values())
+    system_healthy = all("online" in s for s in services.values())
     
     return {
         "status": "online" if system_healthy else "outage",

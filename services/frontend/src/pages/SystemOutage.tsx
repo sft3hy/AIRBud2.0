@@ -23,7 +23,7 @@ export const SystemOutage: React.FC<SystemOutageProps> = ({
 }) => {
   const serviceList = Object.entries(services).map(([name, status]) => ({
     name,
-    status: status.toLowerCase() as "online" | "offline" | "degraded",
+    status: status.toLowerCase(),
   }));
 
   const downCount = serviceList.filter((s) => !s.status.includes("online")).length;
@@ -102,14 +102,14 @@ export const SystemOutage: React.FC<SystemOutageProps> = ({
 
                       <div className="flex items-center gap-3">
                         <span
-                          className={`text-xs font-bold tracking-wide ${svc.status === "online"
+                          className={`text-xs font-bold tracking-wide ${svc.status.includes("online")
                             ? "text-green-600 dark:text-green-400"
                             : "text-red-600 dark:text-red-400"
                             }`}
                         >
                           {svc.status.toUpperCase()}
                         </span>
-                        {svc.status === "online" ? (
+                        {svc.status.includes("online") ? (
                           <div className="relative flex h-3 w-3">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
