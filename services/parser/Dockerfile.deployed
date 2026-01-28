@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1 \
     # Architectures to compile for (Ampere, Turing, Volta, etc.)
     TORCH_CUDA_ARCH_LIST="Kepler;Kepler+Tesla;Maxwell;Maxwell+Tegra;Pascal;Volta;Turing;Ampere" \
     MODEL_DIR=/root/.torch/detectron2_models \
-    MODEL_URL="https://www.dropbox.com/s/dgy9c10wykk4lq4/model_final.pth?dl=1"
+    MODEL_URL="https://huggingface.co/nlpconnect/PubLayNet-faster_rcnn_R_50_FPN_3x/resolve/main/model_final.pth"
 
 WORKDIR /app
 
