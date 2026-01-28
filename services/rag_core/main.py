@@ -211,6 +211,10 @@ async def run_pipeline_task(collection_id: int, filename: str, vision_model: str
 
 # --- Service Health Check ---
 
+@app.get("/health")
+def health_check_simple():
+    return {"status": "online"}
+
 async def check_http_service(name: str, url: str) -> str:
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
