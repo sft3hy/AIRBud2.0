@@ -34,9 +34,9 @@ class AuthHandler:
         Retrieves the authenticated user based on request headers.
         Uses internal caching to avoid database writes on every request.
         """
-        # 1. TEST MODE
-        if settings.TEST_MODE:
-            logger.debug("TEST_MODE active: Using mock user.")
+        # 1. TEST MODE or EPHEMERAL MODE
+        if settings.TEST_MODE or settings.EPHEMERAL_MODE:
+            logger.debug(f"{'TEST_MODE' if settings.TEST_MODE else 'EPHEMERAL_MODE'} active: Using mock user.")
             return self._upsert_mock_user()
 
         # 2. PROD MODE - Header Validation
