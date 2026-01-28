@@ -23,7 +23,7 @@ from src.core.auth import auth_handler
 
 # --- Configuration & State ---
 
-KG_SERVICE_URL = "http://kg_service:8003"
+KG_SERVICE_URL = os.getenv("KG_SERVICE_URL", "http://kg-service:8003")
 
 # Global Job Status Tracker
 # Global Job Status Tracker - MOVED TO DB
