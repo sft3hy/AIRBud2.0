@@ -98,6 +98,16 @@ class ChartDetector:
                 with open(weights_path, "wb") as f:
                     for chunk in response.iter_content(chunk_size=8192):
                         f.write(chunk)
+                
+                # --- VALIDATE DOWNLOAD ---
+                with open(weights_path, "rb") as f:
+                    header = f.read(100).decode('utf-8', errors='ignore')
+                    if "<!DOCTYPE" in header or "<html" in header or "<?xml" in header:
+                        logger.error(f"Downloaded file at {weights_path} is an HTML/XML file, not weights.")
+                        weights_path.unlink()
+                        raise ValueError("Downloaded weights are invalid (HTML/Redirect).")
+                # -------------------------
+                
                 logger.info("Download complete.")
             except Exception as e:
                 logger.error("Failed to download weights.")

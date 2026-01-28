@@ -15,7 +15,7 @@ class Config:
     # Model Settings
     # PubLayNet ResNet50 (Standard benchmark for document layout)
     MODEL_CONFIG = "COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"
-    MODEL_WEIGHTS_URL = "https://www.dropbox.com/s/dgy9c10wykk4lq4/model_final.pth?dl=1"
+    MODEL_WEIGHTS_URL = "https://huggingface.co/nlpconnect/PubLayNet-faster_rcnn_R_50_FPN_3x/resolve/main/model_final.pth?download=true"
     MODEL_WEIGHTS_FILE = "publaynet_faster_rcnn_R_50_FPN_3x.pth"
 
     CONFIDENCE_THRESHOLD = 0.5
