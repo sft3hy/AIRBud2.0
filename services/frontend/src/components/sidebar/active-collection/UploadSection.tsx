@@ -34,6 +34,11 @@ export const VISION_MODELS: {
       label: "Gemma 3 (4B)",
       desc: "Strong Reasoning",
     },
+    {
+      value: "Ollama-Ministral-3-3B",
+      label: "Ministral 3.3B (12B)",
+      desc: "Lightweight",
+    },
   ];
 
 interface UploadSectionProps {
