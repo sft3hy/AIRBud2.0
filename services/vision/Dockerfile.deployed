@@ -22,11 +22,10 @@ ENV HF_HOME=/app/model_cache/huggingface \
 COPY requirements.txt .
 # Install GPU Torch first for efficiency
 # Using cu124 index as it's the current stable high-Cuda target for Torch 2.4+
-# Trusted-host added to bypass SSL issues on Ubuntu 24.04 in restricted environments
+# Trusted-host added to bypass SSL issues in restricted environments
 RUN python3 -m pip install --no-cache-dir torch torchvision \
     --index-url https://download.pytorch.org/whl/cu124 \
-    --trusted-host download.pytorch.org \
-    --break-system-packages
+    --trusted-host download.pytorch.org
 
 RUN python3 -m pip install --no-cache-dir -r requirements.txt \
     --trusted-host pypi.org \
