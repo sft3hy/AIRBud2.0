@@ -37,29 +37,28 @@ const ExtLink = ({
 
 export const Team = () => {
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden bg-transparent font-sans selection:bg-primary/20">
-      {/* Main Content Area */}
-      <ScrollArea className="flex-1 w-full bg-transparent">
-        <div className="flex-1 relative scroll-smooth bg-transparent px-4 py-8">
-          {/* Local Background Removed - Using Global App Background */}
-          {/* Sticky Header */}
-          <div className="sticky top-0 left-0 right-0 z-40 px-6 md:px-12 py-4 bg-background/10 backdrop-blur-sm border-b border-border/40 flex items-center justify-between mb-8 transition-all">
-            <Link to="/">
-              <Button
-                variant="ghost"
-                className="gap-2 pl-0 hover:bg-transparent hover:text-primary transition-colors group"
-              >
-                <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
-                <span className="font-semibold">Back to Dashboard</span>
-              </Button>
-            </Link>
-            <div className="hidden md:flex items-center gap-2 opacity-50">
-              <Terminal className="h-4 w-4" />
-              <span className="text-xs uppercase tracking-widest">Dev Team</span>
-            </div>
+    <div className="h-full w-full overflow-hidden font-sans selection:bg-primary/20">
+      <ScrollArea className="h-full w-full bg-transparent" scrollbarClassName="mt-17">
+        {/* Sticky Header - Inside ScrollArea to allow content to scroll behind it */}
+        <div className="sticky top-0 z-50 px-6 md:px-12 py-4 bg-background/60 backdrop-blur-sm border-b border-border/40 flex items-center justify-between transition-all">
+          <Link to="/">
+            <Button
+              variant="ghost"
+              className="gap-2 pl-0 hover:bg-transparent hover:text-primary transition-colors group"
+            >
+              <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
+              <span className="font-semibold">Back to Dashboard</span>
+            </Button>
+          </Link>
+          <div className="hidden md:flex items-center gap-2 opacity-50">
+            <Terminal className="h-4 w-4" />
+            <span className="text-xs uppercase tracking-widest">Dev Team</span>
           </div>
+        </div>
+
+        <div className="mx-auto space-y-8 max-w-4xl px-4 py-8 scroll-smooth">
           <div className="relative z-10 min-h-full p-6 md:p-12 animate-in fade-in duration-700 slide-in-from-bottom-4">
-            <div className="mx-auto space-y-8 max-w-4xl">
+            <div className="mx-auto space-y-12">
               <div className="max-w-5xl items-center">
                 {/* Title Section */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-border/40">

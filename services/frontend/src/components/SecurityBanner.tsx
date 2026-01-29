@@ -11,6 +11,7 @@ export const SecurityBanner = () => {
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === "Escape") setIsOpen(false);
+            if (e.key === "Enter") setIsOpen(false);
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
@@ -126,7 +127,7 @@ export const SecurityBanner = () => {
                                         onClick={handleAccept}
                                         className="h-12 px-12 font-black uppercase tracking-tighter text-base shadow-[0_0_20px_hsl(var(--primary)/0.3)] transition-all hover:scale-105 active:scale-95 bg-primary hover:bg-primary/90"
                                     >
-                                        Accept & Continue
+                                        Accept
                                     </Button>
                                 </div>
                             </CardFooter>
