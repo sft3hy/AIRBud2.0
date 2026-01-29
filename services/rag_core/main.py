@@ -134,6 +134,7 @@ async def run_pipeline_task(collection_id: int, filename: str, vision_model: str
         unique_folder = f"{uuid.uuid4()}_{filename}"
         output_dir = settings.CHARTS_DIR / unique_folder
         
+        logger.info(f"Pipeline starting for: {filename} (Path: {file_path})")
         os.makedirs(output_dir, exist_ok=True)
 
         rag = SmartRAG(output_dir=output_dir, vision_model_name=vision_model)
@@ -371,7 +372,7 @@ def process_document(req: ProcessRequest, background_tasks: BackgroundTasks, use
         {"logs": []}
     )
     
-    background_tasks.add_task(run_pipeline_task, req.collection_id, req.filename, req.vision_model)
+    background_tasks.add_task(run_pipeline_task, req.collection_id, filename, req.vision_model)
     return {"status": "queued"}
 
 @app.get("/collections/{cid}/status")

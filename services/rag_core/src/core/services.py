@@ -70,7 +70,7 @@ class ExternalServices:
                     if not line: continue
                     
                     try:
-                        data = resp.json() if not isinstance(line, bytes) else json.loads(line)
+                        data = json.loads(line) if isinstance(line, bytes) else json.loads(str(line))
                         
                         if data.get("status") == "processing":
                             if progress_callback:
