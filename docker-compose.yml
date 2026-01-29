@@ -83,6 +83,7 @@ services:
       - POSTGRES_PASSWORD=rag_password
       - POSTGRES_DB=rag_db
       - HF_HOME=/data/huggingface
+      - KG_SERVICE_URL=http://kg_service:8003
     volumes:
       - shared_data:/data
     depends_on:
