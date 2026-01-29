@@ -3,8 +3,6 @@ import { useLocation, useParams } from "react-router-dom";
 import { MainContent } from "../MainContent";
 import { Sidebar } from "./SideBar";
 import { GroupManager } from "./GroupManager";
-
-import { ClassificationBanner } from "./ClassificationBanner";
 import { useQueue } from "../context/QueueContext";
 import { useQuery } from "@tanstack/react-query";
 import { getCollectionStatus } from "../lib/api";
@@ -96,12 +94,7 @@ export const Dashboard = () => {
   const currentWidth = isCollapsed ? 60 : sidebarWidth;
 
   return (
-    <div className="flex flex-col h-screen w-full overflow-hidden bg-transparent text-foreground relative">
-      {/* 1. TOP BANNER */}
-      <div className="flex-none z-50 relative shadow-md">
-        <ClassificationBanner />
-      </div>
-
+    <div className="flex flex-col h-full w-full overflow-hidden bg-transparent text-foreground relative">
       {/* 2. MAIN CONTENT AREA */}
       <div className="flex-1 min-h-0 relative z-0 w-full h-full flex">
         {/* 
@@ -146,11 +139,6 @@ export const Dashboard = () => {
             <MainContent sessionId={sessionId} activeJobId={activeJobId} />
           )}
         </div>
-      </div>
-
-      {/* 3. BOTTOM BANNER */}
-      <div className="flex-none z-50 relative shadow-[0_-4px_10px_rgba(0,0,0,0.1)]">
-        <ClassificationBanner />
       </div>
     </div>
   );

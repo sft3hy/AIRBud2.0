@@ -22,8 +22,6 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import doggieSrc from "../assets/doggie.svg";
-import { ClassificationBanner } from "../components/ClassificationBanner";
-
 // Sleek external link component
 const ExtLink = ({
   href,
@@ -44,16 +42,10 @@ const ExtLink = ({
 
 export const SystemOverview = () => {
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-transparent font-sans selection:bg-primary/20">
-      {/* Top Banner */}
-      <div className="flex-shrink-0 z-50">
-        <ClassificationBanner />
-      </div>
-
-      {/* Main Content Area */}
+    <div className="flex flex-col h-full w-full overflow-hidden bg-transparent font-sans selection:bg-primary/20">
       {/* Main Content Area */}
       <ScrollArea className="flex-1 w-full bg-transparent">
-        <div className="flex-1 relative scroll-smooth bg-transparent">
+        <div className="flex-1 relative scroll-smooth bg-transparent px-4 py-8">
           {/* Local Background Removed - Using Global App Background */}
           {/* Sticky Header */}
           <div className="sticky top-0 left-0 right-0 z-40 px-6 md:px-12 py-4 bg-background/10 backdrop-blur-sm border-b border-border/40 flex items-center justify-between mb-8 transition-all">
@@ -417,11 +409,6 @@ export const SystemOverview = () => {
           </div>
         </div>
       </ScrollArea>
-
-      {/* Bottom Banner */}
-      <div className="flex-shrink-0 z-50">
-        <ClassificationBanner />
-      </div>
     </div>
   );
 };

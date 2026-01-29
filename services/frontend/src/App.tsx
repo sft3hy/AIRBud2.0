@@ -15,6 +15,8 @@ import { fetchSystemStatus } from "./lib/api";
 import { Loader2 } from "lucide-react";
 import { Toaster } from "@/components/ui/toaster";
 import { QueueProvider } from "./context/QueueContext";
+import { SecurityBanner } from "./components/SecurityBanner";
+import { ClassificationBanner } from "./components/ClassificationBanner";
 
 const queryClient = new QueryClient();
 
@@ -137,25 +139,34 @@ const AppContent = () => {
     </BrowserRouter>
   );
 };
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <QueueProvider>
-        {/* --- LIQUID BACKGROUND START --- */}
-        {/* --- LIQUID BACKGROUND START --- */}
-        <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-background">
-          {/* Simple Gradient instead of heavy blobs */}
-          <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/5 to-background" />
 
-          {/* Grid Overlay */}
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--foreground)_/_0.04)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--foreground)_/_0.04)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:linear-gradient(to_bottom,transparent,black)]" />
-        </div>
-        {/* --- LIQUID BACKGROUND END --- */}
-        {/* --- LIQUID BACKGROUND END --- */}
+        {/* Main Application Container */}
+        <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
+          {/* --- TOP BANNER --- */}
+          <div className="relative z-[10001] shrink-0">
+            <ClassificationBanner position="top" />
+          </div>
+          {/* --- LIQUID BACKGROUND --- */}
+          <div className="absolute inset-0 z-0 pointer-events-none">
+            <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/5 to-background" />
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--foreground)_/_0.04)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--foreground)_/_0.04)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:linear-gradient(to_bottom,transparent,black)]" />
+          </div>
 
-        {/* Content Wrapper */}
-        <div className="relative z-10 w-full h-full text-foreground/90">
-          <AppContent />
+          {/* Content Wrapper */}
+          <div className="relative z-10 flex-1 h-full w-full text-foreground/90 overflow-hidden">
+            <SecurityBanner />
+            <AppContent />
+          </div>
+
+          {/* --- BOTTOM BANNER --- */}
+          <div className="relative z-[10001] shrink-0">
+            <ClassificationBanner position="bottom" />
+          </div>
         </div>
 
         <Toaster />

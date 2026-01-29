@@ -18,8 +18,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import doggieSrc from "../assets/doggie.svg";
-import { ClassificationBanner } from "../components/ClassificationBanner"; // <--- Import
-
 export const LoginPage = () => {
   const [status, setStatus] = useState<
     "idle" | "reading" | "success" | "error"
@@ -41,9 +39,7 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-transparent relative">
-      {/* Top Banner */}
-      <ClassificationBanner />
+    <div className="flex flex-col h-full w-full overflow-hidden bg-transparent relative">
       <div className="flex-1 min-h-0 relative overflow-y-auto flex flex-col">
         <div className="min-h-screen flex items-center justify-center bg-transparent p-6 relative overflow-hidden">
           {/* Local background effects removed to use Global App Background */}
@@ -180,7 +176,6 @@ export const LoginPage = () => {
             </div>
           </div>
         </div>
-        <ClassificationBanner />
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ import { UserStatus } from "../UserStatus";
 import doggieSrc from "../../assets/doggie.svg";
 
 export const WelcomeScreen = () => (
-  <div className="flex h-full w-full flex-col bg-transparent">
+  <div className="flex h-full w-full flex-col bg-transparent overflow-y-auto">
     <div className="z-10 flex items-center justify-between border-b bg-background/80 backdrop-blur-md px-6 py-4 shadow-sm">
       <div className="flex items-center gap-3">
         <FolderOpen className="h-6 w-6 text-primary" />

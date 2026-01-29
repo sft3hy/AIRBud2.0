@@ -28,16 +28,9 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Separator } from "@/components/ui/separator";
-import { ClassificationBanner } from "../components/ClassificationBanner";
-
 export const Help = () => {
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-transparent font-sans selection:bg-primary/20">
-      {/* Top Banner */}
-      <div className="flex-shrink-0 z-50">
-        <ClassificationBanner />
-      </div>
-
+    <div className="flex flex-col h-full w-full overflow-hidden bg-transparent font-sans selection:bg-primary/20">
       <ScrollArea className="flex-1 w-full bg-transparent">
         <div className="flex-1 relative scroll-smooth bg-transparent">
           {/* Local Background Removed - Using Global App Background */}
@@ -488,10 +481,6 @@ export const Help = () => {
           </div>
         </div>
       </ScrollArea>
-
-      <div className="flex-shrink-0 z-50">
-        <ClassificationBanner />
-      </div>
     </div>
   );
 };

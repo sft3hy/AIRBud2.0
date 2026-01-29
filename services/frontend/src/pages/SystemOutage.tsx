@@ -10,8 +10,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ClassificationBanner } from "../components/ClassificationBanner"; // <--- Import
-
 interface SystemOutageProps {
   services: Record<string, string>;
   onRetry: () => void;
@@ -23,7 +21,7 @@ export const SystemOutage: React.FC<SystemOutageProps> = ({
 }) => {
   const serviceList = Object.entries(services).map(([name, status]) => ({
     name,
-    status: status.toLowerCase(),
+    status: (status as string).toLowerCase(),
   }));
 
   const downCount = serviceList.filter((s) => !s.status.includes("online")).length;
@@ -31,12 +29,7 @@ export const SystemOutage: React.FC<SystemOutageProps> = ({
 
   return (
     /* Outer Container: Transparent to show Global Background */
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-transparent relative">
-      {/* Top Banner - Frozen at Top */}
-      <div className="z-20">
-        <ClassificationBanner />
-      </div>
-
+    <div className="flex flex-col h-full w-full overflow-hidden bg-transparent relative">
       {/* Middle Section - Scrollable Area */}
       {/* flex-1: Fills remaining space */}
       {/* overflow-y-auto: Allows scrolling ONLY within this area */}
@@ -142,11 +135,6 @@ export const SystemOutage: React.FC<SystemOutageProps> = ({
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Bottom Banner - Frozen at Bottom */}
-      <div className="z-20">
-        <ClassificationBanner />
       </div>
     </div>
   );
