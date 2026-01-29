@@ -212,7 +212,7 @@ class DatabaseManager:
         token = str(uuid.uuid4())
         with self.get_cursor(commit=True) as cur:
             cur.execute(self._q("INSERT INTO groups (name, description, owner_id, is_public, invite_token) VALUES (%s, %s, %s, %s, %s)"), 
-                       (name, description, owner_id, 1 if is_public else 0, token))
+                       (name, description, owner_id, is_public, token))
             gid = cur.lastrowid if settings.EPHEMERAL_MODE else None
             if not gid:
                 cur.execute("SELECT id FROM groups WHERE invite_token = %s", (token,))
@@ -241,7 +241,7 @@ class DatabaseManager:
                 EXISTS (SELECT 1 FROM group_members gm3 WHERE gm3.group_id = g.id AND gm3.user_id = %s) as is_member
                 FROM groups g
                 JOIN users u ON g.owner_id = u.id
-                WHERE g.is_public = 1
+                WHERE g.is_public = TRUE
                 ORDER BY g.created_at DESC
             """), (user_id,))
             return [dict(r) for r in cur.fetchall()]

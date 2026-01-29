@@ -27,9 +27,9 @@ RUN python3 -c "import whisper; \
     print('Downloading Whisper Medium...'); \
     whisper.load_model('medium'); \
     print('Downloading Moondream2...');"
-    
+
 
 COPY . .
 
 EXPOSE 8002
-CMD ["gunicorn", "main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8002", "--threads", "2", "--timeout", "120"]
+CMD ["gunicorn", "--reload", "main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8002", "--threads", "2", "--timeout", "120"]
