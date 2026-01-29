@@ -1,9 +1,6 @@
-FROM nvidia/cuda:13.1.1-cudnn-runtime-ubuntu24.04
+FROM nvidia/cuda:13.1.1-cudnn-runtime-ubuntu22.04
 
 # System dependencies for OpenCV and Audio
-# Fix for OpenSSL 3.0 / Ubuntu 24.04 SSL errors:
-# 1. Install CA certs
-# 2. Force SECLEVEL=0 in openssl.cnf (most permissive) to allow legacy handshakes
 RUN apt-get update && apt-get install -y \
     git \
     python3 \
@@ -11,14 +8,11 @@ RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
     ffmpeg \
-    ca-certificates \
-    && update-ca-certificates \
-    && sed -i 's/CipherString = DEFAULT@SECLEVEL=2/CipherString = DEFAULT@SECLEVEL=0/' /etc/ssl/openssl.cnf \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Environment variables for Offline Model Caching & Pip Trust
+# Environment variables for Offline Model Caching
 ENV HF_HOME=/app/model_cache/huggingface \
     XDG_CACHE_HOME=/app/model_cache \
     PATH="/usr/local/bin:$PATH" \
