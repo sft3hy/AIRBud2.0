@@ -332,15 +332,27 @@ def upload_file(file: UploadFile = File(...), user: Dict = Depends(auth_handler.
 
 @app.post("/process")
 def process_document(req: ProcessRequest, background_tasks: BackgroundTasks, user: Dict = Depends(auth_handler.require_user)):
-    file_path = settings.UPLOAD_DIR / req.filename
+    filename = req.filename
+    logger.info(f"Process request received for collection {req.collection_id}, file: {filename}")
+    
+    file_path = settings.UPLOAD_DIR / filename
+    
+    # Check absolute existence and try unquoting if first attempt fails
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
+        import urllib.parse
+        decoded_filename = urllib.parse.unquote(filename)
+        if decoded_filename != filename:
+            logger.info(f"File not found as '{filename}', trying decoded: '{decoded_filename}'")
+            filename = decoded_filename
+            file_path = settings.UPLOAD_DIR / filename
+
+    if not os.path.exists(file_path):
+        logger.error(f"Process failed: File not found at {file_path}. Content of {settings.UPLOAD_DIR}: {os.listdir(settings.UPLOAD_DIR) if os.path.exists(settings.UPLOAD_DIR) else 'DIR_MISSING'}")
+        raise HTTPException(status_code=404, detail=f"File not found: {filename}")
 
     cid_str = str(req.collection_id)
     
     # Check if job already running
-    # If status is "completed" or "error", we ALLOW overwrite
-    # Query DB instead of memory
     current_job = db.get_job_status(req.collection_id)
     
     if current_job:
