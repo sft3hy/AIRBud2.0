@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+FROM nvidia/cuda:13.1.1-cudnn-runtime-ubuntu24.04
 
 # System dependencies for OpenCV and Audio
 RUN apt-get update && apt-get install -y \
@@ -19,8 +19,9 @@ ENV HF_HOME=/app/model_cache/huggingface \
 
 COPY requirements.txt .
 # Install GPU Torch first for efficiency
-RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu121
-RUN pip install --no-cache-dir -r requirements.txt
+# Using cu124 index as it's the current stable high-Cuda target for Torch 2.4+
+RUN python3 -m pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu124 --break-system-packages
+RUN python3 -m pip install --no-cache-dir -r requirements.txt --break-system-packages
 
 # --- OFFLINE PRE-LOAD STEP ---
 RUN python3 -c "import whisper; \
