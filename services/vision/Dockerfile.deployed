@@ -29,8 +29,7 @@ RUN python3 -m pip install --no-cache-dir torch torchvision \
 
 RUN python3 -m pip install --no-cache-dir -r requirements.txt \
     --trusted-host pypi.org \
-    --trusted-host files.pythonhosted.org \
-    --break-system-packages
+    --trusted-host files.pythonhosted.org
 
 # --- OFFLINE PRE-LOAD STEP ---
 RUN python3 -c "import whisper; \
