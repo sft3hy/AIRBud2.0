@@ -1,6 +1,7 @@
 FROM nvidia/cuda:13.1.1-cudnn-runtime-ubuntu24.04
 
 # System dependencies for OpenCV and Audio
+# Fix for OpenSSL 3.0 / Ubuntu 24.04 SSL errors
 RUN apt-get update && apt-get install -y \
     git \
     python3 \
@@ -8,6 +9,9 @@ RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
     ffmpeg \
+    ca-certificates \
+    && update-ca-certificates \
+    && sed -i 's/CipherString = DEFAULT@SECLEVEL=2/CipherString = DEFAULT@SECLEVEL=1/' /etc/ssl/openssl.cnf \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -25,7 +29,11 @@ RUN python3 -m pip install --no-cache-dir torch torchvision \
     --index-url https://download.pytorch.org/whl/cu124 \
     --trusted-host download.pytorch.org \
     --break-system-packages
-RUN python3 -m pip install --no-cache-dir -r requirements.txt --break-system-packages
+
+RUN python3 -m pip install --no-cache-dir -r requirements.txt \
+    --trusted-host pypi.org \
+    --trusted-host files.pythonhosted.org \
+    --break-system-packages
 
 # --- OFFLINE PRE-LOAD STEP ---
 RUN python3 -c "import whisper; \
