@@ -98,26 +98,26 @@ class ChartDetector:
                 with open(weights_path, "wb") as f:
                     for chunk in response.iter_content(chunk_size=8192):
                         f.write(chunk)
-                
-                # --- VALIDATE DOWNLOAD ---
-                with open(weights_path, "rb") as f:
-                    header = f.read(200)
-                    try:
-                        header_str = header.decode('utf-8', errors='ignore')
-                        if header_str.strip().startswith("<") or "<!DOCTYPE" in header_str:
-                            logger.error(f"Downloaded file at {weights_path} is an HTML/XML file, not weights.")
-                            weights_path.unlink()
-                            raise ValueError("Downloaded weights are invalid (HTML/Redirect).")
-                    except Exception:
-                        pass # Binaries might not decode, which is fine
-                # -------------------------
-                
                 logger.info("Download complete.")
             except Exception as e:
                 logger.error("Failed to download weights.")
                 if weights_path.exists():
                     weights_path.unlink()
                 raise e
+
+        # --- VALIDATE WEIGHTS (Always check) ---
+        if weights_path.exists():
+            with open(weights_path, "rb") as f:
+                header = f.read(200)
+                try:
+                    header_str = header.decode('utf-8', errors='ignore')
+                    if header_str.strip().startswith("<") or "<!DOCTYPE" in header_str:
+                        logger.error(f"File at {weights_path} is an HTML/XML file, not weights. Deleting and retrying...")
+                        weights_path.unlink()
+                        return self._ensure_weights() # One-shot retry
+                except Exception:
+                    pass # Binaries usually fail to decode, which is exactly what we want
+        # -------------------------
 
     def detect(self, page_image: Image.Image) -> List[Tuple[int, int, int, int]]:
         """
