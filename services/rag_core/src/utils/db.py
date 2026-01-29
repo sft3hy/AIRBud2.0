@@ -105,7 +105,14 @@ class DatabaseManager:
     def _q(self, query: str) -> str:
         """Helper to swap %s for ? and other dialect differences if in SQLite mode."""
         if settings.EPHEMERAL_MODE:
-            return query.replace("%s", "?").replace("JSONB", "TEXT").replace("NOW()", "CURRENT_TIMESTAMP").replace("SERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT").replace("TIMESTAMP", "DATETIME")
+            out = query.replace("%s", "?")
+            out = out.replace("JSONB", "TEXT")
+            out = out.replace("SERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+            out = out.replace("NOW()", "CURRENT_TIMESTAMP")
+            # Protect CURRENT_TIMESTAMP from being mangled into CURRENT_DATETIME
+            out = out.replace("CURRENT_TIMESTAMP", "[[CUR_TS]]")
+            out = out.replace("TIMESTAMP", "DATETIME")
+            return out.replace("[[CUR_TS]]", "CURRENT_TIMESTAMP")
         return query
 
     def _init_sqlite_tables(self):
