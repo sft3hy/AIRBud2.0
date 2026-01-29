@@ -58,7 +58,7 @@ export const SystemOverview = () => {
           <div className="hidden md:flex items-center gap-2 opacity-50">
             <Activity className="h-4 w-4" />
             <span className="text-xs uppercase tracking-widest">
-              System Health: Nominal
+              System Health: Up
             </span>
           </div>
         </div>
