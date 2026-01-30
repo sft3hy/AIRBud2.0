@@ -348,8 +348,17 @@ def process_document(req: ProcessRequest, background_tasks: BackgroundTasks, use
             file_path = settings.UPLOAD_DIR / filename
 
     if not os.path.exists(file_path):
-        logger.error(f"Process failed: File not found at {file_path}. Content of {settings.UPLOAD_DIR}: {os.listdir(settings.UPLOAD_DIR) if os.path.exists(settings.UPLOAD_DIR) else 'DIR_MISSING'}")
-        raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+        # Specific handling for "Split Brain" state (DB has record, Disk does not)
+        error_msg = (
+            f"File '{filename}' exists in the database but was not found on disk. "
+            "This often happens after a system redeployment where the database persisted but the file storage was reset. "
+            "Please DELETE this document/collection and RE-UPLOAD the file."
+        )
+        logger.error(f"Process failed: {error_msg}. Disk content: {os.listdir(settings.UPLOAD_DIR) if os.path.exists(settings.UPLOAD_DIR) else 'DIR_MISSING'}")
+        raise HTTPException(
+            status_code=404, 
+            detail=error_msg
+        )
 
     cid_str = str(req.collection_id)
     
