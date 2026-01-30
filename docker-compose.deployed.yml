@@ -38,7 +38,7 @@ services:
       args:
         - VITE_API_URL=https://localhost/api
         - VITE_NETWORK=LOW
-    image: smart_rag_frontend:deployed
+    image: smart_rag_frontend:latest
     container_name: smart_rag_frontend
     restart: always
     ports:
@@ -59,7 +59,7 @@ services:
     build:
       context: ./services/rag_core
       dockerfile: Dockerfile.deployed
-    image: smart_rag_core:deployed
+    image: smart_rag_core:latest
     container_name: smart_rag_core
     restart: always
     deploy:
@@ -99,7 +99,7 @@ services:
     build:
       context: ./services/parser
       dockerfile: Dockerfile.deployed
-    image: smart_rag_parser:deployed
+    image: smart_rag_parser:latest
     container_name: smart_rag_parser
     restart: always
     ports:
@@ -116,7 +116,7 @@ services:
     build:
       context: ./services/vision
       dockerfile: Dockerfile.deployed
-    image: smart_rag_vision:deployed
+    image: smart_rag_vision:latest
     container_name: smart_rag_vision
     restart: always
     deploy:
@@ -165,7 +165,7 @@ services:
     build:
       context: ./services/kg_service
       dockerfile: Dockerfile.deployed
-    image: smart_rag_kg:deployed
+    image: smart_rag_kg:latest
     container_name: smart_rag_kg
     restart: always
     ports:
@@ -212,7 +212,7 @@ services:
     build:
       context: ./services/backup
       dockerfile: Dockerfile.deployed
-    image: smart_rag_backups:deployed
+    image: smart_rag_backups:latest
     container_name: smart_rag_backups
     restart: unless-stopped
     environment:
