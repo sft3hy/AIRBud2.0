@@ -112,11 +112,19 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                         setQueue(q => q.map(i => i.id === head.id ? { ...i, status: 'processing' } : i));
                         setActiveJobId(head.sessionId);
                     }
-                } catch (e) {
+                } catch (e: any) {
                     console.error("Start job failed", e);
-                    // If status 400 (already running), we might want to just set status='processing' and wait?
-                    // For now, retry in next loop or mark error?
-                    // Let's assume transient error and wait, or remove if fatal.
+                    // Critical Fix: If 404 (File not found), abort retry loop
+                    if (e.response && e.response.status === 404) {
+                        toast({
+                            variant: "destructive",
+                            title: "File Missing",
+                            description: "The file was not found on the server. Please re-upload."
+                        });
+                        // Remove from queue to stop loop
+                        setQueue(q => q.filter(i => i.id !== head.id));
+                        setActiveJobId(null);
+                    }
                 }
                 return;
             }
