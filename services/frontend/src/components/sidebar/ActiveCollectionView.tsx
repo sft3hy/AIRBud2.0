@@ -136,7 +136,7 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
     queryClient.invalidateQueries({ queryKey: ["collections"] });
   };
 
-  const isQueueActive = isProcessing || !!activeJobId;
+  const isQueueActive = (isProcessing || !!activeJobId) && activeJobId === currentSessionId;
 
   return (
     <div className="flex flex-col h-full bg-transparent overflow-hidden relative">
@@ -251,6 +251,8 @@ export const ActiveCollectionView: React.FC<ActiveCollectionViewProps> = ({
       <DocumentPreviewModal
         content={previewContent || null}
         onClose={closePreview}
+        collectionId={currentSessionId}
+        document={currentDocs.find((d) => d.id.toString() === previewDocId)}
       />
     </div>
   );
