@@ -217,6 +217,7 @@ class ChartService:
                         "url": url,
                         "filename": filename,
                         "doc_name": doc.get("original_filename", "Unknown"),
+                        "doc_id": doc.get("id"),
                         "page": page_num,
                         "description": desc,
                         "vision_model_used": vision_model

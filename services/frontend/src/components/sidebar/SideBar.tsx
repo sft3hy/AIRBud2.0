@@ -82,7 +82,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (completionHandledRef.current === activeJobId) return;
       completionHandledRef.current = activeJobId;
 
-      console.log(`Job ${activeJobId} finished. Refreshing all views...`);
+      // console.log(`Job ${activeJobId} finished. Refreshing all views...`);
 
       // --- 1. Force Refresh All Views ---
       // This ensures Documents, Charts, and Graph tabs all get new data immediately

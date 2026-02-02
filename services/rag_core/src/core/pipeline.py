@@ -158,8 +158,10 @@ class SmartRAG:
                 self.chart_descriptions[fname] = desc
                 
                 # Visual context injection
+                # We want to KEEP the placeholder for the frontend to render the image,
+                # but ADD the analysis text for the RAG/LLM to understand.
                 placeholder = f"[CHART_PLACEHOLDER:{fname}]"
-                replacement = f"\n> **Visual Scene Analysis ({fname}):**\n> {desc}\n"
+                replacement = f"\n> **Visual Scene Analysis ({fname}):**\n> {desc}\n\n{placeholder}"
                 markdown_text = markdown_text.replace(placeholder, replacement)
 
         # 3. Audio Transcription

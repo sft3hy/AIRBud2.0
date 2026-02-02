@@ -37,7 +37,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
   hasStagedFiles = false,
 }) => {
   return (
-    <div className="cursor-pointer px-4 py-4 space-y-2 mb-6">
+    <div className="cursor-mouse px-4 py-4 space-y-2 mb-6">
       {documents.length === 0 ? (
         hasStagedFiles ? null : (
           <div className="flex flex-col items-center justify-center py-12 border-none text-muted-foreground/50 border-2 bg-muted/5">

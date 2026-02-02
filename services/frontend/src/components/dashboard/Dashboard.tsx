@@ -31,7 +31,7 @@ export const Dashboard = () => {
 
   useEffect(() => {
     if (initialStatus && initialStatus.status === 'processing') {
-      console.log("Restoring active job state for", sessionId);
+      // console.log("Restoring active job state for", sessionId);
       setActiveJobId(sessionId);
     }
   }, [initialStatus, sessionId, setActiveJobId]);
