@@ -8,7 +8,7 @@ interface QueueDisplayProps {
 }
 
 export const QueueDisplay: React.FC<QueueDisplayProps> = ({ collectionId }) => {
-    const { queue } = useQueue();
+    const { queue, removeFromQueue } = useQueue();
 
     // Filter if ID is provided
     const visibleItems = collectionId
@@ -17,12 +17,27 @@ export const QueueDisplay: React.FC<QueueDisplayProps> = ({ collectionId }) => {
 
     if (visibleItems.length === 0) return null;
 
+    const handleClear = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        // Clear all visible items
+        visibleItems.forEach(item => removeFromQueue(item.id));
+    };
+
     return (
-        <div className="mt-4 w-full bg-black/10 rounded-lg p-3 border border-white/5 backdrop-blur-md">
+        <div className="mt-4 w-full bg-black/10 rounded-lg p-3 border border-white/5 backdrop-blur-md relative">
             <div className="flex items-center gap-2 mb-2 text-xs font-medium text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 <span>In Queue ({visibleItems.length})</span>
             </div>
+
+            <button
+                onClick={handleClear}
+                className="absolute top-3 right-3 text-[10px] text-red-400 hover:text-red-300 transition-colors uppercase font-semibold tracking-wider"
+                title="Clear stuck jobs"
+            >
+                Clear
+            </button>
+
             <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
                 {visibleItems.map((item, i) => (
                     <div key={item.id} className="flex items-center gap-2 text-[10px] bg-black/20 p-1.5 rounded border border-white/5">
