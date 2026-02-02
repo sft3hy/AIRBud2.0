@@ -6,15 +6,15 @@ import {
   getCollectionStatus,
   fetchCollectionDocuments,
   getMyGroups,
-} from "../lib/api";
-import { SidebarMode } from "../types";
+} from "../../lib/api";
+import { SidebarMode } from "../../types";
 import { cn } from "@/lib/utils";
 
 // Sub-Components
-import { SidebarHeader } from "./sidebar/SidebarHeader";
-import { CollectionsView } from "./sidebar/CollectionsView";
-import { GroupsView } from "./sidebar/GroupsView";
-import { ActiveCollectionView } from "./sidebar/ActiveCollectionView";
+import { SidebarHeader } from "./SidebarHeader";
+import { CollectionsView } from "./CollectionsView";
+import { GroupsView } from "./GroupsView";
+import { ActiveCollectionView } from "./ActiveCollectionView";
 
 interface SidebarProps {
   mode: SidebarMode;

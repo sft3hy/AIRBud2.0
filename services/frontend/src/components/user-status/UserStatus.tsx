@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { UserCircle } from "lucide-react";
-import { fetchSystemStatus } from "../lib/api";
+import { fetchSystemStatus } from "../../lib/api";
 import {
   Tooltip,
   TooltipContent,

@@ -2,7 +2,7 @@ import React, { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import { Copy, Check } from "lucide-react";
 import { ChatMessage } from "../../types";
-import { SourceViewer } from "../SourceViewer";
+import { SourceViewer } from "../source-viewer/SourceViewer";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 

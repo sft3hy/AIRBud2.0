@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { UserStatus } from "../UserStatus";
+import { UserStatus } from "../user-status/UserStatus";
 import doggieSrc from "../../assets/doggie.svg";
 
 export const WelcomeScreen = () => (

@@ -180,7 +180,7 @@ export const SystemOverview = () => {
                       </p>
                       <p className="text-sm border-t border-border/50 pt-2">
                         These regions are cropped and processed by Multimodal
-                        LLMs (e.g., <strong>Moondream2</strong>), converting
+                        LLMs (e.g., <strong>Granite-3.2</strong>), converting
                         visual data into semantic text descriptions for the
                         search engine.
                       </p>

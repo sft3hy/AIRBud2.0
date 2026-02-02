@@ -4,19 +4,19 @@ import {
   useQuery,
 } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Dashboard } from "./components/Dashboard";
+import { Dashboard } from "./components/dashboard/Dashboard";
 import { SystemOverview } from "./pages/SystemOverview";
 import { Help } from "./pages/Help";
 import { Team } from "./pages/Team";
 import { LoginPage } from "./pages/LoginPage";
 import { SystemOutage } from "./pages/SystemOutage";
-import { InviteHandler } from "./components/GroupManager";
+import { InviteHandler } from "./components/group-manager/GroupManager";
 import { fetchSystemStatus } from "./lib/api";
 import { Loader2 } from "lucide-react";
 import { Toaster } from "@/components/ui/toaster";
 import { QueueProvider } from "./context/QueueContext";
-import { SecurityBanner } from "./components/SecurityBanner";
-import { ClassificationBanner } from "./components/ClassificationBanner";
+import { SecurityBanner } from "./components/banners/SecurityBanner";
+import { ClassificationBanner } from "./components/banners/ClassificationBanner";
 
 const queryClient = new QueryClient();
 

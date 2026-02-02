@@ -8,19 +8,19 @@ import {
   updateGroup,
   fetchSystemStatus,
   leaveGroup,
-} from "../lib/api";
+} from "../../lib/api";
 import { Search } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "./ui/scroll-area";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Sub-components
-import { GroupManagerHeader } from "./group-manager/GroupManagerHeader";
-import { GroupSearchBar } from "./group-manager/GroupSearchBar";
-import { MyGroupCard } from "./group-manager/MyGroupCard";
-import { PublicGroupCard } from "./group-manager/PublicGroupCard";
-import { EditGroupDialog } from "./group-manager/EditGroupDialog";
-import { InviteHandler } from "./group-manager/InviteHandler";
+import { GroupManagerHeader } from "./GroupManagerHeader";
+import { GroupSearchBar } from "./GroupSearchBar";
+import { MyGroupCard } from "./MyGroupCard";
+import { PublicGroupCard } from "./PublicGroupCard";
+import { EditGroupDialog } from "./EditGroupDialog";
+import { InviteHandler } from "./InviteHandler";
 
 export { InviteHandler }; // Re-export for router use
 

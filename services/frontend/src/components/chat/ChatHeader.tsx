@@ -1,6 +1,6 @@
 import React from "react";
 import { FolderOpen } from "lucide-react";
-import { UserStatus } from "../UserStatus";
+import { UserStatus } from "../user-status/UserStatus";
 
 interface ChatHeaderProps {
   activeCollectionName: string;

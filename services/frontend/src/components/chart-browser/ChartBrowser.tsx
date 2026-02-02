@@ -12,14 +12,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { getCollectionCharts } from "../lib/api";
+import { getCollectionCharts } from "../../lib/api";
 
 // Sub-components
 import {
   NoCollectionState,
   NoChartsState,
-} from "./chart-browser/ChartEmptyStates";
-import { ChartFullscreenModal } from "./chart-browser/ChartFullScreenModal";
+} from "./ChartEmptyStates";
+import { ChartFullscreenModal } from "./ChartFullScreenModal";
 
 interface ChartBrowserProps {
   collectionId: string | null;

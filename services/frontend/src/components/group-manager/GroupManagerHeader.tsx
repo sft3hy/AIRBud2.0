@@ -1,6 +1,6 @@
 
 import { Users } from "lucide-react";
-import { UserStatus } from "../UserStatus";
+import { UserStatus } from "../user-status/UserStatus";
 
 export const GroupManagerHeader = () => {
   return (

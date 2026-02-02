@@ -83,9 +83,6 @@ export interface SessionHistoryItem {
 
 export type VisionModel =
     | 'Ollama-Granite3.2-Vision'
-    | 'Moondream2'
-    | 'Ollama-Gemma3'
-    | 'Ollama-Ministral-3-3B';
 
 export interface Group {
     id: number;

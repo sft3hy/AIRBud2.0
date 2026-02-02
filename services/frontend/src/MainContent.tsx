@@ -9,7 +9,7 @@ import {
 } from "./lib/api";
 import { ChatMessage, SessionHistoryItem } from "./types";
 import { logger } from "./lib/logger";
-import { ProcessingView } from "./components/ProcessingView";
+import { ProcessingView } from "./components/processing-view/ProcessingView";
 
 // Sub Components
 import { WelcomeScreen } from "./components/chat/WelcomeScreen";

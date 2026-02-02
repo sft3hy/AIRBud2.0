@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useCallback, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import ForceGraph2D from "react-force-graph-2d";
 import { BookOpenText } from "lucide-react";
-import { SearchResult, SessionDocument } from "../types";
+import { SearchResult, SessionDocument } from "../../types";
 import {
   Accordion,
   AccordionContent,
@@ -12,7 +12,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Network } from "lucide-react";
-import { drawNode, drawLink } from "./graph-explorer/utils";
+import { drawNode, drawLink } from "../graph-explorer/utils";
 
 interface SourceViewerProps {
   sources: SearchResult[];

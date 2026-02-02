@@ -1,5 +1,5 @@
 import React from "react";
-import { useQueue } from "../context/QueueContext";
+import { useQueue } from "../../context/QueueContext";
 import { Paperclip, Loader2 } from "lucide-react";
 
 // Modification: Accept collectionId to filter the queue

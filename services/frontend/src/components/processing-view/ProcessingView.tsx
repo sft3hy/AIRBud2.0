@@ -13,7 +13,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 
-import { JobStatus } from "../types";
+import { JobStatus } from "../../types";
 
 interface ProcessingViewProps {
   status: JobStatus;
@@ -379,4 +379,4 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
   );
 };
 
-import { QueueDisplay } from "./QueueDisplay";
+import { QueueDisplay } from "../queue-display/QueueDisplay";

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import { MainContent } from "../MainContent";
-import { Sidebar } from "./SideBar";
-import { GroupManager } from "./GroupManager";
-import { useQueue } from "../context/QueueContext";
+import { MainContent } from "../../MainContent";
+import { Sidebar } from "../sidebar/SideBar";
+import { GroupManager } from "../group-manager/GroupManager";
+import { useQueue } from "../../context/QueueContext";
 import { useQuery } from "@tanstack/react-query";
-import { getCollectionStatus } from "../lib/api";
+import { getCollectionStatus } from "../../lib/api";
 
 export const Dashboard = () => {
   // --- ROUTER STATE ---

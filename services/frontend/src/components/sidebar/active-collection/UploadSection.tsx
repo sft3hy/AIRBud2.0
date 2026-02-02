@@ -24,21 +24,6 @@ export const VISION_MODELS: {
       label: "Granite 3.2 (2B)",
       desc: "Enterprise Vision",
     },
-    {
-      value: "Moondream2",
-      label: "Moondream2 (1.6B)",
-      desc: "Fast",
-    },
-    {
-      value: "Ollama-Gemma3",
-      label: "Gemma 3 (4B)",
-      desc: "Strong Reasoning",
-    },
-    {
-      value: "Ollama-Ministral-3-3B",
-      label: "Ministral 3B",
-      desc: "Lightweight & Efficient",
-    },
   ];
 
 interface UploadSectionProps {

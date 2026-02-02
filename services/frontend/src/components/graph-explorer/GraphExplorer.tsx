@@ -9,18 +9,18 @@ import { createPortal } from "react-dom";
 import ForceGraph2D from "react-force-graph-2d";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { getCollectionGraph } from "../lib/api";
-import { SessionDocument } from "../types";
+import { getCollectionGraph } from "../../lib/api";
+import { SessionDocument } from "../../types";
 
 // Sub-components
-import { drawNode, drawLink } from "./graph-explorer/utils";
-import { GraphLegend } from "./graph-explorer/GraphLegend";
-import { GraphToolbar } from "./graph-explorer/GraphToolbar";
+import { drawNode, drawLink } from "./utils";
+import { GraphLegend } from "./GraphLegend";
+import { GraphToolbar } from "./GraphToolbar";
 import {
   NoCollectionState,
   LoadingState,
   EmptyDataState,
-} from "./graph-explorer/GraphStates";
+} from "./GraphStates";
 
 interface GraphExplorerProps {
   collectionId: string | null;

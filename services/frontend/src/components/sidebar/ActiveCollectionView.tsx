@@ -7,8 +7,8 @@ import {
   getDocumentPreview,
 } from "../../lib/api";
 import { VisionModel, SessionDocument } from "../../types";
-import { ChartBrowser } from "../ChartBrowser";
-import { GraphExplorer } from "../GraphExplorer";
+import { ChartBrowser } from "../chart-browser/ChartBrowser";
+import { GraphExplorer } from "../graph-explorer/GraphExplorer";
 
 // UI Components
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Sub Components
 import { UploadSection } from "./active-collection/UploadSection";
-import { QueueDisplay } from "../QueueDisplay";
+import { QueueDisplay } from "../queue-display/QueueDisplay";
 import { JobStatusWidget } from "./JobStatusWidget"; // IMPORT
 import { DocumentList } from "./active-collection/DocumentList";
 import { DocumentPreviewModal } from "./active-collection/DocumentPreviewModal";
