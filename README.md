@@ -134,5 +134,5 @@ docker-compose -f docker-compose.deployed.yml up -d --build
 
 ### 3. Access the App:
 - **Frontend:** [https://localhost](https://localhost)
-- **Neo4j Browser:** [http://localhost:7474](http://localhost:7474) (User: `neo4j`, Pass: `smartrag_password`)
+- **Neo4j Browser:** [http://localhost:7474](http://localhost:7474) (User: `neo4j`, Pass: `${NEO4J_PASSWORD}`)
 
