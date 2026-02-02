@@ -78,7 +78,7 @@ class SmartRAG:
     Handles document indexing, state management, and vector search.
     """
 
-    def __init__(self, output_dir: str = None, vision_model_name: str = "Moondream2"):
+    def __init__(self, output_dir: str = None, vision_model_name: str = "Ollama-Granite3.2-Vision"):
         self.output_dir = output_dir
         self.vision_model_name = vision_model_name
         self.llm: BaseLLMClient = get_llm_client()

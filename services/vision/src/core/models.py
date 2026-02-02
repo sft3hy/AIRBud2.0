@@ -136,65 +136,6 @@ class VisionModel(ABC):
 
 # --- Concrete Implementations ---
 
-class Moondream2Model(VisionModel):
-    """
-    Lightweight, high-performance VLM.
-    Ideal for local deployment without massive GPUs.
-    """
-    def load(self) -> bool:
-        if not AutoModelForCausalLM:
-            logger.error("Transformers library not installed.")
-            return False
-
-        try:
-            logger.info(f"Loading Moondream2 on {self.device}...")
-            model_id = "vikhyatk/moondream2"
-            revision = "2025-06-21" # Pinned for stability based on current date context
-
-            # Device placement logic
-            if self.device == "cuda":
-                # CUDA: Use device_map for potential multi-gpu or optimized loading
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    model_id,
-                    revision=revision,
-                    trust_remote_code=True,
-                    device_map={"": "cuda"},
-                    torch_dtype=torch.float16 
-                )
-            else:
-                # CPU/MPS: Load directly to device, avoid float16 on CPU if unstable
-                dtype = torch.float32 if self.device == "cpu" else torch.float16
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    model_id,
-                    revision=revision,
-                    trust_remote_code=True
-                ).to(self.device, dtype=dtype)
-
-            self.tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
-            self._is_loaded = True
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to load Moondream2: {e}", exc_info=True)
-            return False
-
-    def describe(self, image: Image.Image, prompt: str) -> str:
-        if not self._is_loaded:
-            return "[Error: Model not loaded]"
-        
-        with self._inference_lock:
-            try:
-                # Moondream expects PIL image
-                enc_image = self.model.encode_image(image)
-                answer = self.model.answer_question(enc_image, prompt, self.tokenizer)
-                return answer
-            except Exception as e:
-                logger.error(f"Moondream inference error: {e}")
-                return f"[Analysis Error: {str(e)}]"
-
-    def get_name(self):
-        return "Moondream2"
-
 
 class OllamaVisionModel(VisionModel):
     """

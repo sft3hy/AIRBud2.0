@@ -20,14 +20,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # --- OFFLINE PRE-LOAD STEP ---
 # Create a temporary script to trigger downloads during build
 RUN python3 -c "import whisper; \
-    import os; \
-    from transformers import AutoModelForCausalLM, AutoTokenizer; \
-    AutoTokenizer.from_pretrained('vikhyatk/moondream2', revision='2025-06-21', trust_remote_code=True); \
-    AutoModelForCausalLM.from_pretrained('vikhyatk/moondream2', revision='2025-06-21', trust_remote_code=True); \
     print('Downloading Whisper Medium...'); \
     whisper.load_model('medium'); \
-    print('Downloading Moondream2...');"
-    
+    "
 
 COPY . .
 

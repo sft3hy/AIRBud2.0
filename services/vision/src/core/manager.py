@@ -4,7 +4,6 @@ from contextlib import contextmanager
 from typing import Optional
 from src.core.models import (
     VisionModel,
-    Moondream2Model,
     OllamaVisionModel,
     WhisperAudioModel,
 )
@@ -167,18 +166,9 @@ class ModelManager:
 
     def _factory(self, name: str) -> Optional[VisionModel]:
         try:
-            if name == "Moondream2":
-                return Moondream2Model()
-            
             # Explicit Mappings for Common Models
             if name == "Ollama-Granite3.2-Vision":
                  return OllamaVisionModel("granite3.2-vision")
-            
-            if name == "Ollama-Ministral-3-3B":
-                 return OllamaVisionModel("ministral-3:3b")
-
-            if name == "Ollama-Gemma3":
-                 return OllamaVisionModel("gemma3")
             
             # Fallback: Generic Ollama handler
             if name.startswith("Ollama-"):
