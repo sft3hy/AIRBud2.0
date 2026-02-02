@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Create a temporary script to trigger downloads during build
 RUN python3 -c "import whisper; \
     print('Downloading Whisper Medium...'); \
-    whisper.load_model('medium'); \"
+    whisper.load_model('medium');"
 
 
 COPY . .
