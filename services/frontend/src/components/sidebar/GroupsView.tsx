@@ -37,7 +37,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ userGroups: _userGroups 
 
   const handleCreateGroup = async () => {
     await createGroup(newGroupName, newGroupDesc, newGroupPublic);
-    queryClient.invalidateQueries({ queryKey: ["my_groups"] });
+    await queryClient.invalidateQueries({ queryKey: ["my_groups"] });
+    await queryClient.invalidateQueries({ queryKey: ["public_groups"] });
     setNewGroupName("");
     setNewGroupDesc("");
   };
@@ -45,7 +46,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ userGroups: _userGroups 
   const handleUpdateGroup = async () => {
     if (!editGid) return;
     await updateGroup(editGid, editGroupName, editGroupDesc);
-    queryClient.invalidateQueries({ queryKey: ["my_groups"] });
+    await queryClient.invalidateQueries({ queryKey: ["my_groups"] });
+    await queryClient.invalidateQueries({ queryKey: ["public_groups"] });
     setEditGid(null);
   };
 
