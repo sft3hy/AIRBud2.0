@@ -3,28 +3,17 @@ import { Upload, X, Loader2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  SelectGroup,
-  SelectLabel,
-} from "@/components/ui/select";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Info } from "lucide-react";
+
 import { VisionModel } from "../../../types";
 import { getFileIcon } from "./utils";
-
-export const VISION_MODELS: {
-  value: VisionModel;
-  label: string;
-  desc: string;
-}[] = [
-    {
-      value: "Ollama-Granite3.2-Vision",
-      label: "Granite 3.2 (2B)",
-      desc: "Enterprise Vision",
-    },
-  ];
 
 interface UploadSectionProps {
   selectedModel: VisionModel;
@@ -45,6 +34,13 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Force set to Granite 3.2 on mount if not already
+  React.useEffect(() => {
+    if (selectedModel !== "Ollama-Granite3.2-Vision") {
+      onModelChange("Ollama-Granite3.2-Vision");
+    }
+  }, [selectedModel, onModelChange]);
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setStagedFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
@@ -58,35 +54,34 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
 
   return (
     <div className="space-y-3">
-      {/* Model Selection */}
-      <div className="space-y-1.5 [&_select]:border-0">
+      {/* Model Display (Static) */}
+      <div className="space-y-1.5">
         <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-          <Eye className="h-3 w-3" /> Select Vision Model
+          <Eye className="h-3 w-3" /> Vision Model
         </label>
-        <Select
-          value={selectedModel}
-          onValueChange={(v) => onModelChange(v as VisionModel)}
-          disabled={isQueueActive}
-        >
-          <SelectTrigger className="h-8 text-xs w-full bg-card/60 border-input shadow-sm">
-            <SelectValue placeholder="Select a Vision Model" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectLabel className="text-xs text-muted-foreground">
-                Vision Model
-              </SelectLabel>
-              {VISION_MODELS.map((m) => (
-                <SelectItem key={m.value} value={m.value} className="text-xs">
-                  <span className="font-medium">{m.label}</span>
-                  <span className="block text-[10px] text-muted-foreground mt-0.5">
-                    {m.desc}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+
+        <Dialog>
+          <DialogTrigger asChild>
+            <div className="w-full h-9 bg-card/60 border border-input shadow-sm rounded-md flex items-center justify-between px-3 cursor-pointer hover:bg-accent/50 transition-colors group">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-foreground">Granite 3.2 Vision (2B)</span>
+              </div>
+              <Info className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary" />
+            </div>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                Granite Vision 3.2 (2B)
+              </DialogTitle>
+              <DialogDescription className="pt-2 text-sm leading-relaxed">
+                Granite Vision 3.2 2B is a lightweight large language model with computer vision capabilities that target everyday enterprise use cases, trained with a particular focus on visual document understanding.
+                <br /><br />
+                Handling both image and text inputs, Granite Vision 3.2's performance on essential enterprise benchmarks, such as DocVQA and ChartQA, rivals that of even significantly larger open models.
+              </DialogDescription>
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Drag and Drop Area */}

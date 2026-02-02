@@ -20,6 +20,8 @@ interface QueueContextType {
     isProcessing: boolean;
     activeJobId: string | null;
     setActiveJobId: (id: string | null) => void;
+    clearQueue: () => void;
+    removeFromQueue: (id: string) => void;
 }
 
 const QueueContext = createContext<QueueContextType | undefined>(undefined);
@@ -101,30 +103,23 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             // If head is 'uploaded', we try to start the job
             if (head.status === 'uploaded') {
                 try {
-                    // Check if backend is busy first? 
-                    // Assume 'startJob' handles queueing or rejection.
-                    // If backend is busy with THIS collection, we should get 'already_queued'.
-
                     const res = await startJob(head.sessionId, head.filename, head.model);
-
                     if (res.status === 'queued' || res.status === 'processing' || res.status === 'already_queued') {
-                        // Mark as processing
                         setQueue(q => q.map(i => i.id === head.id ? { ...i, status: 'processing' } : i));
                         setActiveJobId(head.sessionId);
                     }
                 } catch (e: any) {
-                    console.error("Start job failed", e);
-                    // Critical Fix: If 404 (File not found), abort retry loop
-                    if (e.response && e.response.status === 404) {
+                    // Critical Fix: If 404 (File not found) or 500, abort retry loop specifically for this item
+                    if (e.response && (e.response.status === 404)) {
                         toast({
                             variant: "destructive",
                             title: "File Missing",
                             description: "The file was not found on the server. Please re-upload."
                         });
-                        // Remove from queue to stop loop
                         setQueue(q => q.filter(i => i.id !== head.id));
                         setActiveJobId(null);
                     }
+                    // Silent fail for network errors, just retry next tick
                 }
                 return;
             }
@@ -137,7 +132,6 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
                     if (status.status === 'completed') {
                         toast({ title: "Processing Complete", description: `${head.filename} is ready for querying.` });
-                        // Remove from queue
                         setQueue(q => q.slice(1));
                         setActiveJobId(null);
                     } else if (status.status === 'error') {
@@ -145,16 +139,23 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                         setQueue(q => q.slice(1));
                         setActiveJobId(null);
                     } else {
-                        // Still processing, ensure activeJobId is set
                         if (activeJobId !== head.sessionId) setActiveJobId(head.sessionId);
                     }
-                } catch (e) {
-                    // Poll failed
+                } catch (e: any) {
+                    // If backend is gone (404/500/NetworkError), we should pause or just wait
+                    if (e.code === "ERR_NETWORK" || !e.response) {
+                        // Network error - do nothing, maybe it's restarting
+                    } else if (e.response && e.response.status === 404) {
+                        // Collection or job lost (likely wipe)
+                        console.warn("Job/Collection lost, removing from queue");
+                        setQueue(q => q.slice(1));
+                        setActiveJobId(null);
+                    }
                 }
             }
         };
 
-        const timer = setInterval(processLoop, 2000); // Check every 2s
+        const timer = setInterval(processLoop, 2000);
         return () => clearInterval(timer);
     }, [queue, activeJobId, toast]);
 
@@ -164,7 +165,9 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             addToQueue,
             isProcessing: queue.length > 0 && queue[0]?.status === 'processing',
             activeJobId,
-            setActiveJobId
+            setActiveJobId,
+            clearQueue: () => setQueue([]),
+            removeFromQueue: (id: string) => setQueue(prev => prev.filter(i => i.id !== id))
         }}>
             {children}
         </QueueContext.Provider>

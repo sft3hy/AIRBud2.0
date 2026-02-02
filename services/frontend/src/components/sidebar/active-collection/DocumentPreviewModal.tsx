@@ -1,18 +1,25 @@
-import React, { useEffect } from "react";
+import { getCollectionCharts } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { FileText, X } from "lucide-react";
+import React, { useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
-import { X, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { SessionDocument } from "@/types";
 
 interface DocumentPreviewModalProps {
   content: string | null;
   onClose: () => void;
+  collectionId?: string; // New prop
+  document?: SessionDocument; // New prop
 }
 
 export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
   content,
   onClose,
+  collectionId,
+  document: doc,
 }) => {
   // Prevent scrolling on the body when modal is open
   useEffect(() => {
@@ -34,6 +41,39 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
+
+  // Fetch charts if we have context
+  const { data: allCharts = [] } = useQuery({
+    queryKey: ["charts", collectionId],
+    queryFn: () => (collectionId ? getCollectionCharts(collectionId) : []),
+    enabled: !!collectionId && !!doc,
+  });
+
+  // Filter and Append Scraped Photos
+  const enhancedContent = useMemo(() => {
+    if (!content) return null;
+    if (!doc || !allCharts.length) return content;
+
+    // Filter charts for this document
+    // We assume chart.doc_name matches doc.original_filename or similar
+    // Based on ChartBrowser logic, charts have 'doc_name'.
+    const relevantCharts = allCharts.filter(
+      (c: any) => c.doc_name === doc.original_filename,
+    );
+
+    if (relevantCharts.length === 0) return content;
+
+    let appendedImages = "\n\n## Scraped Photos\n";
+    relevantCharts.forEach((chart: any) => {
+      // url and description are available on chart objects
+      appendedImages += `\n![${chart.description || "Scraped Image"}](${chart.url})\n`;
+      if (chart.description) {
+        appendedImages += `\n*${chart.description}*\n`;
+      }
+    });
+
+    return content + appendedImages;
+  }, [content, doc, allCharts]);
 
   if (content === null) return null;
 
@@ -62,6 +102,11 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
           <FileText className="h-5 w-5 text-primary" />
           <span className="font-semibold text-sm uppercase tracking-wide">
             File Preview
+            {doc && (
+              <span className="ml-2 text-muted-foreground normal-case">
+                - {doc.original_filename}
+              </span>
+            )}
           </span>
           <span className="ml-auto text-xs mr-12 hidden md:block">
             Press ESC to close
@@ -70,7 +115,8 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
 
         {/* Markdown Viewer */}
         <ScrollArea className="flex-1 p-6 md:p-12">
-          <div className="prose dark:prose-invert max-w-none prose-sm md:prose-base leading-relaxed">
+          {/* Added pr-6 to fix text cutoff on the right */}
+          <div className="prose dark:prose-invert max-w-none prose-sm md:prose-base leading-relaxed pr-6">
             <ReactMarkdown
               components={{
                 table: ({ node, ...props }) => (
@@ -90,13 +136,13 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
                 ),
                 img: ({ node, ...props }) => (
                   <img
-                    className="rounded-lg border shadow-sm max-h-[500px] object-contain mx-auto my-4"
+                    className="rounded-lg border shadow-sm max-h-[600px] object-contain mx-auto my-8 bg-black/5"
                     {...props}
                   />
                 ),
               }}
             >
-              {content}
+              {enhancedContent || ""}
             </ReactMarkdown>
           </div>
         </ScrollArea>
