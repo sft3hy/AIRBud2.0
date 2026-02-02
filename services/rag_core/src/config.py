@@ -26,8 +26,8 @@ class Config:
 
     # Database
     DB_HOST = os.getenv("POSTGRES_SERVER", "postgres")
-    DB_USER = os.getenv("POSTGRES_USER", "rag_user")
-    DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "rag_password")
+    DB_USER = os.getenv("POSTGRES_USER", "slammy")
+    DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
     DB_NAME = os.getenv("POSTGRES_DB", "rag_db")
     DB_PORT = os.getenv("POSTGRES_PORT", "5432")
 
