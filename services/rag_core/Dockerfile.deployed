@@ -1,5 +1,5 @@
 # STAGE 1: Builder
-FROM nvidia/cuda:12.1.0-base-ubuntu22.04 AS builder
+FROM nvidia/cuda:13.1.1-base-ubuntu22.04 AS builder
 
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -12,8 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install GPU Torch
-RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# Install GPU Torch for CUDA 13.0
+# PyTorch 2.9.1 with CUDA 13.0 support (backward compatible with CUDA 13.1 runtime)
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu130
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -26,7 +27,7 @@ RUN mkdir -p $HF_HOME && \
     SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', cache_folder='$HF_HOME')"
 
 # STAGE 2: Runtime
-FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+FROM nvidia/cuda:13.1.1-runtime-ubuntu22.04
 
 WORKDIR /app
 
