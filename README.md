@@ -12,13 +12,17 @@ The system uses a Microservices architecture orchestrated by Docker Compose.
 
 ```mermaid
 graph TD
-    User((User)) -->|Browser| Frontend[Frontend - React/Vite]
-    Frontend -->|HTTP| Core[RAG Core - FastAPI]
+    User((User)) -->|Browser| Nginx[Gateway - Nginx]
+    Nginx -->|HTTP| Frontend[Frontend - React/Vite]
+    Nginx -->|HTTP| Core[RAG Core - FastAPI]
+    Nginx -->|HTTP| KG[KG Service - FastAPI]
+    
+    Frontend -->|HTTP| Core
 
     subgraph "Ingestion Pipeline"
         Core -->|1. Layout| Parser[Parser - Detectron2]
         Core -->|2. Vision| Vision[Vision - Granite3.2]
-        Core -->|3. Entities| KG[KG Service - LLM Extractor]
+        Core -->|3. Entities| KG
     end
 
     subgraph "Storage Layer"
@@ -26,6 +30,14 @@ graph TD
         Core -->|Vector| FAISS[(FAISS Index)]
         KG -->|Graph| Neo4j[(Neo4j Graph DB)]
         SharedVol[Shared Volume]
+    end
+
+    subgraph "Monitoring & Ops"
+        Glances[Glances - System Monitor] -->|Metrics| InfluxDB[(InfluxDB)]
+        Grafana[Grafana - Dashboards] -->|Read| InfluxDB
+        Backups[Backup Service] -.->|Dump| Postgres
+        Backups -.->|Dump| Neo4j
+        PGAdmin[PGAdmin] -.->|Admin| Postgres
     end
 
     Vision -.->|Inference| Ollama[Ollama Provider]
@@ -37,12 +49,15 @@ graph TD
 
 | Service        | Tech                                  | Role                                                                                 |
 | :------------- | :------------------------------------ | :----------------------------------------------------------------------------------- |
+| **Gateway**    | Nginx                                 | Reverse proxy, handles SSL termination and routing.                                  |
 | **Frontend**   | React, Tailwind, Recharts, ForceGraph | Modern UI for chat, document management, and graph visualization.                    |
 | **RAG Core**   | FastAPI, LangChain, FAISS             | Orchestrator. Handles embedding, hybrid search logic, and DB management.             |
 | **KG Service** | FastAPI, [Neo4j](https://neo4j.com)   | **GraphRAG**. Extracts entities/relationships and performs 2-hop neighbor retrieval. |
 | **Parser**     | Detectron2, PyMuPDF                   | Layout Analysis. Detects and crops tables/figures from PDFs.                         |
-| **Vision**     | PyTorch, Transformers                 | Runs local VLMs Granite3.2 to transcribe charts into text.     |
+| **Vision**     | PyTorch, Transformers                 | Runs local VLMs Granite3.2 to transcribe charts into text.                           |
 | **Database**   | PostgreSQL 15                         | Stores collection metadata, chat history, and raw text chunks.                       |
+| **Monitoring** | InfluxDB, Grafana, Glances            | System resource tracking and visualization                                           |
+| **Ops**        | Docker, Bash                          | Backup automation and database administration (PGAdmin)                              |
 
 ---
 
@@ -75,6 +90,11 @@ We use a **Parent-Child** retrieval strategy:
 - **Child Chunks:** Small, specific text fragments used for high-precision vector search.
 - **Parent Chunks:** Larger context blocks returned to the LLM to ensure the answer is comprehensive.
 
+### 5. Robust Operations
+
+- **Monitoring:** Real-time visibility into container metrics via Grafana/InfluxDB.
+- **Backups:** Automated scheduled backups for PostgreSQL and Neo4j data.
+
 ---
 
 ## 📂 Project Structure
@@ -89,12 +109,16 @@ We use a **Parent-Child** retrieval strategy:
 │   ├── faiss_indexes/          # Vector indices
 │   ├── neo4j_data/             # Graph DB storage
 │   └── postgres_data/          # SQL DB storage
+├── monitoring/                 # Monitoring Configs
+│   ├── glances/
+│   └── grafana/
 └── services/
     ├── frontend/               # React UI
     ├── rag_core/               # Main Logic & Vector Search
     ├── kg_service/             # Neo4j & Graph Extraction
     ├── parser/                 # Document Layout Analysis
-    └── vision/                 # Image Inference
+    ├── vision/                 # Image Inference
+    └── backup/                 # DB Backup Automation
 ```
 
 ---
