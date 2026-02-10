@@ -171,7 +171,7 @@ http {
         # SSL Certificates
         ssl_certificate     /etc/nginx/certs/server.crt;
         ssl_certificate_key /etc/nginx/certs/server.key;
-        ssl_client_certificate /etc/nginx/certs/trust_chain.pem;
+        ssl_client_certificate /etc/nginx/certs/dod_roots.pem;
         ssl_verify_depth 5;
 
         # Client Certificate Authentication (STRICT for Deployed)
