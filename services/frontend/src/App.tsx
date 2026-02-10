@@ -60,7 +60,7 @@ const AppContent = () => {
   const isAuthenticated = status?.user && status.user.id > 0;
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/airbud">
       <Routes>
         <Route
           path="/login"

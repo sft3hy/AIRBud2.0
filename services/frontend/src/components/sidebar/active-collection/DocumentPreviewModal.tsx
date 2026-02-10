@@ -1,6 +1,6 @@
 import { getCollectionCharts } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, X, ImageIcon, Maximize2, ScanEye } from "lucide-react";
+import { FileText, X, ImageIcon, Maximize2 } from "lucide-react";
 import React, { useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
@@ -91,7 +91,7 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
         const safeAlt = (chart.description || "Chart").replace(/[\r\n]+/g, " ");
         return `![${safeAlt}](${chart.url})`;
       }
-      return match; // Keep placeholder if no chart found (or remove it?)
+      return match;
     });
 
     console.log("DEBUG: New Content length:", newContent.length);
@@ -138,6 +138,7 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
 
         {/* Markdown Viewer */}
         <ScrollArea className="flex-1 p-6 md:p-12">
+
           {/* Added pr-6 to fix text cutoff on the right */}
           <div className="prose dark:prose-invert max-w-none prose-sm md:prose-base leading-relaxed pr-6">
             <ReactMarkdown
@@ -176,20 +177,20 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
                   }
 
                   return (
-                    <div className="my-8 flex justify-center">
-                      <div className="relative group/container max-w-full">
+                    <div className="my-10 flex flex-col items-center animate-in fade-in slide-in-from-bottom-2 duration-500 w-full">
+                      <div className="relative group/container max-w-full w-full flex flex-col items-center">
                         {/* Background Grid Pattern - inherited from ChartBrowser style */}
                         <div className="absolute inset-0 -m-4 opacity-[0.03] pointer-events-none bg-[radial-gradient(#000_1px,transparent_1px)] dark:bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px] rounded-xl" />
 
                         <Card
-                          className={`relative overflow-hidden border-2 transition-all duration-300 ${isZoomed ? 'fixed inset-4 z-[10000] border-primary shadow-2xl bg-black/95 flex items-center justify-center' : 'bg-background/80/50 border-muted hover:border-primary/30 hover:shadow-lg'}`}
+                          className={`relative overflow-hidden border-2 transition-all duration-300 bg-background/80/50 border-muted hover:border-primary/30 hover:shadow-lg ${isZoomed ? 'fixed inset-4 z-[10000] border-primary shadow-2xl bg-black/95 flex items-center justify-center' : 'w-full max-w-4xl'}`}
                           onClick={() => setIsZoomed(!isZoomed)}
                         >
                           <img
                             src={src}
                             alt={alt}
                             onError={() => setHasError(true)}
-                            className={`transition-transform duration-500 ${isZoomed ? 'max-w-full max-h-full object-contain' : 'rounded-lg max-h-[500px] object-contain cursor-zoom-in group-hover/container:scale-[1.01]'}`}
+                            className={`transition-transform duration-500 ${isZoomed ? 'max-w-full max-h-full object-contain' : 'rounded-lg max-h-[600px] object-contain cursor-zoom-in group-hover/container:scale-[1.01] w-full'}`}
                             {...props}
                           />
 
@@ -216,10 +217,12 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
                             </Button>
                           )}
                         </Card>
+
                         {alt && !isZoomed && (
-                          <div className="text-center mt-3 text-sm text-muted-foreground italic flex items-center justify-center gap-2">
-                            <ScanEye className="h-3 w-3" />
-                            {alt}
+                          <div className="w-full max-w-4xl mt-4 p-4 md:p-6 bg-secondary/10 rounded-xl border border-border/40 text-center shadow-sm">
+                            <p className="text-base text-muted-foreground leading-relaxed">
+                              {alt}
+                            </p>
                           </div>
                         )}
                       </div>

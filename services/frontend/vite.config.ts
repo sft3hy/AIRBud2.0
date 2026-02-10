@@ -7,8 +7,9 @@ import path from "path"
 export default defineConfig({
   plugins: [
     react(),
-    tailwindcss(), // <--- Add this
+    tailwindcss(),
   ],
+  base: '/airbud/',
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -29,10 +30,10 @@ export default defineConfig({
         target: process.env.VITE_API_URL || 'http://localhost:8000',
         changeOrigin: true,
       },
-      '/api': {
+      '/airbud/api': {
         target: process.env.VITE_API_URL || 'http://localhost:8000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
+        rewrite: (path) => path.replace(/^\/airbud\/api/, ''),
       }
     }
   },

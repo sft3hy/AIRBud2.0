@@ -36,7 +36,7 @@ services:
       context: ./services/frontend
       dockerfile: Dockerfile.deployed
       args:
-        - VITE_API_URL=https://localhost/api
+        - VITE_API_URL=https://localhost/airbud/api
         - VITE_NETWORK=LOW
     image: airbud_frontend:latest
     container_name: airbud_frontend
@@ -44,7 +44,7 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - VITE_API_URL=https://localhost/api
+      - VITE_API_URL=https://localhost/airbud/api
       - VITE_NETWORK=LOW
     depends_on:
       - rag_core

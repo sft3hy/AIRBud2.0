@@ -252,7 +252,22 @@ class DatabaseManager:
             res = cur.fetchone()
             if not res: return None
             gid = res['id']
-            cur.execute(self._q("INSERT INTO group_members (group_id, user_id) VALUES (%s, %s)"), (gid, user_id))
+            
+            try:
+                cur.execute(self._q("INSERT INTO group_members (group_id, user_id) VALUES (%s, %s)"), (gid, user_id))
+            except Exception as e:
+                # Check for unique constraint violation (already a member)
+                # Postgres: psycopg2.IntegrityError, SQLite: sqlite3.IntegrityError (caught as Exception)
+                err_str = str(e).lower()
+                is_integrity = isinstance(e, psycopg2.IntegrityError) or "unique constraint" in err_str or "duplicate key" in err_str
+                
+                if is_integrity:
+                    logger.info(f"User {user_id} already in group {gid}, ignoring duplicate join via token.")
+                    if hasattr(cur, 'connection'):
+                        cur.connection.rollback()
+                    return gid
+                raise e
+
             return gid
 
     def join_group_by_id(self, user_id: int, group_id: int) -> bool:
@@ -260,7 +275,21 @@ class DatabaseManager:
             cur.execute(self._q("SELECT is_public FROM groups WHERE id = %s"), (group_id,))
             res = cur.fetchone()
             if not res or not res['is_public']: return False
-            cur.execute(self._q("INSERT INTO group_members (group_id, user_id) VALUES (%s, %s)"), (group_id, user_id))
+            
+            try:
+                cur.execute(self._q("INSERT INTO group_members (group_id, user_id) VALUES (%s, %s)"), (group_id, user_id))
+            except Exception as e:
+                # Check for unique constraint violation (already a member)
+                err_str = str(e).lower()
+                is_integrity = isinstance(e, psycopg2.IntegrityError) or "unique constraint" in err_str or "duplicate key" in err_str
+                
+                if is_integrity:
+                    logger.info(f"User {user_id} already in group {group_id}, ignoring duplicate join via ID.")
+                    if hasattr(cur, 'connection'):
+                        cur.connection.rollback()
+                    return True
+                raise e
+
             return True
 
     def delete_group(self, group_id: int, user_id: int) -> bool:

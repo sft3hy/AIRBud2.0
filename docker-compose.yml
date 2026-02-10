@@ -43,7 +43,7 @@ services:
       context: ./services/frontend
       dockerfile: Dockerfile.local
       args:
-        - VITE_API_URL=http://rag_core:8000
+        - VITE_API_URL=https://localhost/airbud/api
         - VITE_NETWORK=LOW
     image: airbud_frontend:latest
     container_name: airbud_frontend
@@ -51,7 +51,7 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - VITE_API_URL=http://rag_core:8000
+      - VITE_API_URL=https://localhost/airbud/api
       - VITE_NETWORK=LOW
     # Assuming your Dockerfile CMD handles the static serve (e.g., serve -s dist)
     depends_on:

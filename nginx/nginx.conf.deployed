@@ -166,7 +166,7 @@ http {
         listen 443 ssl;
         listen [::]:443 ssl;
         http2 on;
-        server_name localhost;  # Replace with your actual domain in production
+        server_name localhost;
 
         # SSL Certificates
         ssl_certificate     /etc/nginx/certs/server.crt;
@@ -174,11 +174,11 @@ http {
         ssl_client_certificate /etc/nginx/certs/trust_chain.pem;
         ssl_verify_depth 5;
 
-        # Client Certificate Authentication
-        ssl_verify_client off;
+        # Client Certificate Authentication (STRICT for Deployed)
+        ssl_verify_client on;
         
         # Client cert error handling
-        # error_page 495 496 400 = @no_cert;
+        error_page 495 496 400 = @no_cert;
         
         # Security Headers (HTTPS-specific)
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
@@ -197,10 +197,16 @@ http {
             internal;
         }
 
+        # Redirect root to /airbud
+        location = / {
+            return 301 /airbud/;
+        }
+
         # Frontend Application
-        location / {
+        location /airbud/ {
             limit_req zone=general burst=20 nodelay;
             
+            rewrite ^/airbud/(.*) /$1 break;
             proxy_pass http://frontend;
             proxy_http_version 1.1;
             
@@ -208,7 +214,6 @@ http {
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection "upgrade";
             
-            # Standard Proxy Headers
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -218,32 +223,22 @@ http {
             
             # Keepalive
             proxy_set_header Connection "";
-            
-            # Timeouts
-            proxy_connect_timeout 60s;
-            proxy_send_timeout 60s;
-            proxy_read_timeout 60s;
-            
-            # Buffering
-            proxy_buffering on;
-            proxy_request_buffering on;
         }
 
         # Backend API
-        location /api/ {
+        location /airbud/api/ {
             limit_req zone=api burst=50 nodelay;
             
-            rewrite ^/api/(.*) /$1 break;
+            rewrite ^/airbud/api/(.*) /$1 break;
             proxy_pass http://rag_core;
             proxy_http_version 1.1;
             
-            # Client Certificate Headers
-            # proxy_set_header X-Subject-DN $ssl_client_s_dn;
-            # proxy_set_header X-Client-Verify $ssl_client_verify;
-            # proxy_set_header X-Client-Serial $ssl_client_serial;
-            # proxy_set_header X-Client-Fingerprint $ssl_client_fingerprint;
+            # Client Certificate Headers (Passed from Strict Auth)
+            proxy_set_header X-Subject-DN $ssl_client_s_dn;
+            proxy_set_header X-Client-Verify $ssl_client_verify;
+            proxy_set_header X-Client-Serial $ssl_client_serial;
+            proxy_set_header X-Client-Fingerprint $ssl_client_fingerprint;
             
-            # Standard Proxy Headers
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -253,7 +248,7 @@ http {
             # Keepalive
             proxy_set_header Connection "";
             
-            # Timeouts (longer for API operations)
+            # Timeouts
             proxy_connect_timeout 120s;
             proxy_send_timeout 120s;
             proxy_read_timeout 120s;
@@ -264,38 +259,33 @@ http {
         }
 
         # Static Assets from RAG Core
-        location /static/ {
+        location /airbud/static/ {
             limit_req zone=general burst=50 nodelay;
             
+            rewrite ^/airbud/static/(.*) /static/$1 break;
             proxy_pass http://rag_core;
             proxy_http_version 1.1;
-            proxy_set_header Connection "";
             
-            # Caching for static assets
             proxy_cache_valid 200 30d;
-            proxy_cache_valid 404 1m;
             expires 30d;
-            add_header Cache-Control "public, immutable";
         }
         
         # Graph Service API
-        location /graph-api/ {
+        location /airbud/graph-api/ {
             limit_req zone=graph burst=40 nodelay;
             
-            rewrite ^/graph-api/(.*) /$1 break;
+            rewrite ^/airbud/graph-api/(.*) /$1 break;
             proxy_pass http://kg_service;
             proxy_http_version 1.1;
             
-            # Standard Proxy Headers
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
-            proxy_set_header X-Request-ID $request_id;
             
             # Client Certificate Headers
-            # proxy_set_header X-Subject-DN $ssl_client_s_dn;
-            # proxy_set_header X-Client-Verify $ssl_client_verify;
+            proxy_set_header X-Subject-DN $ssl_client_s_dn;
+            proxy_set_header X-Client-Verify $ssl_client_verify;
             
             # Keepalive
             proxy_set_header Connection "";
@@ -307,7 +297,6 @@ http {
         }
         
         # Allow Vite development files (node_modules, @vite, src)
-        # These are needed for Vite HMR in development
         location ~ ^/(node_modules|@vite|src)/ {
             proxy_pass http://frontend;
             proxy_http_version 1.1;
@@ -317,7 +306,7 @@ http {
             proxy_set_header Connection "";
         }
         
-        # Block common attack patterns (but not in development paths)
+        # Block common attack patterns
         location ~ /\.(?!well-known) {
             deny all;
             access_log off;
