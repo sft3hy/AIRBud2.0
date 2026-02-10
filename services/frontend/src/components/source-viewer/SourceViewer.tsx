@@ -263,7 +263,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({ sources, documents }
 
                           // Construct URL with proper encoding
                           // encodeURIComponent is CRITICAL for filenames with spaces/commas
-                          imageUrl = `/static/charts/${encodeURIComponent(chartDirName)}/${encodeURIComponent(subDirName)}/${encodeURIComponent(imageFilename)}`;
+                          imageUrl = `${import.meta.env.BASE_URL}static/charts/${encodeURIComponent(chartDirName)}/${encodeURIComponent(subDirName)}/${encodeURIComponent(imageFilename)}`;
 
                           // Extract description
                           // The regex found the start. Let's capture the description following it.
