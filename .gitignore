@@ -218,3 +218,6 @@ helm-chart/*
 settings.json
 *.pth
 *.pt
+all-MiniLM-L6-v2
+offline_models/huggingface/all-MiniLM-L6-v2
+offline_models/huggingface/*
