@@ -9,6 +9,9 @@ class Config:
     # Environment Logic
     TEST_MODE = os.getenv("TEST", "False").lower() == "true"
     EPHEMERAL_MODE = os.getenv("EPHEMERAL_MODE", "False").lower() == "true"
+    # Auth Mode: "CAC" (default), "OAUTH", "HYBRID", "NONE"
+    AUTH_MODE = os.getenv("AUTH_MODE", "OAUTH").upper()
+
     
     # Paths
     BASE_DIR = Path("/app")
@@ -48,7 +51,8 @@ class Config:
         GEN_MODEL_NAME = "bedrock-claude-4-5-sonnet-v1"
     
     # RAG Settings
-    EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+    EMBEDDING_MODEL_PATH = os.getenv("EMBEDDING_MODEL_PATH")
+    EMBEDDING_MODEL = EMBEDDING_MODEL_PATH if EMBEDDING_MODEL_PATH else "sentence-transformers/all-MiniLM-L6-v2"
     EMBEDDING_DIM = 384
 
 settings = Config()

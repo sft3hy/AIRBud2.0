@@ -216,3 +216,5 @@ helm-chart/apiKeys.yaml
 helm-chart/*
 *.cnf
 settings.json
+*.pth
+*.pt

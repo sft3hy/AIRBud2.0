@@ -65,7 +65,12 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
   // Initial Sync: If URL has fullscreen_chart, find its index
   useEffect(() => {
     if (allCharts.length > 0 && selectedImage && !hasSyncedParam.current) {
-      const foundIndex = allCharts.findIndex((c: any) => c.url === selectedImage);
+      const foundIndex = allCharts.findIndex(
+        (c: any) =>
+          c.url === selectedImage ||
+          (selectedImage.startsWith("/airbud") &&
+            selectedImage === `/airbud${c.url}`),
+      );
       if (foundIndex !== -1) {
         setIndex(foundIndex);
         hasSyncedParam.current = true;
@@ -85,18 +90,34 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
   useEffect(() => {
     if (selectedImage && currentChart?.url) {
       // If URL param doesn't match current chart (based on index)
-      if (selectedImage !== currentChart.url) {
+      // We check both raw URL and prefixed URL
+      const currentUrlPrefixed = `/airbud${currentChart.url}`;
+      const isMatch =
+        selectedImage === currentChart.url ||
+        selectedImage === currentUrlPrefixed;
 
+      if (!isMatch) {
         // If we haven't synced yet, and the mismatch exists, we might be in the race condition.
         // If the URL param corresponds to a valid chart, we trust the URL (Initial Sync effect handles it)
-        const urlMatchExists = allCharts.some((c: any) => c.url === selectedImage);
+        const urlMatchExists = allCharts.some(
+          (c: any) =>
+            c.url === selectedImage ||
+            (selectedImage.startsWith("/airbud") &&
+              selectedImage === `/airbud${c.url}`),
+        );
         if (urlMatchExists && !hasSyncedParam.current) {
           return;
         }
 
         // If we have synced OR the URL is just wrong, we overwrite it.
+        // We prefer the prefixed URL for the param
         setSearchParams((prev) => {
-          prev.set("fullscreen_chart", currentChart.url);
+          prev.set(
+            "fullscreen_chart",
+            currentChart.url.startsWith("/api")
+              ? currentUrlPrefixed
+              : currentChart.url,
+          );
           return prev;
         });
       }
@@ -176,13 +197,22 @@ export const ChartBrowser: React.FC<ChartBrowserProps> = ({ collectionId }) => {
           <Card
             className="relative group w-full h-full max-h-[400px] flex items-center justify-center bg-background/80/50 border-dashed border-2 overflow-hidden cursor-zoom-in transition-all duration-300 hover:border-primary/30 hover:shadow-lg"
             onClick={() =>
-              currentChart?.url && openFullscreen(currentChart.url)
+              currentChart?.url &&
+              openFullscreen(
+                currentChart.url.startsWith("/api")
+                  ? `/airbud${currentChart.url}`
+                  : currentChart.url,
+              )
             }
           >
             {currentChart && currentChart.url ? (
               <>
                 <img
-                  src={currentChart.url}
+                  src={
+                    currentChart.url.startsWith("/api")
+                      ? `/airbud${currentChart.url}`
+                      : currentChart.url
+                  }
                   alt={`Chart ${safeIndex + 1}`}
                   className="max-w-full max-h-full object-contain p-2 transition-transform duration-500 group-hover:scale-[1.02]"
                 />

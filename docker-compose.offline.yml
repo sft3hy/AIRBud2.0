@@ -1,0 +1,30 @@
+services:
+  # 1. Parser Service Override
+  parser:
+    build:
+      dockerfile: Dockerfile.offline
+    volumes:
+      - ./offline_models/detectron2:/models/detectron2
+    environment:
+      - OFFLINE_MODEL_PATH=/models/detectron2/publaynet_faster_rcnn_R_50_FPN_3x.pth
+
+  # 2. RAG Core Service Override
+  rag_core:
+    build:
+      dockerfile: Dockerfile.offline
+    volumes:
+      - ./offline_models/huggingface:/models/huggingface
+    environment:
+      - TRANSFORMERS_OFFLINE=1
+      # Note: We mount the parent folder 'huggingface' to /models/huggingface
+      # So the path inside container is /models/huggingface/all-MiniLM-L6-v2
+      - EMBEDDING_MODEL_PATH=/models/huggingface/all-MiniLM-L6-v2
+
+  # 3. Vision Service Override
+  vision:
+    build:
+      dockerfile: Dockerfile.offline
+    volumes:
+      - ./offline_models/whisper:/models/whisper
+    environment:
+      - WHISPER_MODEL_PATH=/models/whisper/medium.pt

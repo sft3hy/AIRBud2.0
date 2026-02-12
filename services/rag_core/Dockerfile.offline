@@ -1,0 +1,55 @@
+# STAGE 1: Builder
+FROM python:3.10-slim AS builder
+
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install CPU PyTorch
+RUN pip install --no-cache-dir torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# STAGE 2: Runtime
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Runtime Environment
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    # Offline Config
+    TRANSFORMERS_OFFLINE=1 \
+    EMBEDDING_MODEL_PATH="/models/huggingface/all-MiniLM-L6-v2"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Copy venv
+COPY --from=builder /opt/venv /opt/venv
+
+COPY . .
+
+# Create models directory
+RUN mkdir -p /models && chown -R appuser:appuser /models
+
+# Fix permissions
+RUN chown -R appuser:appuser /app
+USER appuser
+
+# Optimization for high concurrency
+ENV OMP_NUM_THREADS=4 \
+    MKL_NUM_THREADS=4
+
+# Use Gunicorn for production
+CMD ["gunicorn", "main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "--threads", "2", "--timeout", "120"]

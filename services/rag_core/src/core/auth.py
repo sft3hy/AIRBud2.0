@@ -1,6 +1,7 @@
 
 import re
 import time
+import hashlib
 from threading import Lock
 from typing import Dict, Optional, Any
 from fastapi import Request, HTTPException, status
@@ -33,13 +34,27 @@ class AuthHandler:
         """
         Retrieves the authenticated user based on request headers.
         Uses internal caching to avoid database writes on every request.
+        Support modes: CAC (mTLS), OAUTH (OAuth2 Proxy), HYBRID (Both).
         """
         # 1. TEST MODE or EPHEMERAL MODE
         if settings.TEST_MODE or settings.EPHEMERAL_MODE:
             logger.debug(f"{'TEST_MODE' if settings.TEST_MODE else 'EPHEMERAL_MODE'} active: Using mock user.")
             return self._upsert_mock_user()
 
-        # 2. PROD MODE - Header Validation
+        # 2. OAUTH MODE / HYBRID Check
+        if settings.AUTH_MODE in ["OAUTH", "HYBRID"]:
+            # OAuth2 Proxy standard header
+            email = request.headers.get("X-Auth-Request-Email")
+            if email:
+                return self._process_oauth_user(request, email)
+
+        # 3. CAC MODE / HYBRID Check
+        # If we are in OAUTH-only mode, we skip CAC checks.
+        if settings.AUTH_MODE == "OAUTH":
+             # If we reached here in OAUTH mode, no email header was found.
+             return self._get_guest_user()
+
+        # Fallback to CAC Logic (Default or Hybrid)
         subject_dn = request.headers.get("X-Subject-DN", "")
         verify_result = request.headers.get("X-Client-Verify")
 
@@ -50,15 +65,16 @@ class AuthHandler:
             return self._get_guest_user()
 
         if not subject_dn:
-            logger.warning("Auth Failed | Missing X-Subject-DN header")
+            if settings.AUTH_MODE == "CAC":
+                logger.warning("Auth Failed | Missing X-Subject-DN header")
             return self._get_guest_user()
 
-        # 3. Check Cache
+        # 4. Check Cache (CAC)
         cached_user = self._get_cached_user(subject_dn)
         if cached_user:
             return cached_user
 
-        # 4. Parse & Process (Cache Miss)
+        # 5. Parse & Process (Cache Miss)
         try:
             user_info = self._parse_dn(subject_dn)
             
@@ -79,7 +95,7 @@ class AuthHandler:
                 "org": friendly_org
             }
 
-            # 5. Update Cache
+            # Update Cache
             self._set_cached_user(subject_dn, user)
             
             return user
@@ -248,4 +264,56 @@ class AuthHandler:
             "org": friendly_org
         }
     
+    def _process_oauth_user(self, request: Request, email: str) -> Dict[str, Any]:
+        """
+        Processes OAuth2 Proxy headers to create/retrieve a user.
+        """
+        # Check Cache first (using email as key)
+        cached_user = self._get_cached_user(email)
+        if cached_user:
+            return cached_user
+            
+        try:
+            # Extract additional info if available
+            # Ideally we'd get name from X-Auth-Request-User or ID Token claims
+            # But the user only guaranteed email in the prompt example
+            raw_user = request.headers.get("X-Auth-Request-User", "")
+            
+            # Robust Logic: We no longer generate fake PIV IDs.
+            # We rely on email uniqueness in the DB.
+            piv_id_sim = None 
+
+            # User Friendly Name logic
+            if raw_user:
+                cn = raw_user
+            else:
+                cn = email.split('@')[0].replace('.', ' ').title()
+            
+            org = "OAuth User"
+            
+            # Upsert into DB (piv_id is None)
+            user_id = self.db.upsert_user(
+                piv_id_sim,
+                cn,
+                org,
+                email # Make sure email is passed!
+            )
+            
+            user = {
+                "id": user_id,
+                "piv_id": piv_id_sim,
+                "cn": cn,
+                "org": org,
+                "email": email
+            }
+            
+            # Update Cache
+            self._set_cached_user(email, user)
+            return user
+            
+        except Exception as e:
+            logger.error(f"Error processing OAuth user {email}: {e}", exc_info=True)
+            return self._get_guest_user()
+
+
 auth_handler = AuthHandler()

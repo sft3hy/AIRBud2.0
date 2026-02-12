@@ -17,6 +17,9 @@ class Config:
     MODEL_CONFIG = "COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"
     MODEL_WEIGHTS_URL = "https://huggingface.co/nlpconnect/PubLayNet-faster_rcnn_R_50_FPN_3x/resolve/main/model_final.pth?download=true"
     MODEL_WEIGHTS_FILE = "publaynet_faster_rcnn_R_50_FPN_3x.pth"
+    
+    # Offline Mode
+    OFFLINE_MODEL_PATH = os.getenv("OFFLINE_MODEL_PATH")
 
     CONFIDENCE_THRESHOLD = 0.5
     DETECTION_PADDING = 60

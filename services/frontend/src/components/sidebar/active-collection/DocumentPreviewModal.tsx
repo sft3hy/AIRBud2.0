@@ -74,27 +74,30 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
     // The parser outputs: [CHART_PLACEHOLDER:filename.png]
     const placeholderRegex = /\[CHART_PLACEHOLDER:(.*?)\]/g;
 
-    console.log("DEBUG: Document:", doc?.original_filename);
-    console.log("DEBUG: All Charts:", allCharts);
-    console.log("DEBUG: Content length:", content.length);
+    // console.log("DEBUG: Document:", doc?.original_filename);
+    // console.log("DEBUG: All Charts:", allCharts);
+    // console.log("DEBUG: Content length:", content.length);
 
     const newContent = content.replace(placeholderRegex, (match, filename) => {
       // Find chart by filename (map is faster)
       const chart = chartMap.get(filename);
 
-      console.log(`DEBUG: Match '${match}' -> Filename '${filename}' -> Found: ${!!chart}`);
+      // console.log(`DEBUG: Match '${match}' -> Filename '${filename}' -> Found: ${!!chart}`);
 
       if (chart) {
-        console.log(`DEBUG: Injecting: ${chart.url}`);
+        // console.log(`DEBUG: Injecting: ${chart.url}`);
         // IMPORTANT: Markdown image syntax ![alt](url) breaks if alt text has newlines.
         // We must sanitize the description.
         const safeAlt = (chart.description || "Chart").replace(/[\r\n]+/g, " ");
-        return `![${safeAlt}](${chart.url})`;
+        const url = chart.url.startsWith("/api")
+          ? `/airbud${chart.url}`
+          : chart.url;
+        return `![${safeAlt}](${url})`;
       }
       return match;
     });
 
-    console.log("DEBUG: New Content length:", newContent.length);
+    // console.log("DEBUG: New Content length:", newContent.length);
     return newContent;
   }, [content, doc, allCharts]);
 

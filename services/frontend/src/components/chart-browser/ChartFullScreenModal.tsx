@@ -77,7 +77,9 @@ export const ChartFullscreenModal: React.FC<ChartFullscreenModalProps> = ({
           {/* Image Container */}
           <div className="flex-1 min-h-0 flex items-center justify-center mb-0">
             <img
-              src={imageUrl}
+              src={
+                imageUrl.startsWith("/api") ? `/airbud${imageUrl}` : imageUrl
+              }
               alt="Fullscreen Chart"
               className="max-w-full max-h-full object-contain shadow-2xl animate-in zoom-in-95 duration-300 select-none rounded-t-lg border border-white/10"
             />

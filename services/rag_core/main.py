@@ -97,6 +97,9 @@ async def run_pipeline_task(collection_id: int, filename: str, vision_model: str
 
     from datetime import datetime
 
+    # Generate unique Job ID for this execution
+    current_job_id = str(uuid.uuid4())
+
     def update_status(stage: str, step: str, progress: int, details: Optional[Dict] = None):
         # Fetch current logs to append (Read-Modify-Write pattern isn't atomic here but acceptable for logs)
         # Ideally, we'd just push to a list in DB, but JSONB append is tricky in standard SQL without logic.
@@ -114,6 +117,7 @@ async def run_pipeline_task(collection_id: int, filename: str, vision_model: str
         
         # Always inject current filename context
         new_details["current_file"] = filename
+        new_details["job_id"] = current_job_id
         
         new_details["logs"] = logs
 
@@ -189,15 +193,24 @@ async def run_pipeline_task(collection_id: int, filename: str, vision_model: str
             "done",
             "Processing Complete!",
             100,
-            {"logs": ["Processing Finished Successfully."]}
+            {
+                "logs": ["Processing Finished Successfully."],
+                "job_id": current_job_id
+            }
         )
         
         # Cleanup status after delay (allow frontend to poll 'completed')
         await asyncio.sleep(30) 
         # Check if still completed (hasn't been overwritten by new job)
         final_check = db.get_job_status(collection_id)
+        
         if final_check and final_check.get("status") == "completed":
-            db.delete_job_status(collection_id)
+             # Only delete if it's OUR job that is still completed
+             details = final_check.get("details", {})
+             if details.get("job_id") == current_job_id:
+                 db.delete_job_status(collection_id)
+             else:
+                 logger.info(f"Skipping cleanup for {cid}: Job ID mismatch (Expected {current_job_id}, found {details.get('job_id')})")
 
     except Exception as e:
         logger.error(f"Pipeline failed for collection {cid}: {e}", exc_info=True)

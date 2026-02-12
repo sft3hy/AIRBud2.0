@@ -43,7 +43,20 @@ class WhisperAudioModel:
         try:
             logger.info(f"Loading Whisper 'medium' model on {self.device}...")
             # 'medium' is a good balance of speed/accuracy for CPU/GPU
-            self.model = whisper.load_model("medium", device=self.device)
+            
+            offline_path = config.get("WHISPER_MODEL_PATH") # Assuming config is a dict or object. Wait, config is imported as `from src.config import config`.
+            # Let me check src/config.py contents first to be safe, but usually it's an object. 
+            # Actually, I should just use os.getenv since config.py might not have it yet and I didn't plan to update config.py for vision, just models.py
+            # But the plan said "Update models.py".
+            import os
+            offline_path = os.getenv("WHISPER_MODEL_PATH")
+            
+            if offline_path and os.path.exists(offline_path):
+                 logger.info(f"Loading from offline path: {offline_path}")
+                 self.model = whisper.load_model(offline_path, device=self.device)
+            else:
+                 self.model = whisper.load_model("medium", device=self.device)
+            
             return True
         except Exception as e:
             logger.error(f"Failed to load Whisper model: {e}", exc_info=True)

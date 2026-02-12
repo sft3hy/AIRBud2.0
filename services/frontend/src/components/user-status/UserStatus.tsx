@@ -18,14 +18,17 @@ export const UserStatus = () => {
 
   if (!systemStatus?.user) return null;
 
+  const user = systemStatus.user;
+  const isPOauth = !user.piv_id; // If no PIV ID, assume OAuth
+
   return (
     <div className="flex items-center gap-2 text-right">
       <div className="flex flex-col leading-tight">
         <span className="truncate text-lg font-medium">
-          {systemStatus.user.cn}
+          {isPOauth ? user.email : user.cn}
         </span>
         <span className="truncate text-sm text-muted-foreground">
-          {systemStatus.user.org}
+          {user.org}
         </span>
       </div>
 
@@ -40,7 +43,7 @@ export const UserStatus = () => {
             side="bottom"
             className="bg-foreground text-background font-medium"
           >
-            <p>Logged in via CAC/PIV</p>
+            <p>{isPOauth ? "Logged in via PKI" : "Logged in via CAC/PIV"}</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

@@ -4,6 +4,16 @@ import gc
 import cv2
 import numpy as np
 import torch
+# --- PYTORCH 2.6+ WEIGHTS_ONLY FIX ---
+# Detectron2/FVCore might not yet support weights_only=True for legacy weights.
+# We monkeypatch torch.load to set weights_only=False if it's not explicitly provided.
+orig_torch_load = torch.load
+def patched_torch_load(*args, **kwargs):
+    if 'weights_only' not in kwargs:
+        kwargs['weights_only'] = False
+    return orig_torch_load(*args, **kwargs)
+torch.load = patched_torch_load
+# -------------------------------------
 from PIL import Image
 from typing import List, Tuple
 from pathlib import Path
@@ -18,10 +28,10 @@ try:
     from detectron2 import model_zoo
 
     _DETECTRON2_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     _DETECTRON2_AVAILABLE = False
     logger.warning(
-        "Detectron2 not installed. Vision features will rely on CV heuristics."
+        f"Detectron2 not installed or import failed: {e}. Vision features will rely on CV heuristics."
     )
 
 
@@ -71,10 +81,14 @@ class ChartDetector:
                 self.cfg.MODEL.DEVICE = "cpu"
 
             # 3. Weights
-            self._ensure_weights()
-            self.cfg.MODEL.WEIGHTS = str(
-                config.MODEL_CACHE_DIR / config.MODEL_WEIGHTS_FILE
-            )
+            if config.OFFLINE_MODEL_PATH and Path(config.OFFLINE_MODEL_PATH).exists():
+                logger.info(f"Using offline model weights from {config.OFFLINE_MODEL_PATH}")
+                self.cfg.MODEL.WEIGHTS = config.OFFLINE_MODEL_PATH
+            else:
+                self._ensure_weights()
+                self.cfg.MODEL.WEIGHTS = str(
+                    config.MODEL_CACHE_DIR / config.MODEL_WEIGHTS_FILE
+                )
 
             # 4. Predictor
             self.predictor = DefaultPredictor(self.cfg)

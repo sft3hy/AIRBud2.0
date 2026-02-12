@@ -127,7 +127,9 @@ class DatabaseManager:
 
     def _init_postgres_tables(self):
         with self.get_cursor(commit=True) as cur:
-            cur.execute("CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, piv_id TEXT UNIQUE NOT NULL, display_name TEXT, organization TEXT, email TEXT, last_login TIMESTAMP, created_at TIMESTAMP DEFAULT NOW())")
+            # PIV_ID is no longer strictly NOT NULL in new setups, but we keep it compatible
+            # We will use _migrate_schema to relax constraints on existing DBs
+            cur.execute("CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, piv_id TEXT UNIQUE, display_name TEXT, organization TEXT, email TEXT UNIQUE, last_login TIMESTAMP, created_at TIMESTAMP DEFAULT NOW())")
             cur.execute("CREATE TABLE IF NOT EXISTS groups (id SERIAL PRIMARY KEY, name TEXT NOT NULL, description TEXT, owner_id INTEGER REFERENCES users(id), is_public BOOLEAN DEFAULT FALSE, invite_token TEXT UNIQUE, created_at TIMESTAMP DEFAULT NOW())")
             cur.execute("CREATE TABLE IF NOT EXISTS group_members (group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, joined_at TIMESTAMP DEFAULT NOW(), PRIMARY KEY (group_id, user_id))")
             cur.execute("CREATE TABLE IF NOT EXISTS collections (id SERIAL PRIMARY KEY, name TEXT, owner_id INTEGER REFERENCES users(id), group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE, created_at TIMESTAMP DEFAULT NOW())")
@@ -138,6 +140,21 @@ class DatabaseManager:
             cur.execute("CREATE TABLE IF NOT EXISTS queries (id SERIAL PRIMARY KEY, collection_id INTEGER REFERENCES collections(id) ON DELETE CASCADE, user_id INTEGER REFERENCES users(id), question TEXT, response TEXT, sources_json TEXT, timestamp TIMESTAMP)")
             cur.execute("ALTER TABLE queries ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)")
             cur.execute("CREATE TABLE IF NOT EXISTS processing_jobs (collection_id INTEGER PRIMARY KEY, status TEXT, stage TEXT, step TEXT, progress INTEGER, details JSONB, updated_at TIMESTAMP DEFAULT NOW())")
+            
+            # --- MIGRATION: Ensure email is unique and piv_id is nullable ---
+            try:
+                cur.execute("ALTER TABLE users ALTER COLUMN piv_id DROP NOT NULL")
+            except Exception:
+                pass # Already nullable or other issue
+
+            try:
+                # Deduplicate/Cleanup empty emails before adding unique constraint
+                # If multiple users have email='', we set them to NULL
+                cur.execute("UPDATE users SET email = NULL WHERE email = ''")
+                # Add unique constraint to email if not exists
+                cur.execute("ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email)")
+            except Exception as e:
+                logger.warning(f"Failed to apply email unique constraint: {e}")
 
     # --- Job Status Operations ---
     def upsert_job_status(self, collection_id: int, status: str, stage: str, step: str, progress: int, details: Dict = None):
@@ -189,23 +206,51 @@ class DatabaseManager:
         with self.get_cursor(commit=True) as cur:
             cur.execute(self._q("DELETE FROM processing_jobs WHERE collection_id = %s"), (collection_id,))
 
-    def upsert_user(self, piv_id: str, display_name: str, organization: str, email: str = "") -> int:
+    def upsert_user(self, piv_id: Optional[str], display_name: str, organization: str, email: str = "") -> int:
         with self.get_cursor(commit=True) as cur:
-            cur.execute(self._q("SELECT id FROM users WHERE piv_id = %s"), (piv_id,))
-            res = cur.fetchone()
-            if res:
-                uid = res['id']
+            uid = None
+            
+            # 1. Try Lookup by Email (Priority for OAuth)
+            if email:
+                cur.execute(self._q("SELECT id FROM users WHERE email = %s"), (email,))
+                res = cur.fetchone()
+                if res:
+                    uid = res['id']
+
+            # 2. Try Lookup by PIV ID (Priority for CAC - fallback if email didn't match)
+            if not uid and piv_id:
+                cur.execute(self._q("SELECT id FROM users WHERE piv_id = %s"), (piv_id,))
+                res = cur.fetchone()
+                if res:
+                    uid = res['id']
+            
+            # 3. Update or Insert
+            if uid:
+                # Update existing user
+                # Only update PIV ID if provided and not currently set? Or overwrite? 
+                # For now, we update fields provided.
                 cur.execute(self._q("UPDATE users SET last_login=%s, display_name=%s, organization=%s WHERE id=%s"), 
                            (datetime.now(), display_name, organization, uid))
+                
+                # If we found by email but provided a piv_id, define it (linking CAC to OAuth account)
+                if piv_id:
+                     cur.execute(self._q("UPDATE users SET piv_id=%s WHERE id=%s AND piv_id IS NULL"), (piv_id, uid))
+                
                 return uid
             else:
+                # Insert New User
                 cur.execute(self._q("INSERT INTO users (piv_id, display_name, organization, email, last_login) VALUES (%s, %s, %s, %s, %s)"), 
                            (piv_id, display_name, organization, email, datetime.now()))
-                # For SQLite, we can use lastrowid if needed, but returning id from RETURNING is Postgres only
+                
                 if settings.EPHEMERAL_MODE:
                     return cur.lastrowid
                 else:
-                    cur.execute("SELECT id FROM users WHERE piv_id = %s", (piv_id,))
+                    # We need to fetch ID back. 
+                    # If we have piv_id, use it lookup. If not, use email.
+                    if piv_id:
+                        cur.execute("SELECT id FROM users WHERE piv_id = %s", (piv_id,))
+                    else:
+                        cur.execute("SELECT id FROM users WHERE email = %s", (email,))
                     return cur.fetchone()['id']
 
     def create_group(self, name: str, description: str, is_public: bool, owner_id: int) -> Tuple[int, str]:

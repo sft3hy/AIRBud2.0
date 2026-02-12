@@ -66,7 +66,7 @@ services:
   rag_core:
     build:
       context: ./services/rag_core
-      dockerfile: Dockerfile.local
+      dockerfile: Dockerfile.offline
     image: airbud_core:latest
     container_name: airbud_core
     restart: always
@@ -82,10 +82,14 @@ services:
       - POSTGRES_USER=slammy
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=rag_db
-      - HF_HOME=/data/huggingface
+      - AUTH_MODE=CAC
       - KG_SERVICE_URL=http://kg_service:8003
+      # Offline Config
+      - TRANSFORMERS_OFFLINE=1
+      - EMBEDDING_MODEL_PATH=/models/huggingface/all-MiniLM-L6-v2
     volumes:
       - shared_data:/data
+      - ./offline_models/huggingface:/models/huggingface
     depends_on:
       parser:
         condition: service_started
@@ -101,7 +105,7 @@ services:
   parser:
     build:
       context: ./services/parser
-      dockerfile: Dockerfile.local
+      dockerfile: Dockerfile.offline
     image: airbud_parser:latest
     container_name: airbud_parser
     restart: always
@@ -109,8 +113,10 @@ services:
       - "8001:8001"
     environment:
       - PYTHONUNBUFFERED=1
+      - OFFLINE_MODEL_PATH=/models/detectron2/publaynet_faster_rcnn_R_50_FPN_3x.pth
     volumes:
       - shared_data:/data
+      - ./offline_models/detectron2:/models/detectron2
     networks:
       - airbud_network
     # Command removed: Using CMD from Dockerfile (Gunicorn)
@@ -119,7 +125,7 @@ services:
   vision:
     build:
       context: ./services/vision
-      dockerfile: Dockerfile.local
+      dockerfile: Dockerfile.offline
     image: airbud_vision:latest
     container_name: airbud_vision
     restart: always
@@ -129,9 +135,10 @@ services:
       - PYTHONUNBUFFERED=1
       # Ensure this points to your external Ollama instance
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - WHISPER_MODEL_PATH=/models/whisper/medium.pt
     volumes:
       - shared_data:/data
-      - huggingface_cache:/root/.cache/huggingface
+      - ./offline_models/whisper:/models/whisper
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

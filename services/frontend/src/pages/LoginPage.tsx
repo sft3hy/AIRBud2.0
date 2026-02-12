@@ -34,7 +34,7 @@ export const LoginPage = () => {
       setStatus("success");
 
       // Redirect would happen here
-      console.log("Certificate selected. Authenticating...");
+      // console.log("Certificate selected. Authenticating...");
     }, 2500);
   };
 

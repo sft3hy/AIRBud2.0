@@ -1,0 +1,35 @@
+FROM python:3.10-slim
+
+# System dependencies for OpenCV and Audio
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    libgl1 \
+    libglib2.0-0 \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Environment variables for Offline Model Caching
+ENV HF_HOME=/app/model_cache/huggingface \
+    XDG_CACHE_HOME=/app/model_cache \
+    PATH="/usr/local/bin:$PATH" \
+    PIP_NO_CACHE_DIR="true" \
+    # Offline Config
+    WHISPER_MODEL_PATH="/models/whisper/medium.pt"
+
+COPY requirements.txt .
+
+# Install CPU PyTorch
+RUN python3 -m pip install --no-cache-dir torch==2.5.1 torchvision==0.20.1 \
+    --index-url https://download.pytorch.org/whl/cpu
+
+RUN python3 -m pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# Create models directory for volume mount
+RUN mkdir -p /models
+
+EXPOSE 8002
+CMD ["gunicorn", "main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8002", "--threads", "2", "--timeout", "120"]

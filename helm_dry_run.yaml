@@ -1,0 +1,1494 @@
+---
+# Source: airbud-2-0/templates/configmap-env.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: airbud-config
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+data:
+  # --- Common Env Vars ---
+  POSTGRES_USER: "rag_user"
+  POSTGRES_DB: "rag_db"
+  # Note: Internal K8s DNS name for the Postgres Service
+  POSTGRES_SERVER: "airbud-postgres"
+
+  # Auth Mode
+  AUTH_MODE: "OAUTH"
+
+  # Offline Support
+  TRANSFORMERS_OFFLINE: "1"
+  HF_DATASETS_OFFLINE: "1"
+  
+  # Neo4j Settings
+  NEO4J_URI: "bolt://airbud-neo4j:7687"
+  NEO4J_USER: "neo4j"
+  
+  # Operating Modes
+  EPHEMERAL_MODE: "false"
+  TEST: "False"
+---
+# Source: airbud-2-0/templates/configmap-gateway.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: airbud-gateway-conf
+data:
+  no-cert.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head><title>Authentication Required</title></head>
+    <body><h1>Smart Card Required</h1><p>Access denied. Insert CAC/PIV.</p></body>
+    </html>
+
+
+
+  nginx.conf: |
+    error_log /var/log/nginx/error.log debug;
+    events { worker_connections 2048; }
+    http {
+        include mime.types;
+        default_type application/octet-stream;
+        sendfile on;
+        client_max_body_size 500M;
+
+        upstream frontend { server airbud-frontend:80; }
+        upstream rag_core { server airbud-rag-core:8000; }
+        upstream kg_service { server airbud-kg-service:8003; }
+        upstream oauth2_proxy { server airbud-oauth2-proxy:4180; }
+
+        server {
+            listen 80;
+            listen 443 ssl http2;
+            server_name localhost;
+
+            ssl_certificate     /etc/nginx/certs/server.crt;
+            ssl_certificate_key /etc/nginx/certs/server.key;
+            location /oauth2/ {
+                proxy_pass       http://oauth2_proxy;
+                proxy_set_header Host                    $host;
+                proxy_set_header X-Real-IP               $remote_addr;
+                proxy_set_header X-Scheme                $scheme;
+                proxy_set_header X-Auth-Request-Redirect $request_uri;
+            }
+
+            location = /oauth2/auth {
+                proxy_pass       http://oauth2_proxy;
+                proxy_set_header Host                    $host;
+                proxy_set_header X-Real-IP               $remote_addr;
+                proxy_set_header X-Scheme                $scheme;
+                proxy_set_header Content-Length          "";
+                proxy_pass_request_body                  off;
+            }
+
+            location /airbud/ {
+                auth_request /oauth2/auth;
+                error_page 401 = /oauth2/start?rd=$request_uri;
+                rewrite ^/airbud/(.*) /$1 break;
+                proxy_pass http://frontend;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+                proxy_set_header Host $host;
+            }
+
+            location /airbud/api/ {
+                auth_request /oauth2/auth;
+                error_page 401 = /oauth2/start?rd=$request_uri;
+                rewrite ^/airbud/api/(.*) /$1 break;
+                proxy_pass http://rag_core;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                auth_request_set $user   $upstream_http_x_auth_request_user;
+                auth_request_set $email  $upstream_http_x_auth_request_email;
+                proxy_set_header X-Auth-Request-User  $user;
+                proxy_set_header X-Auth-Request-Email $email;
+                # Compatibility with CAC headers for the backend
+                proxy_set_header X-Subject-DN "EMAIL=$email,CN=$user";
+                proxy_set_header X-Client-Verify "SUCCESS";
+            }
+
+            location /airbud/static/ {
+                # Proxy static assets (charts, images) to RAG Core
+                rewrite ^/airbud/static/(.*) /static/$1 break;
+                proxy_pass http://rag_core;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+            }
+            location /airbud/graph-api/ {
+                rewrite ^/airbud/graph-api/(.*) /$1 break;
+                proxy_pass http://kg_service;
+            }
+        }
+    }
+---
+# Source: airbud-2-0/templates/pvc.yaml
+# 1. Shared Data (ReadWriteMany - EFS)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airbud-shared-data
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  # Matches the Clairvoyant format: (env)-(project)-efs-sc
+  storageClassName: cosmichorizon-efs-sc
+---
+# Source: airbud-2-0/templates/pvc.yaml
+# 2. Postgres Data (ReadWriteOnce - EBS)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airbud-postgres-data
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: cosmichorizon-ebs-sc-retain
+---
+# Source: airbud-2-0/templates/pvc.yaml
+# 3. Neo4j Data (ReadWriteOnce - EBS)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airbud-neo4j-data
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: cosmichorizon-ebs-sc-retain
+---
+# Source: airbud-2-0/templates/pvc.yaml
+---
+# 5. Ollama Data (ReadWriteOnce - EBS)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airbud-ollama-data
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: cosmichorizon-ebs-sc-retain
+---
+# Source: airbud-2-0/templates/service-gateway.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: airbud-gateway
+  annotations:
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: NodePort
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: 443
+      protocol: TCP
+      nodePort: 30051
+  selector:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+    component: gateway
+---
+# Source: airbud-2-0/templates/service-oauth2-proxy.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: airbud-oauth2-proxy
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+    component: oauth2-proxy
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4180
+      targetPort: 4180
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    component: oauth2-proxy
+---
+# Source: airbud-2-0/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: airbud-frontend
+spec:
+  ports:
+    - port: 80
+      targetPort: 5173
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    component: frontend
+---
+# Source: airbud-2-0/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: airbud-rag-core
+spec:
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    component: rag-core
+---
+# Source: airbud-2-0/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: airbud-parser
+spec:
+  ports:
+    - port: 8001
+      targetPort: 8001
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    component: parser
+---
+# Source: airbud-2-0/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: airbud-vision
+spec:
+  ports:
+    - port: 8002
+      targetPort: 8002
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    component: vision
+---
+# Source: airbud-2-0/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: airbud-kg-service
+spec:
+  ports:
+    - port: 8003
+      targetPort: 8003
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    component: kg-service
+---
+# Source: airbud-2-0/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: airbud-postgres
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+      name: postgres
+  selector:
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    component: postgres
+---
+# Source: airbud-2-0/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: airbud-neo4j
+spec:
+  ports: 
+    - port: 7474
+      name: http
+    - port: 7687
+      name: bolt
+  selector:
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    component: neo4j
+---
+# Source: airbud-2-0/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: airbud-ollama
+spec:
+  ports: 
+    - port: 11434
+      name: http
+  selector:
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    component: ollama
+---
+# Source: airbud-2-0/templates/deployment-frontend.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airbud-frontend
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+    component: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airbud-2-0
+      app.kubernetes.io/instance: airbud-test
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airbud-2-0
+        app.kubernetes.io/instance: airbud-test
+        component: frontend
+    spec:
+      imagePullSecrets:
+        - name: s-hxl2n
+      containers:
+        - name: frontend
+          image: "harbor.i2cv.io/cosmichorizon/airbud-frontend:latest"
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          ports:
+            - containerPort: 5173
+          env:
+            - name: VITE_API_URL
+              value: https://test-cosmichorizon-worker-68a3110f01feebd0.elb.us-gov-west-1.amazonaws.com/airbud
+            - name: VITE_TEST_MODE
+              value: "False"
+      nodeSelector:
+        project: cosmichorizon
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                  - rag-core
+                  - parser
+                  - vision
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      tolerations:
+        - effect: NoSchedule
+          key: karpenter-cpu
+          operator: Equal
+          value: "true"
+        - effect: NoSchedule
+          key: project
+          operator: Equal
+          value: cosmichorizon
+---
+# Source: airbud-2-0/templates/deployment-gateway.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airbud-gateway
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+    component: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      helm.sh/chart: airbud-2-0-1.0.61
+      app.kubernetes.io/name: airbud-2-0
+      app.kubernetes.io/instance: airbud-test
+      app.kubernetes.io/version: "1.0.61"
+      app.kubernetes.io/managed-by: Helm
+      component: gateway
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: airbud-2-0-1.0.61
+        app.kubernetes.io/name: airbud-2-0
+        app.kubernetes.io/instance: airbud-test
+        app.kubernetes.io/version: "1.0.61"
+        app.kubernetes.io/managed-by: Helm
+        component: gateway
+    spec:
+      containers:
+        - name: nginx
+          image: "nginx:alpine"
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          ports:
+            - containerPort: 80
+            - containerPort: 443
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+            - name: server-certs
+              mountPath: /etc/nginx/certs/server.crt
+              subPath: tls.crt
+            - name: server-certs
+              mountPath: /etc/nginx/certs/server.key
+              subPath: tls.key
+          
+          livenessProbe:
+            tcpSocket:
+              port: 443
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 443
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+      volumes:
+        - name: config
+          configMap:
+            name: airbud-gateway-conf
+        - name: server-certs
+          secret:
+            secretName: airbud-server-cert
+
+      # --- KARPENTER CONFIG ---
+      nodeSelector:
+        project: cosmichorizon
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                  - rag-core
+                  - parser
+                  - vision
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      tolerations:
+        - effect: NoSchedule
+          key: karpenter-cpu
+          operator: Equal
+          value: "true"
+        - effect: NoSchedule
+          key: project
+          operator: Equal
+          value: cosmichorizon
+---
+# Source: airbud-2-0/templates/deployment-kg-service.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airbud-kg-service
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+    component: kg-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airbud-2-0
+      app.kubernetes.io/instance: airbud-test
+      component: kg-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airbud-2-0
+        app.kubernetes.io/instance: airbud-test
+        component: kg-service
+    spec:
+      imagePullSecrets:
+        - name: s-hxl2n
+      containers:
+        - name: kg-service
+          image: "harbor.i2cv.io/cosmichorizon/airbud-kg:latest"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8003
+              protocol: TCP
+          # Load generic secrets (DB passwords, etc.)
+          envFrom:
+            - configMapRef:
+                name: airbud-config
+            - secretRef:
+                name: airbud-secrets
+          env:
+            # --- External Secrets Mapping ---
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airbud-secrets
+                  key: GROQ_API_KEY
+            - name: SANCTUARY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airbud-secrets
+                  key: SANCTUARY_API_KEY
+            # -------------------------------
+            - name: NEO4J_URI
+              value: "bolt://airbud-neo4j:7687"
+            - name: NEO4J_USER
+              value: "neo4j"
+            - name: TEST
+              value: "False"
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1Gi
+            requests:
+              cpu: 200m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      nodeSelector:
+        project: cosmichorizon
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                  - rag-core
+                  - parser
+                  - vision
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      tolerations:
+        - effect: NoSchedule
+          key: karpenter-cpu
+          operator: Equal
+          value: "true"
+        - effect: NoSchedule
+          key: project
+          operator: Equal
+          value: cosmichorizon
+---
+# Source: airbud-2-0/templates/deployment-oauth2-proxy.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airbud-oauth2-proxy
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+    component: oauth2-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airbud-2-0
+      app.kubernetes.io/instance: airbud-test
+      component: oauth2-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airbud-2-0
+        app.kubernetes.io/instance: airbud-test
+        component: oauth2-proxy
+    spec:
+      imagePullSecrets:
+        - name: s-hxl2n
+      containers:
+        - name: oauth2-proxy
+          image: "harbor.i2cv.io/cosmichorizon/oauth2-proxy:v7.4.0"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 4180
+              protocol: TCP
+          env:
+            - name: OAUTH2_PROXY_HTTP_ADDRESS
+              value: "0.0.0.0:4180"
+            - name: OAUTH2_PROXY_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: airbud-secrets
+                  key: OAUTH2_PROXY_COOKIE_SECRET
+            - name: OAUTH2_PROXY_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: airbud-secrets
+                  key: OAUTH2_PROXY_CLIENT_ID
+            - name: OAUTH2_PROXY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: airbud-secrets
+                  key: OAUTH2_PROXY_CLIENT_SECRET
+            - name: OAUTH2_PROXY_COOKIE_DOMAINS
+              value: "*"
+            - name: OAUTH2_PROXY_EMAIL_DOMAINS
+              value: "*"
+            - name: OAUTH2_PROXY_UPSTREAMS
+              value: "file:///dev/null"
+            - name: OAUTH2_PROXY_REVERSE_PROXY
+              value: "true"
+            - name: OAUTH2_PROXY_REDIRECT_URL
+              value: "https://test-cosmichorizon-worker-68a3110f01feebd0.elb.us-gov-west-1.amazonaws.com/oauth2/callback"
+            - name: OAUTH2_PROXY_PROVIDER
+              value: "oidc" # Assuming OIDC based on previous context
+            - name: OAUTH2_PROXY_OIDC_ISSUER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: airbud-secrets
+                  key: OIDC_ISSUER_URL
+          resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi
+            requests:
+              cpu: 100m
+              memory: 64Mi
+      nodeSelector:
+        project: cosmichorizon
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                  - rag-core
+                  - parser
+                  - vision
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      tolerations:
+        - effect: NoSchedule
+          key: karpenter-cpu
+          operator: Equal
+          value: "true"
+        - effect: NoSchedule
+          key: project
+          operator: Equal
+          value: cosmichorizon
+---
+# Source: airbud-2-0/templates/deployment-ollama.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airbud-ollama
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+    component: ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airbud-2-0
+      app.kubernetes.io/instance: airbud-test
+      component: ollama
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airbud-2-0
+        app.kubernetes.io/instance: airbud-test
+        component: ollama
+    spec:
+      imagePullSecrets:
+        - name: s-hxl2n
+      containers:
+        - name: ollama
+          image: "ollama/ollama:latest"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 11434
+              protocol: TCP
+          env:
+            - name: OLLAMA_HOST
+              value: "0.0.0.0"
+          volumeMounts:
+            - name: ollama-storage
+              mountPath: /root/.ollama
+          resources:
+            limits:
+              cpu: "2"
+              memory: 8Gi
+              nvidia.com/gpu: 1
+            requests:
+              cpu: "1"
+              memory: 4Gi
+          livenessProbe:
+            tcpSocket:
+              port: 11434
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          readinessProbe:
+            tcpSocket:
+              port: 11434
+            initialDelaySeconds: 15
+            periodSeconds: 10
+        
+        # --- SIDE CAR: Model Loader ---
+        - name: model-loader
+          image: "ollama/ollama:latest"
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Waiting for Ollama API..."
+              # Wait until we can list models (implies server is up)
+              until ollama list > /dev/null 2>&1; do 
+                echo "..."
+                sleep 5
+              done
+              
+              echo "Ollama is ready! Pulling models..."
+              ollama pull granite3.2-vision
+              
+              echo "model pulled. Sleeping..."
+              sleep infinity
+          env:
+            - name: OLLAMA_HOST
+              value: "localhost:11434"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      
+      volumes:
+        - name: ollama-storage
+          persistentVolumeClaim:
+            claimName: airbud-ollama-data
+      
+      # --- GPU CONFIG ---
+      nodeSelector:
+        project: cosmichorizon
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: component
+                operator: In
+                values:
+                - rag-core
+                - parser
+                - vision
+            topologyKey: kubernetes.io/hostname
+      tolerations:
+        - effect: NoSchedule
+          key: nvidia.com/gpu
+          operator: Equal
+          value: "true"
+        - effect: NoSchedule
+          key: project
+          operator: Equal
+          value: cosmichorizon
+---
+# Source: airbud-2-0/templates/deployment-parser.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airbud-parser
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+    component: parser
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airbud-2-0
+      app.kubernetes.io/instance: airbud-test
+      component: parser
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airbud-2-0
+        app.kubernetes.io/instance: airbud-test
+        component: parser
+    spec:
+      imagePullSecrets:
+        - name: s-hxl2n
+      containers:
+        - name: parser
+          image: "harbor.i2cv.io/cosmichorizon/airbud-parser:latest"
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8001
+              protocol: TCP
+          volumeMounts:
+            - name: shared-data
+              mountPath: /data
+            - name: offline-models
+              mountPath: /models/detectron2
+              subPath: detectron2
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: WORKERS
+              value: "1"
+            - name: OFFLINE_MODEL_PATH
+              value: "/models/detectron2/publaynet_faster_rcnn_R_50_FPN_3x.pth"
+          resources:
+            limits:
+              cpu: "1"
+              memory: 6Gi
+              nvidia.com/gpu: 1
+            requests:
+              cpu: 500m
+              memory: 4Gi
+      volumes:
+        - name: shared-data
+          persistentVolumeClaim:
+            claimName: airbud-shared-data
+        - name: offline-models
+          persistentVolumeClaim:
+            claimName: airbud-offline-models
+            readOnly: true
+      # --- KARPENTER CONFIG ---
+      nodeSelector:
+        project: cosmichorizon
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                  - rag-core
+                  - parser
+                  - vision
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      tolerations:
+        - effect: NoSchedule
+          key: karpenter-cpu
+          operator: Equal
+          value: "true"
+        - effect: NoSchedule
+          key: project
+          operator: Equal
+          value: cosmichorizon
+---
+# Source: airbud-2-0/templates/deployment-rag-core.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airbud-rag-core
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+    component: rag-core
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airbud-2-0
+      app.kubernetes.io/instance: airbud-test
+      component: rag-core
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airbud-2-0
+        app.kubernetes.io/instance: airbud-test
+        component: rag-core
+    spec:
+      imagePullSecrets:
+        - name: s-hxl2n
+      
+      initContainers:
+        - name: init-fs
+          image: alpine:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - "mkdir -p /data/uploads /data/charts /data/faiss_indexes /data/chunks /data/huggingface && chmod -R 777 /data"
+          volumeMounts:
+            - name: shared-data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+
+      containers:
+        - name: rag-core
+          image: "harbor.i2cv.io/cosmichorizon/airbud-core:latest"
+          imagePullPolicy: Always
+          command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+          envFrom:
+            - configMapRef:
+                name: airbud-config
+            - secretRef:
+                name: airbud-secrets
+          env:
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airbud-env
+                  key: GROQ_API_KEY
+            - name: SANCTUARY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airbud-env
+                  key: SANCTUARY_API_KEY
+            - name: PARSER_API_URL
+              value: "http://airbud-parser:8001"
+            - name: VISION_API_URL
+              value: "http://airbud-vision:8002"
+            - name: KG_SERVICE_URL
+              value: "http://airbud-kg-service:8003"
+            - name: HF_HOME
+              value: "/data/huggingface"
+            - name: EMBEDDING_MODEL_PATH
+              value: "/models/huggingface/all-MiniLM-L6-v2"
+          volumeMounts:
+            - name: shared-data
+              mountPath: /data
+            - name: offline-models
+              mountPath: /models/huggingface
+              subPath: huggingface
+          resources:
+            limits:
+              cpu: "1"
+              memory: 4Gi
+            requests:
+              cpu: 500m
+              memory: 2Gi
+          
+          # --- ADDED PROBES ---
+          livenessProbe:
+            httpGet:
+              path: /health # Assuming FastAPI endpoint, otherwise use tcpSocket
+              port: 8000
+            initialDelaySeconds: 45
+            periodSeconds: 15
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          # --------------------
+
+      volumes:
+        - name: shared-data
+          persistentVolumeClaim:
+            claimName: airbud-shared-data
+        - name: offline-models
+          persistentVolumeClaim:
+            claimName: airbud-offline-models
+            readOnly: true
+      # --- KARPENTER CONFIG ---
+      nodeSelector:
+        project: cosmichorizon
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                  - rag-core
+                  - parser
+                  - vision
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      tolerations:
+        - effect: NoSchedule
+          key: karpenter-cpu
+          operator: Equal
+          value: "true"
+        - effect: NoSchedule
+          key: project
+          operator: Equal
+          value: cosmichorizon
+---
+# Source: airbud-2-0/templates/deployment-vision.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airbud-vision
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+    component: vision
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airbud-2-0
+      app.kubernetes.io/instance: airbud-test
+      component: vision
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airbud-2-0
+        app.kubernetes.io/instance: airbud-test
+        component: vision
+    spec:
+      imagePullSecrets:
+        - name: s-hxl2n
+      containers:
+        - name: vision
+          image: "harbor.i2cv.io/cosmichorizon/airbud-vision:latest"
+          ports:
+            - containerPort: 8002
+          env:
+            - name: OLLAMA_BASE_URL
+              value: "http://airbud-ollama:11434"
+          volumeMounts:
+            - name: shared-data
+              mountPath: /data
+            - name: hf-cache
+              mountPath: /root/.cache/huggingface
+            - name: offline-models
+              mountPath: /root/.cache/whisper
+              subPath: whisper
+            - name: offline-models
+              mountPath: /models/huggingface
+              subPath: huggingface
+          resources:
+            limits:
+              cpu: "2"
+              memory: 4Gi
+              nvidia.com/gpu: 1
+            requests:
+              cpu: "1"
+              memory: 2Gi
+          
+          livenessProbe:
+            tcpSocket:
+              port: 8002
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          readinessProbe:
+            tcpSocket:
+              port: 8002
+            initialDelaySeconds: 15
+            periodSeconds: 10
+
+      volumes:
+        - name: shared-data
+          persistentVolumeClaim:
+            claimName: airbud-shared-data
+        - name: hf-cache
+          emptyDir: {}
+        - name: offline-models
+          persistentVolumeClaim:
+            claimName: airbud-offline-models
+            readOnly: true
+      
+      # --- KARPENTER GPU CONFIG ---
+      nodeSelector:
+        project: cosmichorizon
+      # Uses GPU Affinity
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: component
+                operator: In
+                values:
+                - rag-core
+                - parser
+                - vision
+            topologyKey: kubernetes.io/hostname
+      # Uses GPU Tolerations
+      tolerations:
+        - effect: NoSchedule
+          key: nvidia.com/gpu
+          operator: Equal
+          value: "true"
+        - effect: NoSchedule
+          key: project
+          operator: Equal
+          value: cosmichorizon
+---
+# Source: airbud-2-0/templates/statefulset-neo4j.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: airbud-neo4j
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+    component: neo4j
+spec:
+  serviceName: airbud-neo4j
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airbud-2-0
+      app.kubernetes.io/instance: airbud-test
+      component: neo4j
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airbud-2-0
+        app.kubernetes.io/instance: airbud-test
+        component: neo4j
+    spec:
+      imagePullSecrets:
+        - name: s-hxl2n
+      containers:
+        - name: neo4j
+          image: "neo4j:5.15-community"
+          resources:
+            limits:
+              cpu: "1"
+              memory: 2Gi
+            requests:
+              cpu: 500m
+              memory: 1Gi
+          ports:
+            - containerPort: 7474
+              name: http
+            - containerPort: 7687
+              name: bolt
+          env:
+            - name: RAG_NEO4J_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: airbud-secrets
+                  key: NEO4J_PASSWORD
+            - name: NEO4J_AUTH
+              value: "neo4j/$(RAG_NEO4J_PASSWORD)"
+            - name: NEO4J_dbms_memory_heap_initial__size
+              value: "512m"
+            - name: NEO4J_dbms_memory_heap_max__size
+              value: "1G"
+
+          volumeMounts:
+            - name: neo4j-data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - cypher-shell -u neo4j -p $RAG_NEO4J_PASSWORD "RETURN 1"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          livenessProbe:
+            tcpSocket:
+              port: 7687
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            
+      # --- KARPENTER CONFIG ---
+      nodeSelector:
+        project: cosmichorizon
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                  - rag-core
+                  - parser
+                  - vision
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      tolerations:
+        - effect: NoSchedule
+          key: karpenter-cpu
+          operator: Equal
+          value: "true"
+        - effect: NoSchedule
+          key: project
+          operator: Equal
+          value: cosmichorizon
+      
+      volumes:
+        - name: neo4j-data
+          persistentVolumeClaim:
+            # References the standalone PVC in pvc.yaml
+            claimName: airbud-neo4j-data
+---
+# Source: airbud-2-0/templates/statefulset-postgres.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: airbud-postgres
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+    component: postgres
+spec:
+  serviceName: airbud-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airbud-2-0
+      app.kubernetes.io/instance: airbud-test
+      component: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airbud-2-0
+        app.kubernetes.io/instance: airbud-test
+        component: postgres
+    spec:
+      imagePullSecrets:
+        - name: s-hxl2n
+      containers:
+        - name: postgres
+          image: "postgres:15-alpine"
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1Gi
+            requests:
+              cpu: 200m
+              memory: 512Mi
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_USER
+              value: "rag_user"
+            - name: POSTGRES_DB
+              value: "rag_db"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: airbud-secrets
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - rag_user
+                - -d
+                - rag_db
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      
+      # --- KARPENTER CONFIG ---
+      nodeSelector:
+        project: cosmichorizon
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                  - rag-core
+                  - parser
+                  - vision
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      tolerations:
+        - effect: NoSchedule
+          key: karpenter-cpu
+          operator: Equal
+          value: "true"
+        - effect: NoSchedule
+          key: project
+          operator: Equal
+          value: cosmichorizon
+      
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            # References the standalone PVC in pvc.yaml
+            claimName: airbud-postgres-data
+---
+# Source: airbud-2-0/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: airbud-gateway
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    external-dns.alpha.kubernetes.io/target: "test-cosmichorizon-worker-68a3110f01feebd0.elb.us-gov-west-1.amazonaws.com"
+
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    cert-manager.io/issuer: airbud-selfsigned
+    nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+    nginx.ingress.kubernetes.io/proxy-body-size: 100m
+    nginx.ingress.kubernetes.io/proxy-ssl-verify: "off"
+
+spec:
+  ingressClassName: cosmichorizon-nginx
+
+  rules:
+    - host: "test-cosmichorizon-worker-68a3110f01feebd0.elb.us-gov-west-1.amazonaws.com"
+      http:
+        paths:
+          - path: /airbud
+            pathType: Prefix
+            backend:
+              service:
+                name: airbud-gateway
+                port:
+                  number: 443
+  tls:
+    - hosts:
+      - test-cosmichorizon-worker-68a3110f01feebd0.elb.us-gov-west-1.amazonaws.com
+      secretName: airbud-server-cert
+---
+# Source: airbud-2-0/templates/issuer.yaml
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: airbud-selfsigned
+  labels:
+    helm.sh/chart: airbud-2-0-1.0.61
+    app.kubernetes.io/name: airbud-2-0
+    app.kubernetes.io/instance: airbud-test
+    app.kubernetes.io/version: "1.0.61"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  selfSigned: {}
