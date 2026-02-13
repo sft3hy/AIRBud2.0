@@ -8,11 +8,25 @@ mkdir -p offline_models/whisper
 
 echo "Starting download of offline models..."
 
+# Function to download file
+download_file() {
+    url="$1"
+    output="$2"
+    
+    if command -v wget &> /dev/null; then
+        wget -O "$output" "$url"
+    elif command -v curl &> /dev/null; then
+        curl -L -o "$output" "$url"
+    else
+        echo "Error: Neither wget nor curl found. Please install one of them."
+        exit 1
+    fi
+}
+
 # 1. Detectron2 (PubLayNet)
 echo "Downloading Detectron2 PubLayNet model..."
 if [ ! -f "offline_models/detectron2/publaynet_faster_rcnn_R_50_FPN_3x.pth" ]; then
-    wget -O offline_models/detectron2/publaynet_faster_rcnn_R_50_FPN_3x.pth \
-    "https://huggingface.co/nlpconnect/PubLayNet-faster_rcnn_R_50_FPN_3x/resolve/main/model_final.pth"
+    download_file "https://huggingface.co/nlpconnect/PubLayNet-faster_rcnn_R_50_FPN_3x/resolve/main/model_final.pth" "offline_models/detectron2/publaynet_faster_rcnn_R_50_FPN_3x.pth"
 else
     echo "Detectron2 model already exists, skipping."
 fi
@@ -20,9 +34,8 @@ fi
 # 2. Whisper (Medium)
 echo "Downloading Whisper Medium model..."
 if [ ! -f "offline_models/whisper/medium.pt" ]; then
-    # URL derived from standard Whisper download logic for 'medium'
-    wget -O offline_models/whisper/medium.pt \
-    "https://openaipublic.azureedge.net/main/whisper/models/345ae4da62f9b3d59413831a8e1be68464296218/medium.pt"
+    # URL updated from openai-whisper library check
+    download_file "https://openaipublic.azureedge.net/main/whisper/models/345ae4da62f9b3d59415adc60127b97c714f32e89e936602e85993674d08dcb1/medium.pt" "offline_models/whisper/medium.pt"
 else
     echo "Whisper model already exists, skipping."
 fi
