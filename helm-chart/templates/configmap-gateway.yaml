@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "airbud.fullname" . }}-gateway-conf
+data:
+  no-cert.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head><title>Authentication Required</title></head>
+    <body><h1>Smart Card Required</h1><p>Access denied. Insert CAC/PIV.</p></body>
+    </html>
+
+  nginx.conf: |
+    error_log /var/log/nginx/error.log debug;
+    events { worker_connections 2048; }
+    http {
+        include mime.types;
+        default_type application/octet-stream;
+        sendfile on;
+        client_max_body_size 500M;
+
+        upstream frontend { server {{ include "airbud.fullname" . }}-frontend:80; }
+        upstream rag_core { server {{ include "airbud.fullname" . }}-rag-core:8000; }
+        {{- if .Values.kgService.enabled }}
+        upstream kg_service { server {{ include "airbud.fullname" . }}-kg-service:8003; }
+        {{- end }}
+
+        server {
+            listen 80;
+            listen 443 ssl;
+            server_name localhost;
+
+            ssl_certificate     /etc/nginx/certs/server.crt;
+            ssl_certificate_key /etc/nginx/certs/server.key;
+            
+            # Trust connections from Ingress (no client cert verification here)
+            ssl_verify_client off;
+            
+            {{- if .Values.gateway.cacEnabled }}
+            # Error page for missing/invalid certificates
+            error_page 496 /no-cert.html;
+            
+            # Check header passed by Ingress (X-SSL-Client-Verify)
+            set $auth_passed 0;
+            if ($http_x_ssl_client_verify = "SUCCESS") {
+                set $auth_passed 1;
+            }
+            if ($auth_passed = 0) {
+                return 496;
+            }
+            {{- end }}
+
+            location = /no-cert.html {
+                root /usr/share/nginx/html;
+                internal;
+            }
+
+            location /airbud/ {
+                rewrite ^/airbud/(.*) /$1 break;
+                proxy_pass http://frontend;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+                proxy_set_header Host $host;
+            }
+
+            location /airbud/api/ {
+                rewrite ^/airbud/api/(.*) /$1 break;
+                proxy_pass http://rag_core;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                {{- if .Values.gateway.cacEnabled }}
+                # Pass through CAC headers from Ingress
+                proxy_set_header X-Subject-DN $http_x_ssl_client_dn;
+                proxy_set_header X-Client-Verify $http_x_ssl_client_verify;
+                {{- end }}
+            }
+
+            location /airbud/static/ {
+                rewrite ^/airbud/static/(.*) /static/$1 break;
+                proxy_pass http://rag_core;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+            }
+
+            {{- if .Values.kgService.enabled }}
+            location /airbud/graph-api/ {
+                rewrite ^/airbud/graph-api/(.*) /$1 break;
+                proxy_pass http://kg_service;
+            }
+            {{- end }}
+        }
+    }

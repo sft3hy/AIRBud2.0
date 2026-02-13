@@ -1,0 +1,117 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "airbud.fullname" . }}-frontend
+spec:
+  ports:
+    - port: 80
+      targetPort: 5173
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "airbud.selectorLabels" . | nindent 4 }}
+    component: frontend
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "airbud.fullname" . }}-rag-core
+spec:
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "airbud.selectorLabels" . | nindent 4 }}
+    component: rag-core
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "airbud.fullname" . }}-parser
+spec:
+  ports:
+    - port: 8001
+      targetPort: 8001
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "airbud.selectorLabels" . | nindent 4 }}
+    component: parser
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "airbud.fullname" . }}-vision
+spec:
+  ports:
+    - port: 8002
+      targetPort: 8002
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "airbud.selectorLabels" . | nindent 4 }}
+    component: vision
+---
+{{- if .Values.kgService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "airbud.fullname" . }}-kg-service
+spec:
+  ports:
+    - port: 8003
+      targetPort: 8003
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "airbud.selectorLabels" . | nindent 4 }}
+    component: kg-service
+{{- end }}
+---
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "airbud.fullname" . }}-postgres
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+      name: postgres
+  selector:
+    {{- include "airbud.selectorLabels" . | nindent 4 }}
+    component: postgres
+{{- end }}
+---
+{{- if .Values.neo4j.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "airbud.fullname" . }}-neo4j
+spec:
+  ports: 
+    - port: 7474
+      name: http
+    - port: 7687
+      name: bolt
+  selector:
+    {{- include "airbud.selectorLabels" . | nindent 4 }}
+    component: neo4j
+{{- end }}
+---
+{{- if .Values.ollama.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "airbud.fullname" . }}-ollama
+spec:
+  ports: 
+    - port: 11434
+      name: http
+  selector:
+    {{- include "airbud.selectorLabels" . | nindent 4 }}
+    component: ollama
+{{- end }}

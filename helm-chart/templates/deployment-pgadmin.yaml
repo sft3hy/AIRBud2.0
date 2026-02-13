@@ -1,0 +1,84 @@
+{{- if .Values.pgadmin.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "airbud.fullname" . }}-pgadmin
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+    component: pgadmin
+spec:
+  ports:
+    - port: 5050
+      targetPort: 80
+      name: http
+  selector:
+    {{- include "airbud.selectorLabels" . | nindent 4 }}
+    component: pgadmin
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "airbud.fullname" . }}-pgadmin
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+    component: pgadmin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "airbud.selectorLabels" . | nindent 6 }}
+      component: pgadmin
+  template:
+    metadata:
+      labels:
+        {{- include "airbud.selectorLabels" . | nindent 8 }}
+        component: pgadmin
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: pgadmin
+          image: "{{ .Values.pgadmin.image }}"
+          resources:
+            {{- toYaml .Values.pgadmin.resources | nindent 12 }}
+          ports:
+            - containerPort: 80
+          env:
+            - name: PGADMIN_DEFAULT_EMAIL
+              value: {{ .Values.pgadmin.email | quote }}
+            - name: PGADMIN_DEFAULT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "airbud.secretName" . }}
+                  key: PGADMIN_DEFAULT_PASSWORD
+            - name: PGADMIN_CONFIG_CONSOLE_LOG_LEVEL
+              value: "50"
+          volumeMounts:
+            - name: pgadmin-data
+              mountPath: /var/lib/pgadmin
+      volumes:
+        - name: pgadmin-data
+        {{- if .Values.global.persistence.enabled }}
+          persistentVolumeClaim:
+            # References the standalone PVC in pvc.yaml
+            claimName: {{ include "airbud.fullname" . }}-pgadmin-data
+        {{- else }}
+          emptyDir: {}
+        {{- end }}
+      
+      # --- KARPENTER CONFIG ---
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

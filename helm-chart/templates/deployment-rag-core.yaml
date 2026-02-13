@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "airbud.fullname" . }}-rag-core
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+    component: rag-core
+spec:
+  replicas: {{ .Values.ragCore.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "airbud.selectorLabels" . | nindent 6 }}
+      component: rag-core
+  template:
+    metadata:
+      labels:
+        {{- include "airbud.selectorLabels" . | nindent 8 }}
+        component: rag-core
+    spec:
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+      
+      initContainers:
+        - name: init-fs
+          image: alpine:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - "mkdir -p /data/uploads /data/charts /data/faiss_indexes /data/chunks /data/huggingface && chmod -R 777 /data"
+          volumeMounts:
+            - name: shared-data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+
+      containers:
+        - name: rag-core
+          image: "{{ .Values.ragCore.image.repository }}:{{ .Values.ragCore.image.tag }}"
+          imagePullPolicy: {{ .Values.ragCore.image.pullPolicy | default "IfNotPresent" }}
+          command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "airbud.fullname" . }}-config
+            - secretRef:
+                name: {{ include "airbud.secretName" . }}
+          env:
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "airbud.fullname" . }}-env
+                  key: GROQ_API_KEY
+            - name: SANCTUARY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "airbud.fullname" . }}-env
+                  key: SANCTUARY_API_KEY
+            - name: PARSER_API_URL
+              value: "http://{{ include "airbud.fullname" . }}-parser:8001"
+            - name: VISION_API_URL
+              value: "http://{{ include "airbud.fullname" . }}-vision:8002"
+            - name: KG_SERVICE_URL
+              value: "http://{{ include "airbud.fullname" . }}-kg-service:8003"
+            - name: HF_HOME
+              value: "/data/huggingface"
+            {{- if .Values.offline.enabled }}
+            - name: EMBEDDING_MODEL_PATH
+              value: "/models/huggingface/all-MiniLM-L6-v2"
+            {{- end }}
+          volumeMounts:
+            - name: shared-data
+              mountPath: /data
+            # Offline models baked in
+          resources:
+            {{- toYaml .Values.ragCore.resources | nindent 12 }}
+          
+          # --- ADDED PROBES ---
+          livenessProbe:
+            httpGet:
+              path: /health # Assuming FastAPI endpoint, otherwise use tcpSocket
+              port: 8000
+            initialDelaySeconds: 45
+            periodSeconds: 15
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          # --------------------
+
+      volumes:
+        - name: shared-data
+        {{- if .Values.global.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "airbud.fullname" . }}-shared-data
+        {{- else }}
+          emptyDir: {}
+        {{- end }}
+        # Offline models baked in
+      # --- KARPENTER CONFIG ---
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

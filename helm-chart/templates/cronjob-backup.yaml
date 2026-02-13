@@ -1,0 +1,91 @@
+{{- if .Values.backup.enabled -}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "airbud.fullname" . }}-backup
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+    component: backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "airbud.labels" . | nindent 12 }}
+            component: backup
+        spec:
+          restartPolicy: OnFailure
+          # Docker socket access usually requires root or specific group
+          securityContext:
+            runAsUser: 0
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: backup
+              image: "{{ .Values.backup.image.repository }}:{{ .Values.backup.image.tag }}"
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+              envFrom:
+                - configMapRef:
+                    name: {{ include "airbud.fullname" . }}-config
+              env:
+                - name: TZ
+                  value: {{ .Values.backup.env.tz }}
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "airbud.secretName" . }}
+                      key: POSTGRES_PASSWORD
+              volumeMounts:
+                - name: docker-sock
+                  mountPath: /var/run/docker.sock
+                # EFS Shared Data (Safe for multi-mount)
+                - name: shared-data
+                  mountPath: /shared_data
+                  readOnly: true
+                # Backup Destination (Shared Data / EFS)
+                - name: shared-data
+                  mountPath: /backups
+                  subPath: backups
+                # Neo4j Data (EBS - RWO). 
+                # WARNING: This mount may fail if the Neo4j Pod is running on a different node 
+                # or if the storage class does not support Multi-Attach.
+                - name: neo4j-data
+                  mountPath: /neo4j_data
+                  readOnly: true
+          volumes:
+            - name: docker-sock
+              hostPath:
+                path: /var/run/docker.sock
+            - name: shared-data
+            {{- if .Values.global.persistence.enabled }}
+              persistentVolumeClaim:
+                claimName: {{ include "airbud.fullname" . }}-shared-data
+            {{- else }}
+              emptyDir: {}
+            {{- end }}
+            - name: neo4j-data
+            {{- if .Values.global.persistence.enabled }}
+              persistentVolumeClaim:
+                claimName: {{ include "airbud.fullname" . }}-neo4j-data
+            {{- else }}
+              emptyDir: {}
+            {{- end }}
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

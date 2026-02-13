@@ -1,0 +1,91 @@
+# 1. Shared Data (ReadWriteMany - EFS)
+{{- if .Values.global.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "airbud.fullname" . }}-shared-data
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: {{ .Values.sharedData.size }}
+  # Matches the Clairvoyant format: (env)-(project)-efs-sc
+  storageClassName: {{ .Values.global.storageClassShared }}
+
+---
+{{- end }}
+
+{{- if and .Values.postgres.enabled .Values.global.persistence.enabled }}
+# 2. Postgres Data (ReadWriteOnce - EBS)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "airbud.fullname" . }}-postgres-data
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.postgres.storage }}
+  storageClassName: {{ .Values.global.storageClass }}
+
+---
+{{- end }}
+
+{{- if and .Values.neo4j.enabled .Values.global.persistence.enabled }}
+# 3. Neo4j Data (ReadWriteOnce - EBS)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "airbud.fullname" . }}-neo4j-data
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.neo4j.storage }}
+  storageClassName: {{ .Values.global.storageClass }}
+
+---
+{{- end }}
+
+{{- if and .Values.pgadmin.enabled .Values.global.persistence.enabled }}
+# 4. PgAdmin Data (ReadWriteOnce - EBS)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "airbud.fullname" . }}-pgadmin-data
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.pgadmin.storage }}
+  storageClassName: {{ .Values.global.storageClass }}
+{{- end }}
+---
+{{- if and .Values.ollama.enabled .Values.ollama.persistence.enabled }}
+# 5. Ollama Data (ReadWriteOnce - EBS)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "airbud.fullname" . }}-ollama-data
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.ollama.persistence.size }}
+  storageClassName: {{ .Values.ollama.persistence.storageClass | default .Values.global.storageClass }}
+{{- end }}

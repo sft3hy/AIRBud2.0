@@ -1,0 +1,83 @@
+{{- if .Values.postgres.enabled -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "airbud.fullname" . }}-postgres
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+    component: postgres
+spec:
+  serviceName: {{ include "airbud.fullname" . }}-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "airbud.selectorLabels" . | nindent 6 }}
+      component: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "airbud.selectorLabels" . | nindent 8 }}
+        component: postgres
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: postgres
+          image: "{{ .Values.postgres.image }}"
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_USER
+              value: "rag_user"
+            - name: POSTGRES_DB
+              value: "rag_db"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "airbud.secretName" . }}
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - rag_user
+                - -d
+                - rag_db
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      
+      # --- KARPENTER CONFIG ---
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      volumes:
+        - name: postgres-data
+        {{- if .Values.global.persistence.enabled }}
+          persistentVolumeClaim:
+            # References the standalone PVC in pvc.yaml
+            claimName: {{ include "airbud.fullname" . }}-postgres-data
+        {{- else }}
+          emptyDir: {}
+        {{- end }}
+{{- end }}

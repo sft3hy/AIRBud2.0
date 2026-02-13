@@ -1,0 +1,107 @@
+{{- if .Values.grafana.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "airbud.fullname" . }}-grafana
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+    component: grafana
+spec:
+  ports:
+    - port: 3000
+      targetPort: 3000
+      name: http
+  selector:
+    {{- include "airbud.selectorLabels" . | nindent 4 }}
+    component: grafana
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "airbud.fullname" . }}-grafana
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+    component: grafana
+spec:
+  serviceName: {{ include "airbud.fullname" . }}-grafana
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "airbud.selectorLabels" . | nindent 6 }}
+      component: grafana
+  template:
+    metadata:
+      labels:
+        {{- include "airbud.selectorLabels" . | nindent 8 }}
+        component: grafana
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        fsGroup: 472
+        runAsUser: 472
+      containers:
+        - name: grafana
+          image: "{{ .Values.grafana.image }}"
+          resources:
+            {{- toYaml .Values.grafana.resources | nindent 12 }}
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: "admin"
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "airbud.secretName" . }}
+                  key: GF_SECURITY_ADMIN_PASSWORD
+          volumeMounts:
+            - name: grafana-data
+              mountPath: /var/lib/grafana
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 60
+            timeoutSeconds: 30
+            failureThreshold: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 60
+            timeoutSeconds: 30
+            failureThreshold: 10
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- if not .Values.global.persistence.enabled }}
+      volumes:
+        - name: grafana-data
+          emptyDir: {}
+      {{- end }}
+  {{- if .Values.global.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: grafana-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ .Values.global.storageClass }}
+        resources:
+          requests:
+            storage: {{ .Values.grafana.storage }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,85 @@
+{{- if .Values.monitor.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "airbud.fullname" . }}-glances-conf
+data:
+  glances.conf: |
+    [global]
+    check_update=false
+    [influxdb2]
+    host={{ include "airbud.fullname" . }}-influxdb
+    port=8086
+    protocol=http
+    org={{ .Values.influxdb.org }}
+    bucket={{ .Values.influxdb.bucket }}
+    token={{ .Values.global.secrets.influxToken }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "airbud.fullname" . }}-monitor
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+    component: monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "airbud.selectorLabels" . | nindent 6 }}
+      component: monitor
+  template:
+    metadata:
+      labels:
+        {{- include "airbud.selectorLabels" . | nindent 8 }}
+        component: monitor
+    spec:
+      hostPID: true 
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: glances
+          image: nicolargo/glances:latest-full
+          command: 
+            - /bin/sh
+            - -c 
+            - "glances -C /glances/conf/glances.conf -q --export influxdb2 --debug"
+          env:
+            - name: DOCKER_HOST
+              value: "unix://var/run/docker.sock"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          # QUOTA FIX: Added resources
+          resources:
+            {{- toYaml .Values.monitor.resources | nindent 12 }}
+          volumeMounts:
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+              readOnly: true
+            - name: config
+              mountPath: /glances/conf/glances.conf
+              subPath: glances.conf
+      volumes:
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+        - name: config
+          configMap:
+            name: {{ include "airbud.fullname" . }}-glances-conf
+      
+      # --- KARPENTER CONFIG ---
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

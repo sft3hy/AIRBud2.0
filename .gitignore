@@ -211,8 +211,6 @@ __marimo__/
 *.csr
 ClassificationBanner.tsx
 model_cache
-helm-chart/apiKeys.yaml
-helm-chart/*
 *.cnf
 settings.json
 *.pth

@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "airbud.fullname" . }}-parser
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+    component: parser
+spec:
+  replicas: {{ .Values.parser.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "airbud.selectorLabels" . | nindent 6 }}
+      component: parser
+  template:
+    metadata:
+      labels:
+        {{- include "airbud.selectorLabels" . | nindent 8 }}
+        component: parser
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: parser
+          image: "{{ .Values.parser.image.repository }}:{{ .Values.parser.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.parser.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: 8001
+              protocol: TCP
+          volumeMounts:
+            - name: shared-data
+              mountPath: /data
+            # Offline models are now baked in, no PVC mount needed
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: WORKERS
+              value: {{ .Values.parser.workers | default 1 | quote }}
+            {{- if .Values.offline.enabled }}
+            - name: OFFLINE_MODEL_PATH
+              value: "/models/detectron2/publaynet_faster_rcnn_R_50_FPN_3x.pth"
+            {{- end }}
+          resources:
+            {{- toYaml .Values.parser.resources | nindent 12 }}
+      volumes:
+        - name: shared-data
+        {{- if .Values.global.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "airbud.fullname" . }}-shared-data
+        {{- else }}
+          emptyDir: {}
+        {{- end }}
+        # Offline models baked in
+      # --- KARPENTER CONFIG ---
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

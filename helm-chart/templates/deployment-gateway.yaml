@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "airbud.fullname" . }}-gateway
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+    component: gateway
+spec:
+  replicas: {{ .Values.gateway.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "airbud.labels" . | nindent 6 }}
+      component: gateway
+  template:
+    metadata:
+      labels:
+        {{- include "airbud.labels" . | nindent 8 }}
+        component: gateway
+    spec:
+      containers:
+        - name: nginx
+          image: "{{ .Values.gateway.image.repository }}:{{ .Values.gateway.image.tag }}"
+          resources:
+            {{- toYaml .Values.gateway.resources | nindent 12 }}
+          ports:
+            - containerPort: 80
+            - containerPort: 443
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+            {{- if .Values.gateway.cacEnabled }}
+            - name: config
+              mountPath: /usr/share/nginx/html/no-cert.html
+              subPath: no-cert.html
+
+            {{- end }}
+            - name: server-certs
+              mountPath: /etc/nginx/certs/server.crt
+              subPath: tls.crt
+            - name: server-certs
+              mountPath: /etc/nginx/certs/server.key
+              subPath: tls.key
+            {{- if .Values.gateway.cacEnabled }}
+            - name: client-ca
+              mountPath: /etc/nginx/certs/trust_chain.pem
+              subPath: trust_chain.pem
+              readOnly: true
+            - name: client-ca
+              mountPath: /etc/nginx/certs/dod_roots.pem
+              subPath: dod_roots.pem
+              readOnly: true
+            {{- end }}
+          
+          livenessProbe:
+            tcpSocket:
+              port: 443
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 443
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "airbud.fullname" . }}-gateway-conf
+        - name: server-certs
+          secret:
+            secretName: {{ .Values.gateway.tls.serverSecretName }}
+        {{- if .Values.gateway.cacEnabled }}
+        - name: client-ca
+          secret:
+            secretName: {{ .Values.gateway.tls.clientCaSecretName }}
+        {{- end }}
+
+      # --- KARPENTER CONFIG ---
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

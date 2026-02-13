@@ -1,0 +1,115 @@
+{{- if .Values.influxdb.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "airbud.fullname" . }}-influxdb
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+    component: influxdb
+spec:
+  ports:
+    - port: 8086
+      targetPort: 8086
+      name: http
+  selector:
+    {{- include "airbud.selectorLabels" . | nindent 4 }}
+    component: influxdb
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "airbud.fullname" . }}-influxdb
+  labels:
+    {{- include "airbud.labels" . | nindent 4 }}
+    component: influxdb
+spec:
+  serviceName: {{ include "airbud.fullname" . }}-influxdb
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "airbud.selectorLabels" . | nindent 6 }}
+      component: influxdb
+  template:
+    metadata:
+      labels:
+        {{- include "airbud.selectorLabels" . | nindent 8 }}
+        component: influxdb
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: influxdb
+          image: "{{ .Values.influxdb.image }}"
+          resources:
+            {{- toYaml .Values.influxdb.resources | nindent 12 }}
+          ports:
+            - containerPort: 8086
+              name: http
+          env:
+            - name: DOCKER_INFLUXDB_INIT_MODE
+              value: "setup"
+            - name: DOCKER_INFLUXDB_INIT_USERNAME
+              value: "admin"
+            - name: DOCKER_INFLUXDB_INIT_ORG
+              value: {{ .Values.influxdb.org | quote }}
+            - name: DOCKER_INFLUXDB_INIT_BUCKET
+              value: {{ .Values.influxdb.bucket | quote }}
+            - name: DOCKER_INFLUXDB_INIT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "airbud.secretName" . }}
+                  key: DOCKER_INFLUXDB_INIT_PASSWORD
+            - name: DOCKER_INFLUXDB_INIT_ADMIN_TOKEN
+              value: {{ .Values.global.secrets.influxToken | quote }}
+          volumeMounts:
+            - name: influxdb-data
+              mountPath: /var/lib/influxdb2
+          
+          # --- FIXED SECTION: Changed healthcheck to probes ---
+          livenessProbe:
+            exec:
+              command: ["curl", "-f", "http://localhost:8086/health"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            exec:
+              command: ["curl", "-f", "http://localhost:8086/health"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+          # --------------------------------------------------
+
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- if not .Values.global.persistence.enabled }}
+      volumes:
+        - name: influxdb-data
+          emptyDir: {}
+      {{- end }}
+  {{- if .Values.global.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: influxdb-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ .Values.global.storageClass }} 
+        resources:
+          requests:
+            storage: {{ .Values.influxdb.storage }}
+  {{- end }}
+{{- end }}
