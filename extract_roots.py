@@ -6,8 +6,20 @@ with open('nginx/certs/trust_chain.pem', 'r') as f:
 
 certs = re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', content, re.DOTALL)
 
-# Write all certificates to dod_roots.pem to ensure Intermediates are included
-with open('nginx/certs/dod_roots.pem', 'w') as f:
-    f.write(content)
+roots = []
+print(f"File contains {len(certs)} certificates total.")
 
-print(f"Extracted {len(certs)} certificates (Roots + Intermediates) to nginx/certs/dod_roots.pem.")
+for i, cert in enumerate(certs):
+    p = subprocess.Popen(['openssl', 'x509', '-noout', '-subject'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    out, err = p.communicate(input=cert)
+    
+    # Check for DoD Root CAs specifically
+    if "DoD Root CA 3" in out or "DoD Root CA 4" in out or "DoD Root CA 5" in out or "DoD Root CA 6" in out:
+        print(f"Found Root CA: {out.strip()}")
+        roots.append(cert)
+
+with open('nginx/certs/dod_roots.pem', 'w') as f:
+    # Ensure there's a newline between certificates
+    f.write('\n'.join(roots) + '\n')
+
+print(f"Extracted {len(roots)} Root CA certificates to nginx/certs/dod_roots.pem.")
