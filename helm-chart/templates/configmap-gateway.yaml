@@ -113,6 +113,17 @@ data:
                 {{- end }}
             }
 
+            location = /airbud/debug-headers {
+                default_type text/plain;
+                return 200 "
+Gateway Debug Info:
+-------------------
+X-SSL-Client-Verify: $http_x_ssl_client_verify
+X-SSL-Client-DN: $http_x_ssl_client_dn
+Original URI: $request_uri
+";
+            }
+
             location /airbud/static/ {
                 # Proxy static assets (charts, images) to RAG Core
                 rewrite ^/airbud/static/(.*) /static/$1 break;
