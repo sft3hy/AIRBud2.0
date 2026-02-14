@@ -150,7 +150,10 @@ ingress:
     nginx.ingress.kubernetes.io/auth-tls-verify-client: "optional"
     nginx.ingress.kubernetes.io/auth-tls-verify-depth: "4"
     nginx.ingress.kubernetes.io/auth-tls-secret: "cosmichorizon/airbud-client-ca"
-    nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream: "true"
+    nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream: "false" # Set to false to avoid huge headers interfering with handshake, we construct our own below
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header X-SSL-Client-Verify $ssl_client_verify;
+      proxy_set_header X-SSL-Client-DN $ssl_client_s_dn;
 
   hosts:
     - host: test-cosmichorizon-worker-68a3110f01feebd0.elb.us-gov-west-1.amazonaws.com
