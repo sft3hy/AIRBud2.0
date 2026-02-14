@@ -83,7 +83,8 @@ class GroupUpdateRequest(BaseModel):
 def _check_db_sync() -> bool:
     try:
         with db.get_cursor() as cur:
-            cur.execute("SELECT 1")
+            # Verify 'users' table exists to ensure schema is initialized
+            cur.execute("SELECT 1 FROM users LIMIT 1")
         return True
     except Exception as e:
         logger.error(f"Health Check DB Error: {e}")
@@ -227,6 +228,8 @@ async def run_pipeline_task(collection_id: int, filename: str, vision_model: str
 
 @app.get("/health")
 def health_check_simple():
+    if not _check_db_sync():
+        raise HTTPException(status_code=503, detail="Database not ready")
     return {"status": "online"}
 
 async def check_http_service(name: str, url: str) -> str:

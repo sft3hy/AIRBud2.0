@@ -16,6 +16,8 @@ spec:
       labels:
         {{- include "airbud.selectorLabels" . | nindent 8 }}
         component: rag-core
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap-env.yaml") . | sha256sum }}
     spec:
       imagePullSecrets:
         {{- toYaml .Values.imagePullSecrets | nindent 8 }}

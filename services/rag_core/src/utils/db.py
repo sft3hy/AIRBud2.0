@@ -126,6 +126,7 @@ class DatabaseManager:
             cur.execute(self._q("CREATE TABLE IF NOT EXISTS processing_jobs (collection_id INTEGER PRIMARY KEY, status TEXT, stage TEXT, step TEXT, progress INTEGER, details TEXT, updated_at DATETIME DEFAULT NOW())"))
 
     def _init_postgres_tables(self):
+        # 1. Base Schema Creation (Must succeed to ensure tables exist)
         with self.get_cursor(commit=True) as cur:
             # PIV_ID is no longer strictly NOT NULL in new setups, but we keep it compatible
             # We will use _migrate_schema to relax constraints on existing DBs
@@ -141,6 +142,8 @@ class DatabaseManager:
             cur.execute("ALTER TABLE queries ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)")
             cur.execute("CREATE TABLE IF NOT EXISTS processing_jobs (collection_id INTEGER PRIMARY KEY, status TEXT, stage TEXT, step TEXT, progress INTEGER, details JSONB, updated_at TIMESTAMP DEFAULT NOW())")
             
+        # 2. Migrations / Constraints (Can fail without rolling back table creation)
+        with self.get_cursor(commit=True) as cur:
             # --- MIGRATION: Ensure email is unique and piv_id is nullable ---
             try:
                 cur.execute("ALTER TABLE users ALTER COLUMN piv_id DROP NOT NULL")

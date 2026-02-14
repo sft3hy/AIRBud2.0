@@ -77,16 +77,19 @@ class AuthHandler:
         # 5. Parse & Process (Cache Miss)
         try:
             user_info = self._parse_dn(subject_dn)
-            
             friendly_name = self._format_friendly_name(user_info['cn'])
             friendly_org = self._format_organization(subject_dn, user_info['org'])
 
-            # Upsert into DB (Update last login, etc.)
-            user_id = self.db.upsert_user(
-                user_info['piv_id'], 
-                friendly_name, 
-                friendly_org
-            )
+            try:
+                # Upsert into DB (Update last login, etc.)
+                user_id = self.db.upsert_user(
+                    user_info['piv_id'], 
+                    friendly_name, 
+                    friendly_org
+                )
+            except Exception as db_e:
+                logger.error(f"DB Upsert failed for {subject_dn}: {db_e}. Using ephemeral ID.")
+                user_id = 999999 # Fallback ID
 
             user = {
                 "id": user_id,

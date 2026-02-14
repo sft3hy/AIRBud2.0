@@ -147,7 +147,7 @@ ingress:
     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
     nginx.ingress.kubernetes.io/proxy-ssl-verify: "off"
     # Client Certificate Auth
-    nginx.ingress.kubernetes.io/auth-tls-verify-client: "optional"
+    nginx.ingress.kubernetes.io/auth-tls-verify-client: "on"
     nginx.ingress.kubernetes.io/auth-tls-verify-depth: "4"
     nginx.ingress.kubernetes.io/auth-tls-secret: "cosmichorizon/airbud-client-ca"
     nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream: "false" # Set to false to avoid huge headers interfering with handshake, we construct our own below
