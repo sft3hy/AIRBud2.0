@@ -43,16 +43,7 @@ data:
             ssl_certificate_key /etc/nginx/certs/server.key;
             
             {{- if .Values.gateway.cacEnabled }}
-            location = /auth-failed {
-                internal;
-                default_type text/plain;
-                return 200 "CAC Verification Failed: $http_x_ssl_client_verify\nCN: $http_x_ssl_client_dn";
-            }
-
-            # Check header passed by Ingress
-            if ($http_x_ssl_client_verify != "SUCCESS") {
-                rewrite ^ /auth-failed last;
-            }
+            # Debugging Removed - Trusting Ingress Headers
             {{- end }}
 
             location = /no-cert.html {
@@ -106,7 +97,7 @@ data:
                 proxy_set_header X-Forwarded-Proto $scheme;
                 {{- if .Values.gateway.cacEnabled }}
                 proxy_set_header X-Subject-DN $http_x_ssl_client_dn;
-                proxy_set_header X-Client-Verify "SUCCESS";
+                proxy_set_header X-Client-Verify $http_x_ssl_client_verify;
                 {{- else if eq .Values.global.authMode "OAUTH" }}
                 auth_request_set $user   $upstream_http_x_auth_request_user;
                 auth_request_set $email  $upstream_http_x_auth_request_email;

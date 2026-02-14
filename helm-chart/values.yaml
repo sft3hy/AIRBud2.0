@@ -10,7 +10,7 @@ global:
     enabled: true 
   ephemeralMode: false
   # Auth Mode: "CAC" or "OAUTH"
-  authMode: "CAC"
+  authMode: "HYBRID"
   # If defined, use this existing secret instead of creating one from values
   existingSecret: "airbud-secrets" 
 
